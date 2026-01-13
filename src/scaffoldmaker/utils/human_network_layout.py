@@ -142,6 +142,6 @@ def constructNetworkLayoutStructure(humanElementCounts:dict):
             humanElementCounts['footElementsCount'], 
             legNetworkLayout, nodeIdentifier, endSegment=True)
         legs.append(legNetworkLayout)
-    humanNetworkLayout = headNetworkLayout + necknNetworkLayout + arms[0] + arms[1] + thoraxNetworkLayout + abdomenNetworkLayout + legs[0] + legs[1]
+    humanNetworkLayout = headNetworkLayout + necknNetworkLayout + thoraxNetworkLayout + abdomenNetworkLayout + arms[0] + arms[1]  + legs[0] + legs[1]
     humanNetworkLayout = humanNetworkLayout[:-1] #Remove a comma at the end
     return humanNetworkLayout
