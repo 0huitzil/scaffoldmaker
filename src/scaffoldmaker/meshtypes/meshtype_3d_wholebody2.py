@@ -343,22 +343,7 @@ class MeshType_1d_human_body_network_layout1(MeshType_1d_network_layout1):
             for meshGroup in meshGroups:
                 meshGroup.addElement(element)
             elementIdentifier += 1
-        thoraxElementsCount = humanElementCounts['thoraxElementsCount']
-        abdomenElementsCount = humanElementCounts['abdomenElementsCount']
-        # Setup thorax elements
-        meshGroups = [bodyMeshGroup, thoraxGroup.getMeshGroup(mesh)]
-        for e in range(thoraxElementsCount):
-            element = mesh.findElementByIdentifier(elementIdentifier)
-            for meshGroup in meshGroups:
-                meshGroup.addElement(element)
-            elementIdentifier += 1
-        # Setup abdomen elements 
-        meshGroups = [bodyMeshGroup, abdomenGroup.getMeshGroup(mesh)]
-        for e in range(abdomenElementsCount):
-            element = mesh.findElementByIdentifier(elementIdentifier)
-            for meshGroup in meshGroups:
-                meshGroup.addElement(element)
-            elementIdentifier += 1
+        
         left = 0
         right = 1
         shoulderElementsCount = humanElementCounts['shoulderElementsCount']
@@ -411,7 +396,22 @@ class MeshType_1d_human_body_network_layout1(MeshType_1d_network_layout1):
                 for meshGroup in meshGroups:
                     meshGroup.addElement(element)
                 elementIdentifier += 1
-        
+        # Setup thorax elements
+        thoraxElementsCount = humanElementCounts['thoraxElementsCount']
+        abdomenElementsCount = humanElementCounts['abdomenElementsCount']
+        meshGroups = [bodyMeshGroup, thoraxGroup.getMeshGroup(mesh)]
+        for e in range(thoraxElementsCount):
+            element = mesh.findElementByIdentifier(elementIdentifier)
+            for meshGroup in meshGroups:
+                meshGroup.addElement(element)
+            elementIdentifier += 1
+        # Setup abdomen elements 
+        meshGroups = [bodyMeshGroup, abdomenGroup.getMeshGroup(mesh)]
+        for e in range(abdomenElementsCount):
+            element = mesh.findElementByIdentifier(elementIdentifier)
+            for meshGroup in meshGroups:
+                meshGroup.addElement(element)
+            elementIdentifier += 1
         hipElementsCount = humanElementCounts['hipElementsCount']
         upperLegElementsCount = humanElementCounts['upperLegElementsCount']
         lowerLegElementsCount = humanElementCounts['lowerLegElementsCount']
@@ -1152,13 +1152,28 @@ class MeshType_1d_human_body_network_layout1(MeshType_1d_network_layout1):
             kinTreeMarkers['toes_' + side_label] = nodeIdentifier - 2
             options['Kinematic tree']['toes_' + side_label] = x
 
+
+        # fieldmodule = region.getFieldmodule()
+        # nodes = fieldmodule.findNodesetByFieldDomainType(Field.DOMAIN_TYPE_NODES)
+        # node_identifier = max(1, get_maximum_node_identifier(nodes) + 1)
+        # coordinates = find_or_create_field_coordinates(fieldmodule)
+        # stickman_markers = networkLayout._scaffoldSettings['Kinematic tree']
+        # for marker_name, marker_position in stickman_markers.items():
+        #     marker_group = findOrCreateAnnotationGroupForTerm(
+        #         annotationGroups, region, (marker_name, ""), isMarker=True
+        #         )
+        #     marker_group.createMarkerNode(
+        #         node_identifier, coordinates, marker_position
+        #         )
+    
         # Kinematic tree markers 
-        for marker_name, marker_position in kinTreeMarkers.items():
+        node_identifier = max(1, get_maximum_node_identifier(nodes) + 1)
+        for marker_name, marker_position in options['Kinematic tree'].items():
             marker_group = findOrCreateAnnotationGroupForTerm(
                 annotationGroups, region, (marker_name, ""), isMarker=True
                 )
             marker_group.createMarkerNode(
-                nodeIdentifier, element=mesh.findElementByIdentifier(marker_position), xi=[1]
+                node_identifier, coordinates, marker_position
             )
         return annotationGroups, networkMesh
 
