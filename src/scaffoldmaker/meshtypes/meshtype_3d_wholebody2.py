@@ -2,14 +2,10 @@
 Generates a 3D body coordinates using tube network mesh.
 """
 from cmlibs.maths.vectorops import add, cross, mult, set_magnitude, sub, magnitude, axis_angle_to_rotation_matrix, matrix_vector_mult, matrix_mult, dot, angle 
-from cmlibs.utils.zinc.general import ChangeManager
-from cmlibs.utils.zinc.field import Field, find_or_create_field_coordinates, find_or_create_field_group, find_or_create_field_stored_string, find_or_create_field_finite_element
+from cmlibs.utils.zinc.field import Field, find_or_create_field_coordinates
 from cmlibs.utils.zinc.finiteelement import get_maximum_node_identifier
-from cmlibs.utils.zinc.region import copy_fitting_data
 from cmlibs.zinc.element import Element
 from cmlibs.zinc.node import Node
-from scaffoldfitter.fitter import Fitter as GeometryFitter
-from scaffoldfitter.fitterstepalign import FitterStepAlign
 from scaffoldmaker.annotation.annotationgroup import (
     AnnotationGroup, findOrCreateAnnotationGroupForTerm, getAnnotationGroupForTerm, evaluateAnnotationMarkerNearestMeshLocation)
 from scaffoldmaker.annotation.body_terms import get_body_term, marker_name_in_terms
@@ -22,11 +18,7 @@ from scaffoldmaker.utils.interpolation import (
 from scaffoldmaker.utils.networkmesh import NetworkMesh
 from scaffoldmaker.utils.tubenetworkmesh import BodyTubeNetworkMeshBuilder, TubeNetworkMeshGenerateData
 from scaffoldmaker.utils.human_network_layout import constructNetworkLayoutStructure, humanElementCounts
-from scaffoldmaker.utils.zinc_utils import generate_datapoints, find_or_create_field_zero_fibres
-# from scaffoldmaker.utils.human_network_layout import 
 import math
-import logging
-logger = logging.getLogger(__name__)
 
 class MeshType_1d_human_body_network_layout1(MeshType_1d_network_layout1):
     """
@@ -1188,59 +1180,7 @@ class MeshType_1d_human_body_network_layout1(MeshType_1d_network_layout1):
             if interactiveFunction[0] == "Edit structure...":
                 interactiveFunctions.remove(interactiveFunction)
                 break
-        interactiveFunctions = interactiveFunctions + [\
-        ("Align to body markers", 
-            {"Load transformation parameters into Settings": True},
-            lambda region, options, networkMesh, functionOptions, editGroupName:
-            cls.alignNetworkLayoutToMarkers(region, options, networkMesh, functionOptions, editGroupName)
-            ),
-        ]
         return interactiveFunctions
-
-    @classmethod
-    def alignNetworkLayoutToMarkers(cls, region, options, networkMesh, functionOptions, editGroupName):
-
-        # Load the data into the current region 
-        data_region = region.getParent().findChildByName('data')
-        if not data_region.isValid():
-            logger.warning('Missing input data')
-            return None
-        data_fieldmodule = data_region.getFieldmodule()
-        with ChangeManager(data_fieldmodule):
-            copy_fitting_data(region, data_region)
-        del data_region  
-        # Setup fitting routine
-        fieldmodule = region.getFieldmodule()
-        fitter = GeometryFitter(region=region)
-        fitter.getInitialFitterStepConfig()
-        # Manually run the _loadModel routines
-        fitter._discoverModelCoordinatesField()
-        fitter._discoverModelFitGroup()
-        # 
-        zero_fibres = find_or_create_field_zero_fibres(fieldmodule)
-        fitter.setFibreField(zero_fibres)
-        del zero_fibres
-        #
-        fitter._discoverFlattenGroup()
-        fitter.defineCommonMeshFields()
-        # Manually run the _loadData routines
-        fitter._discoverDataCoordinatesField()
-        fitter._discoverMarkerGroup()
-        # Stuff 
-        fitter.defineCommonMeshFields()
-        fitter.defineDataProjectionFields()
-        fitter.initializeFit()
-        # Call Align step
-        fit1 = FitterStepAlign() 
-        fitter.addFitterStep(fit1)
-        fit1.setAlignMarkers(True)
-        fit1._doAutoAlign()
-        # Pass the graphical transformation settings into options
-        options['rotation'] = fit1._rotation
-        options['scale'] = fit1._scale
-        options['translation'] = fit1._translation
-        del fit1
-        return True, False
     
 
 class MeshType_3d_wholebody2(Scaffold_base):
