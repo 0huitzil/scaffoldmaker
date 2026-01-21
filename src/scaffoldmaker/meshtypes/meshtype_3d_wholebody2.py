@@ -91,7 +91,7 @@ class MeshType_1d_human_body_network_layout1(MeshType_1d_network_layout1):
         options["Left ankle flexion degrees"] = 90.0
         options["Right ankle flexion degrees"] = 90.0
         options["Foot height"] = 1.25
-        options["Foot length"] = 2.0
+        options["Foot length"] = 1.4
         options["Foot thickness"] = 0.3
         options["Foot width"] = 1.0
         options["Inner proportion default"] = 0.7
@@ -389,7 +389,7 @@ class MeshType_1d_human_body_network_layout1(MeshType_1d_network_layout1):
                 elementIdentifier += 1
             # Setup hand elements
             meshGroups = [bodyMeshGroup, 
-                          armMeshGroup, 
+                          armMeshGroup, sideArmGroup.getMeshGroup(mesh),
                           handMeshGroup, sideHandGroup.getMeshGroup(mesh)]
             for e in range(handElementsCount):
                 element = mesh.findElementByIdentifier(elementIdentifier)
@@ -451,7 +451,8 @@ class MeshType_1d_human_body_network_layout1(MeshType_1d_network_layout1):
                     meshGroup.addElement(element)
                 elementIdentifier += 1
             # Foot
-            meshGroups = [bodyMeshGroup, legMeshGroup, footMeshGroup, sideFootGroup.getMeshGroup(mesh)]
+            meshGroups = [bodyMeshGroup, legMeshGroup, sideLegGroup.getMeshGroup(mesh), 
+                          footMeshGroup, sideFootGroup.getMeshGroup(mesh)]
             for e in range(footElementsCount):
                 element = mesh.findElementByIdentifier(elementIdentifier)
                 for meshGroup in meshGroups:
