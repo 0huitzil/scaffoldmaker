@@ -78,7 +78,7 @@ def constructNetworkLayoutStructure(humanElementCounts:dict):
     # Abdomen 
     abdomenNetworkLayout, nodeIdentifier = createLayoutSegment(
         humanElementCounts['abdomenElementsCount'], nodeIdentifier, versionEnd=1)
-    pelvisNodeJoint = nodeIdentifier
+    pelvisJointNode = nodeIdentifier
     # Arms
     arms = []
     for i in range(2):
@@ -95,7 +95,8 @@ def constructNetworkLayoutStructure(humanElementCounts:dict):
             humanElementCounts['antebrachiumElementsCount'], nodeIdentifier)
         # Hand
         handNetworkLayout, nodeIdentifier = createLayoutSegment(
-            humanElementCounts['handElementsCount'], nodeIdentifier)
+            humanElementCounts['handElementsCount'], nodeIdentifier, versionEnd=1)
+        handJointNode = nodeIdentifier
         # Join arm
         armNetworkLayout = shoulderNetworkLayout + brachiumNetworkLayout + antebrachiumNetworkLayout + handNetworkLayout
         arms.append(armNetworkLayout)
@@ -106,7 +107,7 @@ def constructNetworkLayoutStructure(humanElementCounts:dict):
         # Hip
         hipNetworkLayout, nodeIdentifier = createLayoutSegment(
             humanElementCounts['hipElementsCount'], nodeIdentifier, 
-            initialJointNode=pelvisNodeJoint, versionStart=version)
+            initialJointNode=pelvisJointNode, versionStart=version)
         # Upper leg
         upperLegNetworkLayout, nodeIdentifier = createLayoutSegment(
             humanElementCounts['upperLegElementsCount'], nodeIdentifier)
