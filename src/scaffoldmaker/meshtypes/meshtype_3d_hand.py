@@ -105,8 +105,8 @@ class MeshType_3d_hand1(Scaffold_base):
         node = nodes.createNode(nodeIdentifier, nodetemplate)
         fieldcache.setNode(node)
         x = [0, 0, 0]
-        d1 = [1, 0, 0]
-        d2 = [0, 1, 0]
+        d1 = [2, 0, 0]
+        d2 = [0, 2, 0]
         d3 = [0, 0, 1]
         setNodeFieldParameters(coordinates, fieldcache, x, d1, d2, d3)
         nodeIdentifier += 1
@@ -214,68 +214,23 @@ class MeshType_3d_hand1(Scaffold_base):
         basis3d = fieldmodule.createElementbasis(3, Elementbasis.FUNCTION_TYPE_LINEAR_LAGRANGE)
         eft3d = mesh3d.createElementfieldtemplate(basis3d)
         # Here is where we start messing with the eft
-        setEftScaleFactorIds(eft3d, [], [], 2) 
-        remapEftNodeValueLabel(
-            eft=eft3d, 
-            localNodeIndexes=[1], 
-            fromValueLabel=Node.VALUE_LABEL_VALUE, 
-            expressionTerms=[(Node.VALUE_LABEL_VALUE, []), 
-                             (Node.VALUE_LABEL_VALUE, [1]) ]
-        )
-        remapEftNodeValueLabel(
-            eft=eft3d, 
-            localNodeIndexes=[2], 
-            fromValueLabel=Node.VALUE_LABEL_VALUE, 
-            expressionTerms=[(Node.VALUE_LABEL_VALUE, []),
-                            (Node.VALUE_LABEL_D_DS1, [])]
-        )
-        remapEftNodeValueLabel(
-            eft=eft3d, 
-            localNodeIndexes=[3], 
-            fromValueLabel=Node.VALUE_LABEL_VALUE, 
-            expressionTerms=[(Node.VALUE_LABEL_VALUE, []),
-                            (Node.VALUE_LABEL_D_DS2, [])]
-        )
-        remapEftNodeValueLabel(
-            eft=eft3d, 
-            localNodeIndexes=[4], 
-            fromValueLabel=Node.VALUE_LABEL_VALUE, 
-            expressionTerms=[(Node.VALUE_LABEL_VALUE, []),
-                            (Node.VALUE_LABEL_D_DS1, []),
-                            (Node.VALUE_LABEL_D_DS2, [])]
-        )
-        remapEftNodeValueLabel(
-            eft=eft3d, 
-            localNodeIndexes=[5], 
-            fromValueLabel=Node.VALUE_LABEL_VALUE, 
-            expressionTerms=[(Node.VALUE_LABEL_VALUE, []),
-                            (Node.VALUE_LABEL_D_DS3, [])]
-        )
-        remapEftNodeValueLabel(
-            eft=eft3d, 
-            localNodeIndexes=[6], 
-            fromValueLabel=Node.VALUE_LABEL_VALUE, 
-            expressionTerms=[(Node.VALUE_LABEL_VALUE, []),
-                            (Node.VALUE_LABEL_D_DS1, []),
-                            (Node.VALUE_LABEL_D_DS3, [])]
-        )
-        remapEftNodeValueLabel(
-            eft=eft3d, 
-            localNodeIndexes=[7], 
-            fromValueLabel=Node.VALUE_LABEL_VALUE, 
-            expressionTerms=[(Node.VALUE_LABEL_VALUE, []),
-                            (Node.VALUE_LABEL_D_DS2, []),
-                            (Node.VALUE_LABEL_D_DS3, [])]
-        )
-        remapEftNodeValueLabel(
-            eft=eft3d, 
-            localNodeIndexes=[8], 
-            fromValueLabel=Node.VALUE_LABEL_VALUE, 
-            expressionTerms=[(Node.VALUE_LABEL_VALUE, []),
-                             (Node.VALUE_LABEL_D_DS1, []),
-                            (Node.VALUE_LABEL_D_DS2, []),
-                            (Node.VALUE_LABEL_D_DS3, [])]
-        )
+        setEftScaleFactorIds(eft3d, [], [], 6) 
+        ln = 1
+        for n3 in [5, 6]:
+            for n2 in [3, 4]:
+                for n1 in [1, 2]:
+                    remapEftNodeValueLabel(
+                        eft3d, 
+                        [ln], 
+                        Node.VALUE_LABEL_VALUE,                   
+                        [
+                            (Node.VALUE_LABEL_VALUE, []),
+                            (Node.VALUE_LABEL_D_DS1, n1),
+                            (Node.VALUE_LABEL_D_DS2, n2),
+                            (Node.VALUE_LABEL_D_DS3, n3)
+                        ]
+                        )
+                    ln += 1
         remapEftLocalNodes(eft3d, 1, [1, 1, 1, 1, 1, 1, 1, 1])
         elementtemplate3d = mesh3d.createElementtemplate()
         elementtemplate3d.setElementShapeType(Element.SHAPE_TYPE_CUBE)
@@ -283,7 +238,19 @@ class MeshType_3d_hand1(Scaffold_base):
         elementIdentifier += 1
         element = mesh3d.createElement(elementIdentifier, elementtemplate3d)
         element.setNodesByIdentifier(eft3d, [1])
-        # element.setScaleFactors(eft3d, [-1.0])
+        element.setScaleFactors(eft3d, [-2, -1, 0, 1, -1, 1])
+        elementIdentifier += 1
+        element = mesh3d.createElement(elementIdentifier, elementtemplate3d)
+        element.setNodesByIdentifier(eft3d, [1])
+        element.setScaleFactors(eft3d, [-1, 0, 0, 1, -1, 1])
+        elementIdentifier += 1
+        element = mesh3d.createElement(elementIdentifier, elementtemplate3d)
+        element.setNodesByIdentifier(eft3d, [1])
+        element.setScaleFactors(eft3d, [0, 1, 0, 1, -1, 1])
+        elementIdentifier += 1
+        element = mesh3d.createElement(elementIdentifier, elementtemplate3d)
+        element.setNodesByIdentifier(eft3d, [1])
+        element.setScaleFactors(eft3d, [1, 2, 0, 1, -1, 1])
         return [], None
     
 
