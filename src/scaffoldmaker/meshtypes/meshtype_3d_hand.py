@@ -329,27 +329,37 @@ class MeshType_3d_hand1(Scaffold_base):
         setEftScaleFactorIds(eft_box_3, [], [], 8) 
         ln = 1
         matrix = [
-            [1, 2, 1, 2, 3, 4],
-            [5, 6, 5, 6, 7, 8],
             [1, 2, 3, 4, 3, 4],
             [5, 6, 7, 8, 7, 8],
-            [1, 2, 1, 2, 1, 2],
-            [5, 6, 5, 6, 5, 6],
+            [1, 2, 1, 2, 3, 4],
+            [5, 6, 5, 6, 7, 8],
             [1, 2, 3, 4, 1, 2],
             [5, 6, 7, 8, 5, 6],
+            [1, 2, 1, 2, 1, 2],
+            [5, 6, 5, 6, 5, 6],
+
+
+            # [1, 2, 1, 2, 3, 4],
+            # [5, 6, 5, 6, 7, 8],
+            # [1, 2, 3, 4, 3, 4],
+            # [5, 6, 7, 8, 7, 8],
+            # [1, 2, 1, 2, 1, 2],
+            # [5, 6, 5, 6, 5, 6],
+            # [1, 2, 3, 4, 1, 2],
+            # [5, 6, 7, 8, 5, 6],
         ]
-        for node in range(8):
+        for n in range(8):
             remapEftNodeValueLabelWithNodes(
                         eft_box_3, 
                         ln, 
                         Node.VALUE_LABEL_VALUE,                   
                         [
-                            (1, Node.VALUE_LABEL_VALUE, [matrix[node][0]]),
-                            (2, Node.VALUE_LABEL_VALUE, [matrix[node][1]]),
-                            (1, Node.VALUE_LABEL_D_DS2, [matrix[node][2]]),
-                            (2, Node.VALUE_LABEL_D_DS2, [matrix[node][3]]),
-                            (1, Node.VALUE_LABEL_D_DS3, [matrix[node][4]]),
-                            (2, Node.VALUE_LABEL_D_DS3, [matrix[node][5]])
+                            (1, Node.VALUE_LABEL_VALUE, [matrix[n][0]]),
+                            (2, Node.VALUE_LABEL_VALUE, [matrix[n][1]]),
+                            (1, Node.VALUE_LABEL_D_DS2, [matrix[n][2]]),
+                            (2, Node.VALUE_LABEL_D_DS2, [matrix[n][3]]),
+                            (1, Node.VALUE_LABEL_D_DS3, [matrix[n][4]]),
+                            (2, Node.VALUE_LABEL_D_DS3, [matrix[n][5]])
                         ]
                         )
             ln += 1
