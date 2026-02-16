@@ -102,125 +102,178 @@ class MeshType_3d_hand1(Scaffold_base):
         #################
 
         nodeIdentifier = 1 
-        node = nodes.createNode(nodeIdentifier, nodetemplate)
-        fieldcache.setNode(node)
-        x = [0, 0, 0]
+        n = nodes.createNode(nodeIdentifier, nodetemplate)
+        fieldcache.setNode(n)
+        x0 = [0, 0, 0]
         d1 = [2, 0, 0]
         d2 = [0, 2, 0]
-        d3 = [0, 0, 1]
-        setNodeFieldParameters(coordinates, fieldcache, x, d1, d2, d3)
+        d3 = [0, 0, 2]
+        setNodeFieldParameters(coordinates, fieldcache, x0, d1, d2, d3)
+
+        # nodeIdentifier += 1
+        # n = nodes.createNode(nodeIdentifier, nodetemplate)
+        # fieldcache.setNode(n)
+        # x = add(add(x0, mult(d1, 2)), mult(d2, 3))
+        # setNodeFieldParameters(coordinates, fieldcache, x, d1, d2, d3)
+
+        # nodeIdentifier += 1
+        # n = nodes.createNode(nodeIdentifier, nodetemplate)
+        # fieldcache.setNode(n)
+        # x = add(add(x0, mult(d1, 2)), mult(d2, 1))
+        # setNodeFieldParameters(coordinates, fieldcache, x, d1, d2, d3)
+
+        # nodeIdentifier += 1
+        # n = nodes.createNode(nodeIdentifier, nodetemplate)
+        # fieldcache.setNode(n)
+        # x = add(add(x0, mult(d1, 2)), mult(d2, -1))
+        # setNodeFieldParameters(coordinates, fieldcache, x, d1, d2, d3)
+
+        # nodeIdentifier += 1
+        # n = nodes.createNode(nodeIdentifier, nodetemplate)
+        # fieldcache.setNode(n)
+        # x = add(add(x0, mult(d1, 2)), mult(d2,  -3))
+        # setNodeFieldParameters(coordinates, fieldcache, x, d1, d2, d3)
+
+        # nodeIdentifier += 1
+        # n = nodes.createNode(nodeIdentifier, nodetemplate)
+        # fieldcache.setNode(n)
+        # x = add(add(x0, mult(d1, 4)), mult(d2, 3))
+        # setNodeFieldParameters(coordinates, fieldcache, x, d1, d2, d3)
+
+        # nodeIdentifier += 1
+        # n = nodes.createNode(nodeIdentifier, nodetemplate)
+        # fieldcache.setNode(n)
+        # x = add(add(x0, mult(d1, 4)), mult(d2, 1))
+        # setNodeFieldParameters(coordinates, fieldcache, x, d1, d2, d3)
+
+        # nodeIdentifier += 1
+        # n = nodes.createNode(nodeIdentifier, nodetemplate)
+        # fieldcache.setNode(n)
+        # x = add(add(x0, mult(d1, 4)), mult(d2, -1))
+        # setNodeFieldParameters(coordinates, fieldcache, x, d1, d2, d3)
+
+        # nodeIdentifier += 1
+        # n = nodes.createNode(nodeIdentifier, nodetemplate)
+        # fieldcache.setNode(n)
+        # x = add(add(x0, mult(d1, 4)), mult(d2,  -3))
+        # setNodeFieldParameters(coordinates, fieldcache, x, d1, d2, d3)
+
+        # a = 8
+        # nodeIdentifier += 1
+        # n = nodes.createNode(nodeIdentifier, nodetemplate)
+        # fieldcache.setNode(n)
+        # x = add(add(x0, mult(d1, a)), mult(d2, 3))
+        # setNodeFieldParameters(coordinates, fieldcache, x, d1, d2, d3)
+
+        # nodeIdentifier += 1
+        # n = nodes.createNode(nodeIdentifier, nodetemplate)
+        # fieldcache.setNode(n)
+        # x = add(add(x0, mult(d1, a)), mult(d2, 1))
+        # setNodeFieldParameters(coordinates, fieldcache, x, d1, d2, d3)
+
+        # nodeIdentifier += 1
+        # n = nodes.createNode(nodeIdentifier, nodetemplate)
+        # fieldcache.setNode(n)
+        # x = add(add(x0, mult(d1, a)), mult(d2, -1))
+        # setNodeFieldParameters(coordinates, fieldcache, x, d1, d2, d3)
+
+        # nodeIdentifier += 1
+        # n = nodes.createNode(nodeIdentifier, nodetemplate)
+        # fieldcache.setNode(n)
+        # x = add(add(x0, mult(d1, a)), mult(d2,  -3))
+        # setNodeFieldParameters(coordinates, fieldcache, x, d1, d2, d3)
+
+        # Line
         nodeIdentifier += 1
-        # node = nodes.createNode(nodeIdentifier, nodetemplate)
-        # fieldcache.setNode(node)
-        # x = [1, 0, 0]
-        # d1 = [1, 0, 0]
-        # d2 = [0, 1, 0]
-        # d3 = [0, 0, 1]
-        # setNodeFieldParameters(coordinates, fieldcache, x, d1, d2, d3)
-        # nodeIdentifier += 1
-        # node = nodes.createNode(nodeIdentifier, nodetemplate)
-        # fieldcache.setNode(node)
-        # x = [1, 1, 0]
-        # d1 = [1, 0, 0]
-        # d2 = [0, 1, 0]
-        # d3 = [0, 0, 1]
-        # setNodeFieldParameters(coordinates, fieldcache, x, d1, d2, d3)
-        # nodeIdentifier += 1
-        # node = nodes.createNode(nodeIdentifier, nodetemplate)
-        # fieldcache.setNode(node)
-        # x = [0, 1, 0]
-        # d1 = [1, 0, 0]
-        # d2 = [0, 1, 0]
-        # d3 = [0, 0, 1]
-        # setNodeFieldParameters(coordinates, fieldcache, x, d1, d2, d3)
+        n = nodes.createNode(nodeIdentifier, nodetemplate)
+        fieldcache.setNode(n)
+        x = add(add(x0, mult(d1, 1)), mult(d2,  0))
+        setNodeFieldParameters(coordinates, fieldcache, x, d1, d2, d3)
+
+        nodeIdentifier += 1
+        n = nodes.createNode(nodeIdentifier, nodetemplate)
+        fieldcache.setNode(n)
+        x = add(add(x0, mult(d1, 2)), mult(d2,  0))
+        setNodeFieldParameters(coordinates, fieldcache, x, d1, d2, d3)
+
+        nodeIdentifier += 1
+        n = nodes.createNode(nodeIdentifier, nodetemplate)
+        fieldcache.setNode(n)
+        x = add(add(x0, mult(d1, 4)), mult(d2,  0))
+        setNodeFieldParameters(coordinates, fieldcache, x, d1, d2, d3)
 
         #################
         # Create 1D elements 
         #################
 
         mesh = fieldmodule.findMeshByDimension(1)
-        basis = fieldmodule.createElementbasis(1, Elementbasis.FUNCTION_TYPE_LINEAR_LAGRANGE)
+        basis = fieldmodule.createElementbasis(1, Elementbasis.FUNCTION_TYPE_CUBIC_HERMITE)
         eft = mesh.createElementfieldtemplate(basis)
         elementtemplate = mesh.createElementtemplate()
         elementtemplate.setElementShapeType(Element.SHAPE_TYPE_LINE)
         result = elementtemplate.defineField(coordinates, -1, eft)
         elementIdentifier = 0
 
-        # elementIdentifier += 1
-        # element = mesh.createElement(elementIdentifier, elementtemplate)
-        # element.setNodesByIdentifier(eft, [1, 3])
-
-        # elementIdentifier += 1
-        # element = mesh.createElement(elementIdentifier, elementtemplate)
-        # element.setNodesByIdentifier(eft, [2, 3])
-
-        # elementIdentifier += 1
-        # element = mesh.createElement(elementIdentifier, elementtemplate)
-        # element.setNodesByIdentifier(eft, [3, 4])
-
-        # elementIdentifier += 1
-        # element = mesh.createElement(elementIdentifier, elementtemplate)
-        # element.setNodesByIdentifier(eft, [4, 1])
 
         #################
-        # Create 2D elements 
+        # 2D Plate Template (1 node)
         #################
         mesh2d = fieldmodule.findMeshByDimension(2)
         basis2d = fieldmodule.createElementbasis(2, Elementbasis.FUNCTION_TYPE_LINEAR_LAGRANGE)
-        eft2d = mesh2d.createElementfieldtemplate(basis2d)
+        eft_plate_1 = mesh2d.createElementfieldtemplate(basis2d)
         # Here is where we start messing with the eft
-        setEftScaleFactorIds(eft2d, [], []) #Extremely unsure what this one does
-        remapEftNodeValueLabel(
-            eft=eft2d, 
-            localNodeIndexes=[1], 
-            fromValueLabel=Node.VALUE_LABEL_VALUE, 
-            expressionTerms=[(Node.VALUE_LABEL_VALUE, [])]
-        )
-        remapEftNodeValueLabel(
-            eft=eft2d, 
-            localNodeIndexes=[2], 
-            fromValueLabel=Node.VALUE_LABEL_VALUE, 
-            expressionTerms=[(Node.VALUE_LABEL_VALUE, []),
-                            (Node.VALUE_LABEL_D_DS1, [])]
-        )
-        remapEftNodeValueLabel(
-            eft=eft2d, 
-            localNodeIndexes=[3], 
-            fromValueLabel=Node.VALUE_LABEL_VALUE, 
-            expressionTerms=[(Node.VALUE_LABEL_VALUE, []),
-                            (Node.VALUE_LABEL_D_DS2, [])]
-        )
-        remapEftNodeValueLabel(
-            eft=eft2d, 
-            localNodeIndexes=[4], 
-            fromValueLabel=Node.VALUE_LABEL_VALUE, 
-            expressionTerms=[(Node.VALUE_LABEL_VALUE, []),
-                            (Node.VALUE_LABEL_D_DS1, []),
-                            (Node.VALUE_LABEL_D_DS2, [])]
-        )
-        remapEftLocalNodes(eft2d, 1, [1, 1, 1, 1])
-        elementtemplate2d = mesh2d.createElementtemplate()
-        elementtemplate2d.setElementShapeType(Element.SHAPE_TYPE_SQUARE)
-        result = elementtemplate2d.defineField(coordinates, -1, eft2d)
-        # elementIdentifier += 1
-        # element = mesh2d.createElement(elementIdentifier, elementtemplate2d)
-        # element.setNodesByIdentifier(eft2d, [1])
-        # element.setScaleFactors(eft2d, [-1.0])
+        setEftScaleFactorIds(eft_plate_1, [], [], 1) 
+        ln = 1
+        matrix = [
+            [[], [], [1]], 
+            [[], [], []], 
+            [[], [1], [1]],
+            [[], [1], []]
+        ]
+        eft_plate_1.setNumberOfLocalNodes(5)
+        for n in range(4):
+            remapEftNodeValueLabelWithNodes(
+                        eft_plate_1, 
+                        ln, 
+                        Node.VALUE_LABEL_VALUE,                   
+                        [
+                            (1, Node.VALUE_LABEL_VALUE, matrix[n][0]),
+                            (1, Node.VALUE_LABEL_D_DS2, matrix[n][1]),
+                            (1, Node.VALUE_LABEL_D_DS3, matrix[n][2]),
+                        ]
+                        )
+            # remapEftNodeValueLabel(
+            #             eft_plate_1, 
+            #             [ln], 
+            #             Node.VALUE_LABEL_VALUE,                   
+            #             [
+            #                 (Node.VALUE_LABEL_VALUE, matrix[n][0]),
+            #                 (Node.VALUE_LABEL_D_DS2, matrix[n][1]),
+            #                 (Node.VALUE_LABEL_D_DS3, matrix[n][2]),
+            #             ]
+            #             )
+            ln += 1
+        remapEftLocalNodes(eft_plate_1, 1, [1, 1, 1, 1, 1])
+        eft_plate_1.validate()
+        etemplate_plate_1 = mesh2d.createElementtemplate()
+        etemplate_plate_1.setElementShapeType(Element.SHAPE_TYPE_SQUARE)
+        result = etemplate_plate_1.defineField(coordinates, -1, eft_plate_1)
+
 
         #################
-        # Create 3D elements 
+        # 3D Box Template (1 node)
         #################
         mesh3d = fieldmodule.findMeshByDimension(3)
         basis3d = fieldmodule.createElementbasis(3, Elementbasis.FUNCTION_TYPE_LINEAR_LAGRANGE)
-        eft3d = mesh3d.createElementfieldtemplate(basis3d)
+        eft_box_1 = mesh3d.createElementfieldtemplate(basis3d)
         # Here is where we start messing with the eft
-        setEftScaleFactorIds(eft3d, [], [], 6) 
+        setEftScaleFactorIds(eft_box_1, [], [], 6) 
         ln = 1
         for n3 in [5, 6]:
             for n2 in [3, 4]:
                 for n1 in [1, 2]:
                     remapEftNodeValueLabel(
-                        eft3d, 
+                        eft_box_1, 
                         [ln], 
                         Node.VALUE_LABEL_VALUE,                   
                         [
@@ -231,26 +284,171 @@ class MeshType_3d_hand1(Scaffold_base):
                         ]
                         )
                     ln += 1
-        remapEftLocalNodes(eft3d, 1, [1, 1, 1, 1, 1, 1, 1, 1])
-        elementtemplate3d = mesh3d.createElementtemplate()
-        elementtemplate3d.setElementShapeType(Element.SHAPE_TYPE_CUBE)
-        result = elementtemplate3d.defineField(coordinates, -1, eft3d)
+        remapEftLocalNodes(eft_box_1, 1, [1, 1, 1, 1, 1, 1, 1, 1])
+        etemplate_box_1 = mesh3d.createElementtemplate()
+        etemplate_box_1.setElementShapeType(Element.SHAPE_TYPE_CUBE)
+        result = etemplate_box_1.defineField(coordinates, -1, eft_box_1)
+
+        #################
+        # 3D Box Template (2 nodes)
+        #################
+        mesh3d = fieldmodule.findMeshByDimension(3)
+        basis3d = fieldmodule.createElementbasis(3, Elementbasis.FUNCTION_TYPE_LINEAR_LAGRANGE)
+        eft_box_2 = mesh3d.createElementfieldtemplate(basis3d)
+        # Here is where we start messing with the eft
+        setEftScaleFactorIds(eft_box_2, [], [], 6) 
+        ln = 1
+        for n3 in [3, 4]:
+            for n2 in [1, 2]:
+                for n1 in [5, 6]:
+                    remapEftNodeValueLabel(
+                        eft_box_2, 
+                        [ln], 
+                        Node.VALUE_LABEL_VALUE,                   
+                        [
+                            (Node.VALUE_LABEL_VALUE, []),
+                            (Node.VALUE_LABEL_D_DS2, [n1, n2]),
+                            # (Node.VALUE_LABEL_D_DS2, n2),
+                            (Node.VALUE_LABEL_D_DS3, n3)
+                        ]
+                        )
+                    ln += 1
+        remapEftLocalNodes(eft_box_2, 2, [1, 2, 1, 2, 1, 2, 1, 2])
+        etemplate_box_2 = mesh3d.createElementtemplate()
+        etemplate_box_2.setElementShapeType(Element.SHAPE_TYPE_CUBE)
+        result = etemplate_box_2.defineField(coordinates, -1, eft_box_2)
+
+        #################
+        # 3D Box Template (2 nodes - blended)
+        #################
+
+        mesh3d = fieldmodule.findMeshByDimension(3)
+        basis3d = fieldmodule.createElementbasis(3, Elementbasis.FUNCTION_TYPE_LINEAR_LAGRANGE)
+        eft_box_3 = mesh3d.createElementfieldtemplate(basis3d)
+        # Here is where we start messing with the eft
+        setEftScaleFactorIds(eft_box_3, [], [], 8) 
+        ln = 1
+        matrix = [
+            [1, 2, 1, 2, 3, 4],
+            [5, 6, 5, 6, 7, 8],
+            [1, 2, 3, 4, 3, 4],
+            [5, 6, 7, 8, 7, 8],
+            [1, 2, 1, 2, 1, 2],
+            [5, 6, 5, 6, 5, 6],
+            [1, 2, 3, 4, 1, 2],
+            [5, 6, 7, 8, 5, 6],
+        ]
+        for node in range(8):
+            remapEftNodeValueLabelWithNodes(
+                        eft_box_3, 
+                        ln, 
+                        Node.VALUE_LABEL_VALUE,                   
+                        [
+                            (1, Node.VALUE_LABEL_VALUE, [matrix[node][0]]),
+                            (2, Node.VALUE_LABEL_VALUE, [matrix[node][1]]),
+                            (1, Node.VALUE_LABEL_D_DS2, [matrix[node][2]]),
+                            (2, Node.VALUE_LABEL_D_DS2, [matrix[node][3]]),
+                            (1, Node.VALUE_LABEL_D_DS3, [matrix[node][4]]),
+                            (2, Node.VALUE_LABEL_D_DS3, [matrix[node][5]])
+                        ]
+                        )
+            ln += 1
+        remapEftLocalNodes(eft_box_3, 2, [1, 2, 1, 1, 1, 1, 1, 1])
+        etemplate_box_3 = mesh3d.createElementtemplate()
+        etemplate_box_3.setElementShapeType(Element.SHAPE_TYPE_CUBE)
+        result = etemplate_box_3.defineField(coordinates, -1, eft_box_3)
+
+        #################
+        # Box Elements
+        #################
+
+        # elementIdentifier += 1
+        # element = mesh3d.createElement(elementIdentifier, etemplate_box_1)
+        # element.setNodesByIdentifier(eft_box_1, [1])
+        # element.setScaleFactors(eft_box_1, [0, 1, -4, -2, -1, 1])
+        # elementIdentifier += 1
+        # element = mesh3d.createElement(elementIdentifier, etemplate_box_1)
+        # element.setNodesByIdentifier(eft_box_1, [1])
+        # element.setScaleFactors(eft_box_1, [0, 1, -2, 0, -1, 1])
+        # elementIdentifier += 1
+        # element = mesh3d.createElement(elementIdentifier, etemplate_box_1)
+        # element.setNodesByIdentifier(eft_box_1, [1])
+        # element.setScaleFactors(eft_box_1, [0, 1, 0, 2,-1, 1])
+        # elementIdentifier += 1
+        # element = mesh3d.createElement(elementIdentifier, etemplate_box_1)
+        # element.setNodesByIdentifier(eft_box_1, [1])
+        # element.setScaleFactors(eft_box_1, [0, 1, 2, 4,-1, 1])
+        # elementIdentifier += 1
+
+
+        # element = mesh3d.createElement(elementIdentifier, etemplate_box_2)
+        # element.setNodesByIdentifier(eft_box_2, [1, 2])
+        # element.setScaleFactors(eft_box_2, [-1, 1, -1, 1, 3, 0])
+        # elementIdentifier += 1
+        # element = mesh3d.createElement(elementIdentifier, etemplate_box_2)
+        # element.setNodesByIdentifier(eft_box_2, [1, 3])
+        # element.setScaleFactors(eft_box_2, [-1, 1, -1, 1, 1, 0])
+        # elementIdentifier += 1
+        # element = mesh3d.createElement(elementIdentifier, etemplate_box_2)
+        # element.setNodesByIdentifier(eft_box_2, [1, 4])
+        # element.setScaleFactors(eft_box_2, [-1, 1, -1, 1, -1, 0])
+        # elementIdentifier += 1
+        # element = mesh3d.createElement(elementIdentifier, etemplate_box_2)
+        # element.setNodesByIdentifier(eft_box_2, [1, 5])
+        # element.setScaleFactors(eft_box_2, [-1, 1, -1, 1, -3, 0])
+        # elementIdentifier += 1
+        
+        # element = mesh3d.createElement(elementIdentifier, etemplate_box_2)
+        # element.setNodesByIdentifier(eft_box_2, [2, 6])
+        # element.setScaleFactors(eft_box_2, [-1, 1, -1, 1, 0, 0])
+        # elementIdentifier += 1
+        # element = mesh3d.createElement(elementIdentifier, etemplate_box_2)
+        # element.setNodesByIdentifier(eft_box_2, [3, 7])
+        # element.setScaleFactors(eft_box_2, [-1, 1, -1, 1, 0, 0])
+        # elementIdentifier += 1
+        # element = mesh3d.createElement(elementIdentifier, etemplate_box_2)
+        # element.setNodesByIdentifier(eft_box_2, [4, 8])
+        # element.setScaleFactors(eft_box_2, [-1, 1, -1, 1, 0, 0])
+        # elementIdentifier += 1
+        # element = mesh3d.createElement(elementIdentifier, etemplate_box_2)
+        # element.setNodesByIdentifier(eft_box_2, [5, 9])
+        # element.setScaleFactors(eft_box_2, [-1, 1, -1, 1, 0, 0])
+        a = 0.0
+        b = 0.25
+        scale_factors = [1-a, a, a-1, -a, 1-b, b, b-1, -b]
+        element = mesh3d.createElement(elementIdentifier, etemplate_box_3)
+        element.setNodesByIdentifier(eft_box_3, [1, 2])
+        element.setScaleFactors(eft_box_3, scale_factors)
         elementIdentifier += 1
-        element = mesh3d.createElement(elementIdentifier, elementtemplate3d)
-        element.setNodesByIdentifier(eft3d, [1])
-        element.setScaleFactors(eft3d, [-2, -1, 0, 1, -1, 1])
+        a = 0.25
+        b = 0.5
+        scale_factors = [1-a, a, a-1, -a, 1-b, b, b-1, -b]
+        element = mesh3d.createElement(elementIdentifier, etemplate_box_3)
+        element.setNodesByIdentifier(eft_box_3, [1, 2])
+        element.setScaleFactors(eft_box_3, scale_factors)
         elementIdentifier += 1
-        element = mesh3d.createElement(elementIdentifier, elementtemplate3d)
-        element.setNodesByIdentifier(eft3d, [1])
-        element.setScaleFactors(eft3d, [-1, 0, 0, 1, -1, 1])
+        a = 0.5
+        b = 0.75
+        scale_factors = [1-a, a, a-1, -a, 1-b, b, b-1, -b]
+        element = mesh3d.createElement(elementIdentifier, etemplate_box_3)
+        element.setNodesByIdentifier(eft_box_3, [1, 2])
+        element.setScaleFactors(eft_box_3, scale_factors)
         elementIdentifier += 1
-        element = mesh3d.createElement(elementIdentifier, elementtemplate3d)
-        element.setNodesByIdentifier(eft3d, [1])
-        element.setScaleFactors(eft3d, [0, 1, 0, 1, -1, 1])
+        a = 0.75
+        b = 1.0
+        scale_factors = [1-a, a, a-1, -a, 1-b, b, b-1, -b]
+        element = mesh3d.createElement(elementIdentifier, etemplate_box_3)
+        element.setNodesByIdentifier(eft_box_3, [1, 2])
+        element.setScaleFactors(eft_box_3, scale_factors)
         elementIdentifier += 1
-        element = mesh3d.createElement(elementIdentifier, elementtemplate3d)
-        element.setNodesByIdentifier(eft3d, [1])
-        element.setScaleFactors(eft3d, [1, 2, 0, 1, -1, 1])
+
+        # element = mesh3d.createElement(elementIdentifier, etemplate_box_3)
+        # element.setNodesByIdentifier(eft_box_3, [2, 6])
+        # element.setScaleFactors(eft_box_3, [0.5, -0.5, 1, -1])
+
+        # element = mesh3d.createElement(elementIdentifier, etemplate_plate_1)
+        # element.setNodesByIdentifier(eft_plate_1, [1])
+        # element.setScaleFactors(eft_plate_1, [-1])
         return [], None
     
 
