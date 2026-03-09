@@ -95,6 +95,7 @@ class MeshType_3d_hand1(Scaffold_base):
         #################
         fieldmodule = region.getFieldmodule()
         coordinates = find_or_create_field_coordinates(fieldmodule)
+        nodes = fieldmodule.findNodesetByFieldDomainType(Field.DOMAIN_TYPE_NODES)
         fieldcache = fieldmodule.createFieldcache()
         mesh3d = fieldmodule.findMeshByDimension(3)
         #################
@@ -109,37 +110,49 @@ class MeshType_3d_hand1(Scaffold_base):
             carpal_nodes.append(x)
         # Fingers 2 - 4 (finger 1, thumb, is added later)
         finger_dimensions = [
-            [0.3, 0.5, 0.2, 0.4],
-            [2.4, 0.5, 0.2, 0.2],
-            [1.4, 0.2, 0.2, 0.2], 
-            [0.8, 0.2, 0.2, 0.2], 
-            [0.6, 0.2, 0.2, 0.2]
+            [1.0, 0.5, 0.3, 0.4],
+            [2.0, 0.5, 0.3, 0.2],
+            [1.5, 0.2, 0.3, 0.2], 
+            [1.0, 0.2, 0.3, 0.2], 
+            [1.0, 0.2, 0.3, 0.2]
         ]
         node_identifier = create_finger_nodes(fieldmodule, node_identifier, finger_dimensions, carpal_nodes[0])
-        finger_dimensions = [
-            [0.3, 0.5, 0.2, 0.4],
-            [2.3, 0.5, 0.2, 0.2],
-            [1.6, 0.2, 0.2, 0.2], 
-            [1, 0.2, 0.2, 0.2], 
-            [0.6, 0.2, 0.2, 0.2]
-        ]
         node_identifier = create_finger_nodes(fieldmodule, node_identifier, finger_dimensions, carpal_nodes[1])
-        finger_dimensions = [
-            [0.3, 0.5, 0.2, 0.4],
-            [2.0, 0.5, 0.2, 0.2],
-            [1.5, 0.2, 0.2, 0.2], 
-            [0.9, 0.2, 0.2, 0.2], 
-            [0.7, 0.2, 0.2, 0.2]
-        ]
         node_identifier = create_finger_nodes(fieldmodule, node_identifier, finger_dimensions, carpal_nodes[2])
-        finger_dimensions = [
-            [0.3, 0.5, 0.2, 0.4],
-            [1.9, 0.5, 0.2, 0.2],
-            [1.2, 0.2, 0.2, 0.2], 
-            [0.7, 0.2, 0.2, 0.2], 
-            [0.6, 0.2, 0.2, 0.2]
-        ]
         node_identifier = create_finger_nodes(fieldmodule, node_identifier, finger_dimensions, carpal_nodes[3])
+        node_identifier = nodes.getSize() + 1
+        # finger_dimensions = [
+        #     [0.3, 0.5, 0.2, 0.4],
+        #     [2.4, 0.5, 0.2, 0.2],
+        #     [1.4, 0.2, 0.2, 0.2], 
+        #     [0.8, 0.2, 0.2, 0.2], 
+        #     [0.6, 0.2, 0.2, 0.2]
+        # ]
+        # node_identifier = create_finger_nodes(fieldmodule, node_identifier, finger_dimensions, carpal_nodes[0])
+        # finger_dimensions = [
+        #     [0.3, 0.5, 0.2, 0.4],
+        #     [2.3, 0.5, 0.2, 0.2],
+        #     [1.6, 0.2, 0.2, 0.2], 
+        #     [1, 0.2, 0.2, 0.2], 
+        #     [0.6, 0.2, 0.2, 0.2]
+        # ]
+        # node_identifier = create_finger_nodes(fieldmodule, node_identifier, finger_dimensions, carpal_nodes[1])
+        # finger_dimensions = [
+        #     [0.3, 0.5, 0.2, 0.4],
+        #     [2.0, 0.5, 0.2, 0.2],
+        #     [1.5, 0.2, 0.2, 0.2], 
+        #     [0.9, 0.2, 0.2, 0.2], 
+        #     [0.7, 0.2, 0.2, 0.2]
+        # ]
+        # node_identifier = create_finger_nodes(fieldmodule, node_identifier, finger_dimensions, carpal_nodes[2])
+        # finger_dimensions = [
+        #     [0.3, 0.5, 0.2, 0.4],
+        #     [1.9, 0.5, 0.2, 0.2],
+        #     [1.2, 0.2, 0.2, 0.2], 
+        #     [0.7, 0.2, 0.2, 0.2], 
+        #     [0.6, 0.2, 0.2, 0.2]
+        # ]
+        # node_identifier = create_finger_nodes(fieldmodule, node_identifier, finger_dimensions, carpal_nodes[3])
         # Finger 1 (thumb)
         # Get the finger 1 metacarpal node
         finger_dimensions = [
@@ -152,14 +165,19 @@ class MeshType_3d_hand1(Scaffold_base):
         # Create box elements
         #################
         # Get scale factor matrix 
-        number_elements = [1, 3, 2, 1, 1]
+        # There is an extra row of elements on the metacarpal that represent the joint between
+        # the palm and the finger, always needs to be there. 
+        # Make sure to add 1 manually to the number of metacarpal elements when you add the options
+        number_elements = [1, 1+1, 1, 1, 1]
         
-        scale_factor_matrix = create_scale_factor_matrix(number_elements)
+        scale_factor_matrix = create_scale_factor_matrix(fieldmodule, number_elements, node_identifier)
         # Let it rip
         element_identifier = 1
         for k in range(3):
             for j in range(18): 
                 for i in range(sum(number_elements)):
+                    # if i != 2:
+                    #     continue 
                     result = create_linear_cube_element(fieldmodule, element_identifier, scale_factor_matrix, i, j, k)
                     if result == RESULT_OK:
                         element_identifier += 1
@@ -181,6 +199,202 @@ class MeshType_3d_hand1(Scaffold_base):
         mesh1d = fieldmodule.findMeshByDimension(1)
 
 
+def create_scale_factor_matrix(fieldmodule, number_elements, node_identifier):
+    c, mc, pp, mp, dp = number_elements
+    # mc += 1 #To account for the transitionary element from palm to finger
+    scale_factor_matrix = [[[None for k in range(4)] for j in range(19)] for i in range(c+mc+pp+mp+dp+1)]
+    # Scale factors for d2 and d3
+    bone_w = 1
+    skin_w = 1.5
+    bone_h = 1
+    skin_h = 2
+    # hand_node_ids = {
+    #     # Carpals
+    #     1: {'y': [(0, -skin_w), (1, -bone_w), (2, bone_w), (6, bone_w)]}, 
+    #     2: {'y': [(7, bone_w), (11, bone_w)]}, 
+    #     3: {'y': [(12, bone_w), (16, bone_w)]}, 
+    #     4: {'y': [(17, bone_w), (18, skin_w)]}, 
+    #     # Metacarpals 
+    #     5: {'y': [(0, -skin_w), (1, -bone_w), (2, bone_w), (6, bone_w)]}, 
+    #     6: {'y': [(7, bone_w), (11, bone_w)]}, 
+    #     7: {'y': [(12, bone_w), (16, bone_w)]}, 
+    #     8: {'y': [(17, bone_w), (18, skin_w)]}, 
+    #     # Proximal phalanx
+    #     9: {'y': [(0, -skin_w), (1, -bone_w), (2, bone_w), (3, skin_w)]}, 
+    #     10: {'y': [(5, -skin_w), (6, -bone_w), (7, bone_w), (8, skin_w)]}, 
+    #     11: {'y': [(10, -skin_w), (11, -bone_w), (12, bone_w), (13, skin_w)]}, 
+    #     12: {'y': [(15, -skin_w), (16, -bone_w), (17, bone_w), (18, skin_w)]}, 
+    #     # Middle phalanx 
+    #     13: {'y': [(0, -skin_w), (1, -bone_w), (2, bone_w), (3, skin_w)]}, 
+    #     14: {'y': [(5, -skin_w), (6, -bone_w), (7, bone_w), (8, skin_w)]}, 
+    #     15: {'y': [(10, -skin_w), (11, -bone_w), (12, bone_w), (13, skin_w)]}, 
+    #     16: {'y': [(15, -skin_w), (16, -bone_w), (17, bone_w), (18, skin_w)]}, 
+    #     # Distal phalanx
+    #     17: {'y': [(0, -skin_w), (1, -bone_w), (2, bone_w), (3, skin_w)]}, 
+    #     18: {'y': [(5, -skin_w), (6, -bone_w), (7, bone_w), (8, skin_w)]}, 
+    #     19: {'y': [(10, -skin_w), (11, -bone_w), (12, bone_w), (13, skin_w)]}, 
+    #     20: {'y': [(15, -skin_w), (16, -bone_w), (17, bone_w), (18, skin_w)]}, 
+    # }
+    bone_node_ids = {
+        # Carpals
+        1: {'y': [ (1, -bone_w), (2, bone_w), (6, bone_w)]}, 
+        2: {'y': [(7, bone_w), (11, bone_w)]}, 
+        3: {'y': [(12, bone_w), (16, bone_w)]}, 
+        4: {'y': [(17, bone_w), ]}, 
+        # Metacarpals 
+        5: {'y': [ (1, -bone_w), (2, bone_w), (6, bone_w)]}, 
+        6: {'y': [(7, bone_w), (11, bone_w)]}, 
+        7: {'y': [(12, bone_w), (16, bone_w)]}, 
+        8: {'y': [(17, bone_w)]}, 
+        # Proximal phalanx
+        9: {'y': [ (1, -bone_w), (2, bone_w), ]}, 
+        10: {'y': [(6, -bone_w), (7, bone_w), ]}, 
+        11: {'y': [(11, -bone_w), (12, bone_w), ]}, 
+        12: {'y': [(16, -bone_w), (17, bone_w), ]}, 
+        # Middle phalanx 
+        13: {'y': [(1, -bone_w), (2, bone_w), ]}, 
+        14: {'y': [ (6, -bone_w), (7, bone_w), ]}, 
+        15: {'y': [ (11, -bone_w), (12, bone_w), ]}, 
+        16: {'y': [ (16, -bone_w), (17, bone_w), ]}, 
+        # Distal phalanx
+        17: {'y': [ (1, -bone_w), (2, bone_w), ]}, 
+        18: {'y': [ (6, -bone_w), (7, bone_w), ]}, 
+        19: {'y': [ (11, -bone_w), (12, bone_w), ]}, 
+        20: {'y': [ (16, -bone_w), (17, bone_w), ]}, 
+    }
+    # The rows in the x and z direction follow a more basic algorithm, which still depends on the 
+    # node_ids, but these can be somewhat automated. 
+    # Carpals
+    z_vals = [(1, -bone_h), (2, bone_h)]
+    for node_id in range(1, 5):
+        bone_node_ids[node_id]['x'] = [(i, i/c) for i in range(c)]
+        bone_node_ids[node_id]['z'] = z_vals
+    # Metacarpals
+    for node_id in range(5, 9):
+        bone_node_ids[node_id]['x'] = [(c+i, (i/mc)*0.5) for i in range(mc-1)]
+        bone_node_ids[node_id]['x'].append((c+mc-1, 0.5))
+        bone_node_ids[node_id]['z'] = z_vals
+    # Proximal phalanx
+    for node_id in range(9, 13):
+        bone_node_ids[node_id]['x'] = [(i+c+mc, i/pp) for i in range(pp)]
+        bone_node_ids[node_id]['z'] = z_vals
+    # Middle phalanx 
+    for node_id in range(13, 17):
+        bone_node_ids[node_id]['x'] = [(i+c+mc+pp, i/mp) for i in range(mp)]
+        bone_node_ids[node_id]['z'] = z_vals
+        # Distal phalanx
+    for node_id in range(17, 21):
+        bone_node_ids[node_id]['x'] = [(i+c+mc+pp+mp, i/mp) for i in range(dp+1)]
+        bone_node_ids[node_id]['z'] = z_vals
+        
+    for node_id, node_factors in bone_node_ids.items():
+            for x in node_factors['x']:
+                for y in node_factors['y']:
+                    for z in node_factors['z']: 
+                        i = x[0]
+                        j = y[0]
+                        k = z[0]
+                        a0 = 1
+                        a1 = x[1]
+                        a2 = y[1]
+                        a3 = z[1]
+                        if scale_factor_matrix[i][j][k] is None: 
+                            scale_factor_matrix[i][j][k] = {
+                                Node.VALUE_LABEL_VALUE: [node_id, a0, a1, a2, a3]
+                            } 
+    ############
+    # Skin nodes 
+    ############
+    skin_node_ids = {
+        # Carpals
+        1: {'y': [([0], -skin_w), ([2, 6], bone_w)]}, 
+        2: {'y': [([7, 11], bone_w)]}, 
+        3: {'y': [([12, 16], bone_w)]}, 
+        4: {'y': [([17], bone_w), ([18], skin_w)]}, 
+        # Metacarpals 
+        5: {'y': [([0], -skin_w), ([2, 6], bone_w)]}, 
+        6: {'y': [([7, 11], bone_w)]},
+        7: {'y': [([12, 16], bone_w)]}, 
+        8: {'y': [([17], bone_w), ([18], skin_w)]}, 
+        # Proximal phalanx
+        9: {'y': [ ([0], -skin_w), ([3], skin_w), ]}, 
+        10: {'y': [ ([5], -skin_w), ([8], skin_w), ]}, 
+        11: {'y': [ ([10], -skin_w), ([13], skin_w), ]}, 
+        12: {'y': [ ([15], -skin_w), ([18], skin_w), ]}, 
+        # Middle phalanx 
+        13: {'y': [ ([0], -skin_w), ([3], skin_w), ]}, 
+        14: {'y': [ ([5], -skin_w), ([8], skin_w), ]}, 
+        15: {'y': [ ([10], -skin_w), ([13], skin_w), ]}, 
+        16: {'y': [ ([15], -skin_w), ([18], skin_w), ]}, 
+        # Distal phalanx
+        17: {'y': [ ([0], -skin_w), ([3], skin_w), ]}, 
+        18: {'y': [ ([5], -skin_w), ([8], skin_w), ]}, 
+        19: {'y': [ ([10], -skin_w), ([13], skin_w), ]}, 
+        20: {'y': [ ([15], -skin_w), ([18], skin_w), ]}, 
+    }
+    z_vals = [(0, -skin_h), (3, skin_h)]
+    for node_id in range(1, 5):
+        skin_node_ids[node_id]['x'] = [(i, i/c) for i in range(c)]
+        skin_node_ids[node_id]['z'] = z_vals
+    # Metacarpals
+    for node_id in range(5, 9):
+        skin_node_ids[node_id]['x'] = [(c+i, (i/mc)*0.5) for i in range(mc-1)]
+        skin_node_ids[node_id]['x'].append((c+mc-1, 0.5))
+        skin_node_ids[node_id]['z'] = z_vals
+    # Proximal phalanx
+    for node_id in range(9, 13):
+        skin_node_ids[node_id]['x'] = [(i+c+mc, i/pp) for i in range(pp)]
+        skin_node_ids[node_id]['z'] = z_vals
+    # Middle phalanx 
+    for node_id in range(13, 17):
+        skin_node_ids[node_id]['x'] = [(i+c+mc+pp, i/mp) for i in range(mp)]
+        skin_node_ids[node_id]['z'] = z_vals
+    # Distal phalanx
+    for node_id in range(17, 21):
+        skin_node_ids[node_id]['x'] = [(i+c+mc+pp+mp, i/mp) for i in range(dp+1)]
+        skin_node_ids[node_id]['z'] = z_vals
+    # Assigning scale factors to the matrix
+    for node_id, node_factors in skin_node_ids.items():
+        for x in node_factors['x']:
+            for z in node_factors['z']: 
+                for y in node_factors['y']:
+                    a0 = 1
+                    a1 = x[1]
+                    a2 = y[1]
+                    a3 = z[1]
+                    node_identifier = add_skin_node(
+                            fieldmodule, node_id, node_identifier, [a0, a1, a2, a3])
+                    # Assign this node to all the corners, as per the indices described
+                    # in the dictionary
+                    i = x[0]
+                    k = z[0]
+                    for y0 in y[0]:
+                        j = y0
+                        # In these 'corner' cases 
+                        # The matrix cell itself is not written on, instead the two 
+                        # other nodes at the side are 'pinched together' to make sure the 
+                        # skin elements stitch together. 
+                        if abs(a2) == skin_w and abs(a3) == skin_h:
+                            sign2 = int(math.copysign(1, a2))
+                            sign3 = int(math.copysign(1, a3))
+                            # node_identifier = add_skin_node(
+                                # fieldmodule, node_id, node_identifier, [a0, a1, a2, a3])
+                            scale_factor_matrix[i][j-sign2][k] = {
+                                Node.VALUE_LABEL_VALUE: [node_identifier-1, 1, 0, 0, 0]
+                            }
+                            scale_factor_matrix[i][j][k-sign3] = {
+                                Node.VALUE_LABEL_VALUE: [node_identifier-1, 1, 0, 0, 0]
+                            }
+                        else:
+                            # To not accidentally overwritte a corner node
+                            if scale_factor_matrix[i][j][k] is None: 
+                                scale_factor_matrix[i][j][k] = {
+                                    Node.VALUE_LABEL_VALUE: [node_identifier-1, 1, 0, 0, 0]
+                                } 
+    return scale_factor_matrix
+
+
+
 def create_linear_cube_element(fieldmodule, element_identifier, scale_factor_matrix, x, y, z):
     # Zinc setup
     mesh3d = fieldmodule.findMeshByDimension(3)
@@ -193,6 +407,7 @@ def create_linear_cube_element(fieldmodule, element_identifier, scale_factor_mat
     local_node = 0
     local_node_ids = {}
     expression_terms = {}
+    readable_expression_terms = {}
     n_local_nodes = 0
     n_scale_factors = 0
     value_labels = [
@@ -202,11 +417,13 @@ def create_linear_cube_element(fieldmodule, element_identifier, scale_factor_mat
             Node.VALUE_LABEL_D_DS2, 
             Node.VALUE_LABEL_D_DS3
         ]
+    value_label_names = [0, 'v', 'd1', 'd2', 'd3']
     for k in [0, 1]:
         for j in [0, 1]:
             for i in [0, 1]:
                 local_node = 1 + 1*i + 2*j +4*k
                 et = []
+                ret = []
                 corner = scale_factor_matrix[x+i][y+j][z+k]
                 if corner is None:
                     return -2 
@@ -227,7 +444,11 @@ def create_linear_cube_element(fieldmodule, element_identifier, scale_factor_mat
                         et.append(
                             [local_node_ids[global_node_id], value_labels[factor], scale_factor_ids[scale_factor]]
                         )
+                        ret.append(
+                            [str(global_node_id).zfill(2), value_label_names[factor], str(scale_factor).zfill(4)]
+                        )
                 expression_terms[local_node] = et
+                readable_expression_terms[local_node] = ret
     setEftScaleFactorIds(eft, [], [], n_scale_factors)
     for local_node in expression_terms:
         remapEftNodeValueLabelWithNodes(
@@ -248,6 +469,40 @@ def create_linear_cube_element(fieldmodule, element_identifier, scale_factor_mat
     element.setScaleFactors(eft, scale_factors)
     # element_identifier += 1
     return RESULT_OK
+
+def add_skin_node(fieldmodule: Fieldmodule, bone_node_id: int, node_identifier: int, scale_factors: list):
+    # Zinc setup
+    coordinates = find_or_create_field_coordinates(fieldmodule)
+    nodes = fieldmodule.findNodesetByFieldDomainType(Field.DOMAIN_TYPE_NODES)
+    nodetemplate = get_simple_nodetemplate(fieldmodule)
+    fieldcache = fieldmodule.createFieldcache()
+    # Get position from node
+    bone_node = nodes.findNodeByIdentifier(bone_node_id)
+    fieldcache.setNode(bone_node)
+    a0, a1, a2, a3 = scale_factors
+    value_labels = [
+            Node.VALUE_LABEL_VALUE,
+            Node.VALUE_LABEL_D_DS1, 
+            Node.VALUE_LABEL_D_DS2, 
+            Node.VALUE_LABEL_D_DS3
+        ]
+    node_params = []
+    for label in value_labels:
+        node_params.append(coordinates.getNodeParameters(fieldcache, -1, label, 1, 3)[1])
+    x0, e1, e2, e3 = node_params
+    # Calculating skin node parameters 
+    x = [0, 0, 0]
+    for i in range(4):
+        x = add(x, mult(node_params[i], scale_factors[i]))
+    # Create skin node
+    skin_node = nodes.createNode(node_identifier, nodetemplate)
+    fieldcache.setNode(skin_node)
+    d1 = [1, 0, 0]
+    d2 = [0, 0, 0]
+    d3 = [0, 0, 0]
+    setNodeFieldParameters(coordinates, fieldcache, x, d1, d2, d3)
+    node_identifier += 1
+    return node_identifier
 
 def create_thumb_nodes(fieldmodule, node_identifier, finger_dimensions, metacarpal_node_id, angle_degrees=0):
     """
@@ -384,7 +639,6 @@ def setNodeFieldParameters(field, fieldcache, x, d1, d2, d3, d12=None, d13=None)
     if d13:
         field.setNodeParameters(fieldcache, -1, Node.VALUE_LABEL_D2_DS1DS3, 1, d13)
 
-
 def setNodeFieldVersionDerivatives(field, fieldcache, version, d1, d2, d3, d12=None, d13=None):
     """
     Assign node field parameters d1, d2, d3 of field.
@@ -405,101 +659,3 @@ def setNodeFieldVersionDerivatives(field, fieldcache, version, d1, d2, d3, d12=N
         field.setNodeParameters(fieldcache, -1, Node.VALUE_LABEL_D2_DS1DS2, version, d12)
     if d13:
         field.setNodeParameters(fieldcache, -1, Node.VALUE_LABEL_D2_DS1DS3, version, d13)
-
-
-def create_scale_factor_matrix(number_elements):
-    c, mc, pp, mp, dp = number_elements
-    scale_factor_matrix = [[[None for k in range(4)] for j in range(19)] for i in range(c+mc+pp+mp+dp+1)]
-    # Scale factors for d2 and d3
-    bone_w = 1
-    skin_w = 1.5
-    bone_h = 1
-    skin_h = 2
-    hand_node_ids = {
-        # Carpals
-        1: {'y': [(0, -skin_w), (1, -bone_w), (2, bone_w), (6, bone_w)]}, 
-        2: {'y': [(7, bone_w), (11, bone_w)]}, 
-        3: {'y': [(12, bone_w), (16, bone_w)]}, 
-        4: {'y': [(17, bone_w), (18, skin_w)]}, 
-        # Metacarpals 
-        5: {'y': [(0, -skin_w), (1, -bone_w), (2, bone_w), (6, bone_w)]}, 
-        6: {'y': [(7, bone_w), (11, bone_w)]}, 
-        7: {'y': [(12, bone_w), (16, bone_w)]}, 
-        8: {'y': [(17, bone_w), (18, skin_w)]}, 
-        # Proximal phalanx
-        9: {'y': [(0, -skin_w), (1, -bone_w), (2, bone_w), (3, skin_w)]}, 
-        10: {'y': [(5, -skin_w), (6, -bone_w), (7, bone_w), (8, skin_w)]}, 
-        11: {'y': [(10, -skin_w), (11, -bone_w), (12, bone_w), (13, skin_w)]}, 
-        12: {'y': [(15, -skin_w), (16, -bone_w), (17, bone_w), (18, skin_w)]}, 
-        # Middle phalanx 
-        13: {'y': [(0, -skin_w), (1, -bone_w), (2, bone_w), (3, skin_w)]}, 
-        14: {'y': [(5, -skin_w), (6, -bone_w), (7, bone_w), (8, skin_w)]}, 
-        15: {'y': [(10, -skin_w), (11, -bone_w), (12, bone_w), (13, skin_w)]}, 
-        16: {'y': [(15, -skin_w), (16, -bone_w), (17, bone_w), (18, skin_w)]}, 
-        # Distal phalanx
-        17: {'y': [(0, -skin_w), (1, -bone_w), (2, bone_w), (3, skin_w)]}, 
-        18: {'y': [(5, -skin_w), (6, -bone_w), (7, bone_w), (8, skin_w)]}, 
-        19: {'y': [(10, -skin_w), (11, -bone_w), (12, bone_w), (13, skin_w)]}, 
-        20: {'y': [(15, -skin_w), (16, -bone_w), (17, bone_w), (18, skin_w)]}, 
-    }
-    # The rows in the x and z direction follow a more basic algorithm, which still depends on the 
-    # node_ids, but these can be somewhat automated. 
-    # Carpals
-    for node_id in range(1, 5):
-        hand_node_ids[node_id]['x'] = [(i, i/c) for i in range(c)]
-        hand_node_ids[node_id]['z'] = [(0, -skin_h), (1, -bone_h), (2, bone_h), (3, skin_h)]
-    # Metacarpals
-    for node_id in range(5, 9):
-        hand_node_ids[node_id]['x'] = [(c+i, i/mc) for i in range(mc)]
-        hand_node_ids[node_id]['z'] = [(0, -skin_h), (1, -bone_h), (2, bone_h), (3, skin_h)]
-    # Proximal phalanx
-    for node_id in range(9, 13):
-        hand_node_ids[node_id]['x'] = [(i+c+mc, i/pp) for i in range(pp)]
-        hand_node_ids[node_id]['z'] = [(0, -skin_h), (1, -bone_h), (2, bone_h), (3, skin_h)]
-    # Middle phalanx 
-    for node_id in range(13, 17):
-        hand_node_ids[node_id]['x'] = [(i+c+mc+pp, i/mp) for i in range(mp)]
-        hand_node_ids[node_id]['z'] = [(0, -skin_h), (1, -bone_h), (2, bone_h), (3, skin_h)]
-        # Distal phalanx
-    for node_id in range(17, 21):
-        hand_node_ids[node_id]['x'] = [(i+c+mc+pp+mp, i/mp) for i in range(dp+1)]
-        hand_node_ids[node_id]['z'] = [(0, -skin_h), (1, -bone_h), (2, bone_h), (3, skin_h)]
-        
-    # Assigning scale factors to the matrix
-    for node_id, node_factors in hand_node_ids.items():
-        for x in node_factors['x']:
-            for y in node_factors['y']:
-                for z in node_factors['z']: 
-                    i = x[0]
-                    j = y[0]
-                    k = z[0]
-                    a1 = x[1]
-                    a2 = y[1]
-                    a3 = z[1]
-                    if a2 == skin_w and a3 == skin_h:
-                        assign_scale_factors(scale_factor_matrix, node_id, i, j-1, k, a1, a2, a3, overwrite=True) 
-                        assign_scale_factors(scale_factor_matrix, node_id, i, j, k-1, a1, a2, a3, overwrite=True) 
-                    elif a2 == -skin_w and a3 == skin_h:
-                        assign_scale_factors(scale_factor_matrix, node_id, i, j+1, k, a1, a2, a3, overwrite=True) 
-                        assign_scale_factors(scale_factor_matrix, node_id, i, j, k-1, a1, a2, a3, overwrite=True) 
-                    elif a2 == skin_w and a3 == -skin_h:
-                        assign_scale_factors(scale_factor_matrix, node_id, i, j-1, k, a1, a2, a3, overwrite=True) 
-                        assign_scale_factors(scale_factor_matrix, node_id, i, j, k+1, a1, a2, a3, overwrite=True) 
-                    elif a2 == -skin_w and a3 == -skin_h:
-                        assign_scale_factors(scale_factor_matrix, node_id, i, j+1, k, a1, a2, a3, overwrite=True) 
-                        assign_scale_factors(scale_factor_matrix, node_id, i, j, k+1, a1, a2, a3, overwrite=True) 
-                    else:
-                        assign_scale_factors(scale_factor_matrix, node_id, i, j, k, a1, a2, a3)
-    return scale_factor_matrix
-
-def assign_scale_factors(scale_factor_matrix, node_id, i, j, k, a1, a2, a3, overwrite=False):
-    a0 = 1
-    if not overwrite: 
-        if scale_factor_matrix[i][j][k] is None: 
-            scale_factor_matrix[i][j][k] = {
-                Node.VALUE_LABEL_VALUE: [node_id, a0, a1, a2, a3]
-            } 
-    else:
-        scale_factor_matrix[i][j][k] = {
-                Node.VALUE_LABEL_VALUE: [node_id, a0, a1, a2, a3]
-            } 
