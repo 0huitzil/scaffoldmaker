@@ -1,6 +1,8 @@
 import math
 import logging
 
+
+from itertools import product
 from cmlibs.maths.vectorops import (
     add, cross, distance, dot, magnitude, matrix_mult, matrix_inv, mult, normalize, rejection, set_magnitude, sub)
 from cmlibs.utils.zinc.field import find_or_create_field_group, find_or_create_field_coordinates
@@ -111,7 +113,7 @@ class MeshType_3d_hand1(Scaffold_base):
         # Fingers 2 - 4 (finger 1, thumb, is added later)
         finger_dimensions = [
             [1.0, 0.5, 0.3, 0.4],
-            [2.0, 0.5, 0.3, 0.2],
+            [3.0, 0.5, 0.3, 0.2],
             [1.5, 0.2, 0.3, 0.2], 
             [1.0, 0.2, 0.3, 0.2], 
             [1.0, 0.2, 0.3, 0.2]
@@ -120,7 +122,7 @@ class MeshType_3d_hand1(Scaffold_base):
         node_identifier = create_finger_nodes(fieldmodule, node_identifier, finger_dimensions, carpal_nodes[1])
         node_identifier = create_finger_nodes(fieldmodule, node_identifier, finger_dimensions, carpal_nodes[2])
         node_identifier = create_finger_nodes(fieldmodule, node_identifier, finger_dimensions, carpal_nodes[3])
-        node_identifier = nodes.getSize() + 1
+        
         # finger_dimensions = [
         #     [0.3, 0.5, 0.2, 0.4],
         #     [2.4, 0.5, 0.2, 0.2],
@@ -155,12 +157,10 @@ class MeshType_3d_hand1(Scaffold_base):
         # node_identifier = create_finger_nodes(fieldmodule, node_identifier, finger_dimensions, carpal_nodes[3])
         # Finger 1 (thumb)
         # Get the finger 1 metacarpal node
-        finger_dimensions = [
-            [1.9, 0.4, 0.2, 0.2],
-            [1.2, 0.2, 0.2, 0.2], 
-            [0.6, 0.2, 0.2, 0.2]
-        ]
-        # node_identifier = create_thumb_nodes(fieldmodule, 21, finger_dimensions, 5, thumb_angle_degrees)
+
+        node_identifier = nodes.getSize() + 1
+        node_identifier = create_thumb_nodes(fieldmodule, node_identifier, finger_dimensions[1:], 8, 0)
+        node_identifier = nodes.getSize() + 1
         #################
         # Create box elements
         #################
@@ -172,12 +172,34 @@ class MeshType_3d_hand1(Scaffold_base):
         
         scale_factor_matrix = create_scale_factor_matrix(fieldmodule, number_elements, node_identifier)
         # Let it rip
+        scale_factor_matrix[2][3][1] = scale_factor_matrix[2][2][0] 
+        scale_factor_matrix[2][3][2] = scale_factor_matrix[2][2][3]
+
+        scale_factor_matrix[2][5][1] = scale_factor_matrix[2][2][0] 
+        scale_factor_matrix[2][5][2] = scale_factor_matrix[2][2][3]
+        
+        scale_factor_matrix[2][8][1] = scale_factor_matrix[2][7][0] 
+        scale_factor_matrix[2][8][2] = scale_factor_matrix[2][7][3]
+
+        scale_factor_matrix[2][10][1] = scale_factor_matrix[2][7][0] 
+        scale_factor_matrix[2][10][2] = scale_factor_matrix[2][7][3]
+        
+        scale_factor_matrix[2][13][1] = scale_factor_matrix[2][12][0] 
+        scale_factor_matrix[2][13][2] = scale_factor_matrix[2][12][3]
+
+        scale_factor_matrix[2][15][1] = scale_factor_matrix[2][12][0] 
+        scale_factor_matrix[2][15][2] = scale_factor_matrix[2][12][3]
+
         element_identifier = 1
         for k in range(3):
             for j in range(18): 
                 for i in range(sum(number_elements)):
-                    # if i != 2:
+                    # if i != 3:
                     #     continue 
+                    # if j not in [0, 1]:
+                    #     continue
+                    # if k not in [1]:
+                    #     continue
                     result = create_linear_cube_element(fieldmodule, element_identifier, scale_factor_matrix, i, j, k)
                     if result == RESULT_OK:
                         element_identifier += 1
@@ -207,60 +229,36 @@ def create_scale_factor_matrix(fieldmodule, number_elements, node_identifier):
     bone_w = 1
     skin_w = 1.5
     bone_h = 1
-    skin_h = 2
-    # hand_node_ids = {
-    #     # Carpals
-    #     1: {'y': [(0, -skin_w), (1, -bone_w), (2, bone_w), (6, bone_w)]}, 
-    #     2: {'y': [(7, bone_w), (11, bone_w)]}, 
-    #     3: {'y': [(12, bone_w), (16, bone_w)]}, 
-    #     4: {'y': [(17, bone_w), (18, skin_w)]}, 
-    #     # Metacarpals 
-    #     5: {'y': [(0, -skin_w), (1, -bone_w), (2, bone_w), (6, bone_w)]}, 
-    #     6: {'y': [(7, bone_w), (11, bone_w)]}, 
-    #     7: {'y': [(12, bone_w), (16, bone_w)]}, 
-    #     8: {'y': [(17, bone_w), (18, skin_w)]}, 
-    #     # Proximal phalanx
-    #     9: {'y': [(0, -skin_w), (1, -bone_w), (2, bone_w), (3, skin_w)]}, 
-    #     10: {'y': [(5, -skin_w), (6, -bone_w), (7, bone_w), (8, skin_w)]}, 
-    #     11: {'y': [(10, -skin_w), (11, -bone_w), (12, bone_w), (13, skin_w)]}, 
-    #     12: {'y': [(15, -skin_w), (16, -bone_w), (17, bone_w), (18, skin_w)]}, 
-    #     # Middle phalanx 
-    #     13: {'y': [(0, -skin_w), (1, -bone_w), (2, bone_w), (3, skin_w)]}, 
-    #     14: {'y': [(5, -skin_w), (6, -bone_w), (7, bone_w), (8, skin_w)]}, 
-    #     15: {'y': [(10, -skin_w), (11, -bone_w), (12, bone_w), (13, skin_w)]}, 
-    #     16: {'y': [(15, -skin_w), (16, -bone_w), (17, bone_w), (18, skin_w)]}, 
-    #     # Distal phalanx
-    #     17: {'y': [(0, -skin_w), (1, -bone_w), (2, bone_w), (3, skin_w)]}, 
-    #     18: {'y': [(5, -skin_w), (6, -bone_w), (7, bone_w), (8, skin_w)]}, 
-    #     19: {'y': [(10, -skin_w), (11, -bone_w), (12, bone_w), (13, skin_w)]}, 
-    #     20: {'y': [(15, -skin_w), (16, -bone_w), (17, bone_w), (18, skin_w)]}, 
-    # }
+    skin_h = 1.5
+    ############
+    # Bone nodes 
+    ############
     bone_node_ids = {
         # Carpals
-        1: {'y': [ (1, -bone_w), (2, bone_w), (6, bone_w)]}, 
-        2: {'y': [(7, bone_w), (11, bone_w)]}, 
-        3: {'y': [(12, bone_w), (16, bone_w)]}, 
-        4: {'y': [(17, bone_w), ]}, 
+        1: {'y': [ ([1], -bone_w), ([2, 6], bone_w)]}, 
+        2: {'y': [([7, 11], bone_w)]}, 
+        3: {'y': [([12, 16], bone_w)]}, 
+        4: {'y': [([17], bone_w), ]}, 
         # Metacarpals 
-        5: {'y': [ (1, -bone_w), (2, bone_w), (6, bone_w)]}, 
-        6: {'y': [(7, bone_w), (11, bone_w)]}, 
-        7: {'y': [(12, bone_w), (16, bone_w)]}, 
-        8: {'y': [(17, bone_w)]}, 
+        5: {'y': [ ([1], -bone_w), ([2, 6], bone_w)]}, 
+        6: {'y': [([7, 11], bone_w)]}, 
+        7: {'y': [([12, 16], bone_w)]}, 
+        8: {'y': [([17], bone_w), ]}, 
         # Proximal phalanx
-        9: {'y': [ (1, -bone_w), (2, bone_w), ]}, 
-        10: {'y': [(6, -bone_w), (7, bone_w), ]}, 
-        11: {'y': [(11, -bone_w), (12, bone_w), ]}, 
-        12: {'y': [(16, -bone_w), (17, bone_w), ]}, 
+        9: {'y': [ ([1], -bone_w), ([2], bone_w), ]}, 
+        10: {'y': [([6], -bone_w), ([7], bone_w), ]}, 
+        11: {'y': [([11], -bone_w), ([12], bone_w), ]}, 
+        12: {'y': [([16], -bone_w), ([17], bone_w), ]}, 
         # Middle phalanx 
-        13: {'y': [(1, -bone_w), (2, bone_w), ]}, 
-        14: {'y': [ (6, -bone_w), (7, bone_w), ]}, 
-        15: {'y': [ (11, -bone_w), (12, bone_w), ]}, 
-        16: {'y': [ (16, -bone_w), (17, bone_w), ]}, 
+        13: {'y': [([1], -bone_w), ([2], bone_w), ]}, 
+        14: {'y': [ ([6], -bone_w), ([7], bone_w), ]}, 
+        15: {'y': [ ([11], -bone_w), ([12], bone_w), ]}, 
+        16: {'y': [ ([16], -bone_w), ([17], bone_w), ]}, 
         # Distal phalanx
-        17: {'y': [ (1, -bone_w), (2, bone_w), ]}, 
-        18: {'y': [ (6, -bone_w), (7, bone_w), ]}, 
-        19: {'y': [ (11, -bone_w), (12, bone_w), ]}, 
-        20: {'y': [ (16, -bone_w), (17, bone_w), ]}, 
+        17: {'y': [ ([1], -bone_w), ([2], bone_w), ]}, 
+        18: {'y': [ ([6], -bone_w), ([7], bone_w), ]}, 
+        19: {'y': [ ([11], -bone_w), ([12], bone_w), ]}, 
+        20: {'y': [ ([16], -bone_w), ([17], bone_w), ]}, 
     }
     # The rows in the x and z direction follow a more basic algorithm, which still depends on the 
     # node_ids, but these can be somewhat automated. 
@@ -271,8 +269,8 @@ def create_scale_factor_matrix(fieldmodule, number_elements, node_identifier):
         bone_node_ids[node_id]['z'] = z_vals
     # Metacarpals
     for node_id in range(5, 9):
-        bone_node_ids[node_id]['x'] = [(c+i, (i/mc)*0.5) for i in range(mc-1)]
-        bone_node_ids[node_id]['x'].append((c+mc-1, 0.5))
+        bone_node_ids[node_id]['x'] = [(c+i, (i/mc)*0.7) for i in range(mc-1)]
+        bone_node_ids[node_id]['x'].append((c+mc-1, 0.7))
         bone_node_ids[node_id]['z'] = z_vals
     # Proximal phalanx
     for node_id in range(9, 13):
@@ -289,19 +287,20 @@ def create_scale_factor_matrix(fieldmodule, number_elements, node_identifier):
         
     for node_id, node_factors in bone_node_ids.items():
             for x in node_factors['x']:
-                for y in node_factors['y']:
-                    for z in node_factors['z']: 
-                        i = x[0]
-                        j = y[0]
-                        k = z[0]
-                        a0 = 1
-                        a1 = x[1]
-                        a2 = y[1]
-                        a3 = z[1]
-                        if scale_factor_matrix[i][j][k] is None: 
-                            scale_factor_matrix[i][j][k] = {
-                                Node.VALUE_LABEL_VALUE: [node_id, a0, a1, a2, a3]
-                            } 
+                for z in node_factors['z']: 
+                    for y in node_factors['y']:
+                        for j in y[0]:
+                            i = x[0]
+                            k = z[0]
+                            a0 = 1
+                            a1 = x[1]
+                            a2 = y[1]
+                            a3 = z[1]
+                            if scale_factor_matrix[i][j][k] is None: 
+                                scale_factor_matrix[i][j][k] = {
+                                    Node.VALUE_LABEL_VALUE: [node_id, a0, a1, a2, a3], 
+                                    'Type': 'bone'
+                                } 
     ############
     # Skin nodes 
     ############
@@ -310,12 +309,12 @@ def create_scale_factor_matrix(fieldmodule, number_elements, node_identifier):
         1: {'y': [([0], -skin_w), ([2, 6], bone_w)]}, 
         2: {'y': [([7, 11], bone_w)]}, 
         3: {'y': [([12, 16], bone_w)]}, 
-        4: {'y': [([17], bone_w), ([18], skin_w)]}, 
+        4: {'y': [([18], skin_w)]}, 
         # Metacarpals 
         5: {'y': [([0], -skin_w), ([2, 6], bone_w)]}, 
         6: {'y': [([7, 11], bone_w)]},
         7: {'y': [([12, 16], bone_w)]}, 
-        8: {'y': [([17], bone_w), ([18], skin_w)]}, 
+        8: {'y': [([18], skin_w)]}, 
         # Proximal phalanx
         9: {'y': [ ([0], -skin_w), ([3], skin_w), ]}, 
         10: {'y': [ ([5], -skin_w), ([8], skin_w), ]}, 
@@ -338,8 +337,8 @@ def create_scale_factor_matrix(fieldmodule, number_elements, node_identifier):
         skin_node_ids[node_id]['z'] = z_vals
     # Metacarpals
     for node_id in range(5, 9):
-        skin_node_ids[node_id]['x'] = [(c+i, (i/mc)*0.5) for i in range(mc-1)]
-        skin_node_ids[node_id]['x'].append((c+mc-1, 0.5))
+        skin_node_ids[node_id]['x'] = [(c+i, (i/mc)*0.7) for i in range(mc-1)]
+        skin_node_ids[node_id]['x'].append((c+mc-1, 0.7))
         skin_node_ids[node_id]['z'] = z_vals
     # Proximal phalanx
     for node_id in range(9, 13):
@@ -362,35 +361,52 @@ def create_scale_factor_matrix(fieldmodule, number_elements, node_identifier):
                     a1 = x[1]
                     a2 = y[1]
                     a3 = z[1]
-                    node_identifier = add_skin_node(
-                            fieldmodule, node_id, node_identifier, [a0, a1, a2, a3])
+                    d1 = [1, 0, 0]
+                    d2 = [0, 1, 0] if x[0] != c+mc-1 else [0, 0, 0]
+                    d3 = [0, 0, 0]
                     # Assign this node to all the corners, as per the indices described
                     # in the dictionary
                     i = x[0]
                     k = z[0]
-                    for y0 in y[0]:
-                        j = y0
-                        # In these 'corner' cases 
-                        # The matrix cell itself is not written on, instead the two 
-                        # other nodes at the side are 'pinched together' to make sure the 
-                        # skin elements stitch together. 
+                    for j in y[0]:
                         if abs(a2) == skin_w and abs(a3) == skin_h:
+                            # In these 'corner' cases 
+                            # The node itself is not written on, instead the two 
+                            # other nodes at the side are 'pinched together' to make sure the 
+                            # skin elements stitch together. 
                             sign2 = int(math.copysign(1, a2))
                             sign3 = int(math.copysign(1, a3))
-                            # node_identifier = add_skin_node(
-                                # fieldmodule, node_id, node_identifier, [a0, a1, a2, a3])
+                            sin45 = math.sin(math.pi/4)
+                            d2 = [0, sign3*sin45, -sign2*sin45]
+                            d1 = [1, 0, 0]
                             scale_factor_matrix[i][j-sign2][k] = {
-                                Node.VALUE_LABEL_VALUE: [node_identifier-1, 1, 0, 0, 0]
+                                Node.VALUE_LABEL_VALUE: [node_identifier, 1, 0, 0, 0], 
+                                    'Type': 'skin'
                             }
                             scale_factor_matrix[i][j][k-sign3] = {
-                                Node.VALUE_LABEL_VALUE: [node_identifier-1, 1, 0, 0, 0]
+                                Node.VALUE_LABEL_VALUE: [node_identifier, 1, 0, 0, 0], 
+                                    'Type': 'skin'
                             }
+                        elif x[0] == c+mc-1 and abs(a2) == bone_w:
+                            d1 = [0.7, 0, 0]
+                            d2 = [0, 0, 0]
+                            scale_factor_matrix[i][j][k] = {
+                                    Node.VALUE_LABEL_VALUE: [node_identifier, 1, 0, 0, 0], 
+                                    'Type': 'skin'
+                                } 
                         else:
                             # To not accidentally overwritte a corner node
+                            sign2 = int(math.copysign(1, a2))
+                            sign3 = int(math.copysign(1, a3))
+                            d2 = [0, sign3, 0]
+                            d1 = [1, 0, 0]
                             if scale_factor_matrix[i][j][k] is None: 
                                 scale_factor_matrix[i][j][k] = {
-                                    Node.VALUE_LABEL_VALUE: [node_identifier-1, 1, 0, 0, 0]
+                                    Node.VALUE_LABEL_VALUE: [node_identifier, 1, 0, 0, 0], 
+                                    'Type': 'skin'
                                 } 
+                    node_identifier = add_skin_node(
+                            fieldmodule, node_id, node_identifier, [a0, a1, a2, a3], [d1, d2])
     return scale_factor_matrix
 
 
@@ -399,15 +415,51 @@ def create_linear_cube_element(fieldmodule, element_identifier, scale_factor_mat
     # Zinc setup
     mesh3d = fieldmodule.findMeshByDimension(3)
     coordinates = find_or_create_field_coordinates(fieldmodule)
-    linear_basis = fieldmodule.createElementbasis(3, Elementbasis.FUNCTION_TYPE_LINEAR_LAGRANGE)
-    # Create adn remap eft
-    eft = mesh3d.createElementfieldtemplate(linear_basis)
-    scale_factor_ids = {
-    }
+    # 
+    # Criteria to identify the z axis of the element
+    corner_1 = scale_factor_matrix[x][y][z]
+    corner_3 = scale_factor_matrix[x+1][y+1][z]
+    corner_5 = scale_factor_matrix[x+1][y+1][z+1]
+    if corner_1 is None or corner_3 is None or corner_5 is None:
+        return -2
+    corner_5_skin = True if corner_5['Type'] == 'skin' else False 
+    corner_3_skin = True if corner_3['Type'] == 'skin' else False
+    corner_1_skin = True if corner_1['Type'] == 'skin' else False 
+    if not corner_1_skin and not corner_3_skin:
+        ranges = [[0, 1], [0, 1], [0, 1]]
+        order = [2, 1, 0]
+    elif not corner_1_skin and  corner_3_skin:
+        ranges = [[0, 1], [0, 1], [1, 0]]
+        order = [1, 2, 0]
+    elif  corner_1_skin and not corner_3_skin:
+        ranges = [[0, 1], [1, 0], [0, 1]]
+        order = [1, 2, 0]
+    elif corner_1_skin and corner_3_skin:
+        ranges = [[0, 1], [1, 0], [1, 0]]
+        order = [2, 1, 0]
+    is_bicubic = True if corner_1_skin or corner_3_skin or corner_5_skin else False
+    # Obtained the ordered list of indices to parse through
+    reordered_ranges = [ranges[idx] for idx in order]
+    indices = []
+    # Create the cartersian product
+    for prod in product(*reordered_ranges):
+        # Create a placeholder for [i, j, k]
+        row = [0] * len(ranges)
+        # Map the generated values back to their correct positions
+        for i, val in enumerate(prod):
+            original_axis = order[i]
+            row[original_axis] = val
+        indices.append(row)
+    # Extract information from nodes matrix and create expression terms
+    global_to_local_scale_factor_ids = {}
     local_node = 0
     local_node_ids = {}
-    expression_terms = {}
+    value_expression_terms = {}
+    d1_expression_terms = {}
+    d2_expression_terms = {}
+    negative_value_ets = {}
     readable_expression_terms = {}
+    readable_negative_ets = {}
     n_local_nodes = 0
     n_scale_factors = 0
     value_labels = [
@@ -418,59 +470,137 @@ def create_linear_cube_element(fieldmodule, element_identifier, scale_factor_mat
             Node.VALUE_LABEL_D_DS3
         ]
     value_label_names = [0, 'v', 'd1', 'd2', 'd3']
-    for k in [0, 1]:
-        for j in [0, 1]:
-            for i in [0, 1]:
-                local_node = 1 + 1*i + 2*j +4*k
-                et = []
-                ret = []
-                corner = scale_factor_matrix[x+i][y+j][z+k]
-                if corner is None:
-                    return -2 
-                corner = corner[Node.VALUE_LABEL_VALUE]
-                for factor in range(len(corner)):
-                    if factor == 0:
-                        # Check for node_ids
-                        global_node_id = corner[factor]
-                        if global_node_id not in local_node_ids:
-                            n_local_nodes += 1
-                            local_node_ids[global_node_id] = n_local_nodes
-                    else:
-                        # Check for scale_factor_ids
-                        scale_factor = corner[factor]
-                        if scale_factor not in scale_factor_ids:
-                            n_scale_factors += 1
-                            scale_factor_ids[scale_factor] = n_scale_factors
-                        et.append(
-                            [local_node_ids[global_node_id], value_labels[factor], scale_factor_ids[scale_factor]]
-                        )
-                        ret.append(
-                            [str(global_node_id).zfill(2), value_label_names[factor], str(scale_factor).zfill(4)]
-                        )
-                expression_terms[local_node] = et
-                readable_expression_terms[local_node] = ret
-    setEftScaleFactorIds(eft, [], [], n_scale_factors)
-    for local_node in expression_terms:
-        remapEftNodeValueLabelWithNodes(
-            eft, local_node, Node.VALUE_LABEL_VALUE, expression_terms[local_node]
-        )
-    remapEftLocalNodes(eft, n_local_nodes, [1, 2, 3, 4, 5, 6, 7, 8])
-    # Create element template
-    etemplate = mesh3d.createElementtemplate()
-    etemplate.setElementShapeType(Element.SHAPE_TYPE_CUBE)
-    result = etemplate.defineField(coordinates, -1, eft)
-    if result != RESULT_OK:
-        return result
+    local_node = 0
+    for index in indices:
+        et = []
+        neg_et = []
+        ret = []
+        i = index[0]
+        j = index[1]
+        k = index[2]
+        local_node += 1
+        corner = scale_factor_matrix[x+i][y+j][z+k]
+        if corner is None:
+            return -2 
+        corner = corner[Node.VALUE_LABEL_VALUE]
+        # Value expression terms
+        for factor in range(len(corner)):
+            if factor == 0:
+                # Check for node_ids
+                global_node_id = corner[factor]
+                if global_node_id not in local_node_ids:
+                    n_local_nodes += 1
+                    local_node_ids[global_node_id] = n_local_nodes
+            else:
+                # Check for scale_factor_ids
+                scale_factor = corner[factor]
+                if scale_factor not in global_to_local_scale_factor_ids:
+                    n_scale_factors += 1
+                    global_to_local_scale_factor_ids[scale_factor] = n_scale_factors
+                et.append(
+                    [local_node_ids[global_node_id], value_labels[factor], global_to_local_scale_factor_ids[scale_factor]]
+                )
+                ret.append(
+                    [str(global_node_id).zfill(2), value_label_names[factor], str(scale_factor).zfill(4)]
+                )
+        value_expression_terms[local_node] = et
+        readable_expression_terms[local_node] = ret
+    local_to_global_node_ids = {value:key for key, value in local_node_ids.items()}
+    local_to_global_scale_factor_ids = {value:key for key, value in global_to_local_scale_factor_ids.items()}
+    if is_bicubic:
+        # Create 'negative' value expression terms 
+        for local_node in [1, 2, 3]: 
+            neg_et = []
+            red_et = []
+            et = value_expression_terms[local_node]
+            for term in et: 
+                l_node_id = term[0]
+                label = term[1]
+                scale_factor_id = term[2]
+                scale_factor = -local_to_global_scale_factor_ids[scale_factor_id]
+                if scale_factor not in global_to_local_scale_factor_ids:
+                    n_scale_factors += 1
+                    global_to_local_scale_factor_ids[scale_factor] = n_scale_factors
+                neg_et.append([l_node_id, label, global_to_local_scale_factor_ids[scale_factor]])
+                # red_et.append(
+                #     [str(local_to_global_node_ids[l_node_id]).zfill(2), value_label_names[label], str(scale_factor).zfill(4)]
+                # )
+            negative_value_ets[local_node] = neg_et
+            readable_negative_ets[local_node] = red_et
+        # Create d1 expression terms 
+        d1_expression_terms[1] = value_expression_terms[2] + negative_value_ets[1]
+        d1_expression_terms[2] = value_expression_terms[2] + negative_value_ets[1]
+        d1_expression_terms[3] = value_expression_terms[4] + negative_value_ets[3]
+        d1_expression_terms[4] = value_expression_terms[4] + negative_value_ets[3]
+        for local_node in range(5, 9):
+            et = value_expression_terms[local_node][0]
+            l_node_id = et[0]
+            label = Node.VALUE_LABEL_D_DS1
+            scale_factor_id = global_to_local_scale_factor_ids[1]
+            d1_expression_terms[local_node] = [[l_node_id, label, scale_factor_id]]
+            # d1_expression_terms[local_node-4] = [[l_node_id, label, scale_factor_id]]
+        # create d1 expression terms 
+        d2_expression_terms[1] = value_expression_terms[3] + negative_value_ets[1]
+        d2_expression_terms[2] = value_expression_terms[4] + negative_value_ets[2]
+        d2_expression_terms[3] = value_expression_terms[3] + negative_value_ets[1]
+        d2_expression_terms[4] = value_expression_terms[4] + negative_value_ets[2]
+        for local_node in range(5, 9):
+            et = value_expression_terms[local_node][0]
+            l_node_id = et[0]
+            label = Node.VALUE_LABEL_D_DS2
+            scale_factor_id = global_to_local_scale_factor_ids[1]
+            d2_expression_terms[local_node] = [[l_node_id, label, scale_factor_id]]
+            # d2_expression_terms[local_node-4] = [[l_node_id, label, scale_factor_id]]
+    # Create adn remap eft
+    if is_bicubic:
+        # Bicubic linear element (skin)
+        bicubic_linear_basis = fieldmodule.createElementbasis(3, Elementbasis.FUNCTION_TYPE_CUBIC_HERMITE_SERENDIPITY)
+        bicubic_linear_basis.setFunctionType(3, Elementbasis.FUNCTION_TYPE_LINEAR_LAGRANGE)
+        eft = mesh3d.createElementfieldtemplate(bicubic_linear_basis)
+        setEftScaleFactorIds(eft, [], [], n_scale_factors)
+        for local_node in value_expression_terms:
+            remapEftNodeValueLabelWithNodes(
+                eft, local_node, Node.VALUE_LABEL_VALUE, value_expression_terms[local_node]
+            )
+            remapEftNodeValueLabelWithNodes(
+                eft, local_node, Node.VALUE_LABEL_D_DS1, d1_expression_terms[local_node]
+            )
+            remapEftNodeValueLabelWithNodes(
+                eft, local_node, Node.VALUE_LABEL_D_DS2, d2_expression_terms[local_node]
+            )
+        remapEftLocalNodes(eft, n_local_nodes, [1, 2, 3, 4, 5, 6, 7, 8])
+        # Create element template
+        etemplate = mesh3d.createElementtemplate()
+        etemplate.setElementShapeType(Element.SHAPE_TYPE_CUBE)
+        result = etemplate.defineField(coordinates, -1, eft)
+        if result != RESULT_OK:
+            return result
+    else:
+        # Trilinear element (bone)
+        trilinear_basis = fieldmodule.createElementbasis(3, Elementbasis.FUNCTION_TYPE_LINEAR_LAGRANGE)
+        eft = mesh3d.createElementfieldtemplate(trilinear_basis)
+        setEftScaleFactorIds(eft, [], [], n_scale_factors)
+        for local_node in value_expression_terms:
+            remapEftNodeValueLabelWithNodes(
+                eft, local_node, Node.VALUE_LABEL_VALUE, value_expression_terms[local_node]
+            )
+        remapEftLocalNodes(eft, n_local_nodes, [1, 2, 3, 4, 5, 6, 7, 8])
+        # Create element template
+        etemplate = mesh3d.createElementtemplate()
+        etemplate.setElementShapeType(Element.SHAPE_TYPE_CUBE)
+        result = etemplate.defineField(coordinates, -1, eft)
+        if result != RESULT_OK:
+            return result
     # Create element
     element = mesh3d.createElement(element_identifier, etemplate)
     node_ids = list(local_node_ids.keys())
     element.setNodesByIdentifier(eft, node_ids)
-    scale_factors = list(scale_factor_ids.keys())
+    scale_factors = list(global_to_local_scale_factor_ids.keys())
     element.setScaleFactors(eft, scale_factors)
     # element_identifier += 1
     return RESULT_OK
 
-def add_skin_node(fieldmodule: Fieldmodule, bone_node_id: int, node_identifier: int, scale_factors: list):
+def add_skin_node(fieldmodule: Fieldmodule, bone_node_id: int, node_identifier: int, scale_factors: list, directions: list):
     # Zinc setup
     coordinates = find_or_create_field_coordinates(fieldmodule)
     nodes = fieldmodule.findNodesetByFieldDomainType(Field.DOMAIN_TYPE_NODES)
@@ -497,8 +627,11 @@ def add_skin_node(fieldmodule: Fieldmodule, bone_node_id: int, node_identifier: 
     # Create skin node
     skin_node = nodes.createNode(node_identifier, nodetemplate)
     fieldcache.setNode(skin_node)
-    d1 = [1, 0, 0]
-    d2 = [0, 0, 0]
+    d1, d2 = directions
+    # d2 = set_magnitude(d2, magnitude(mult(node_params[2], scale_factors[2])))
+    # d1 = set_magnitude(d1, magnitude(mult(node_params[1], 1-scale_factors[1])))
+    d2 = set_magnitude(d2, magnitude(node_params[2])) if magnitude(d2) != 0 else d2
+    # d1 = set_magnitude(d1, magnitude(node_params[1])) if magnitude(d1) != 0 else d2
     d3 = [0, 0, 0]
     setNodeFieldParameters(coordinates, fieldcache, x, d1, d2, d3)
     node_identifier += 1
