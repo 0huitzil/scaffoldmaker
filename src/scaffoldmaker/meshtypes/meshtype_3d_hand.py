@@ -104,25 +104,36 @@ class MeshType_3d_hand1(Scaffold_base):
         # Create bone nodes
         #################
         node_identifier = 1
-        carpal_nodes = [[0, 0.2, 0]]
+        carpal_nodes = [[0, 0, 0]]
 
         for i in range(4):
             x = carpal_nodes[-1]
             x = add(x, mult([0, 1, 0], 1))
             carpal_nodes.append(x)
         # Fingers 2 - 4 (finger 1, thumb, is added later)
-        finger_dimensions = [
-            [1.0, 0.5, 0.3, 0.4],
-            [3.0, 0.5, 0.3, 0.2],
-            [1.5, 0.2, 0.3, 0.2], 
-            [1.0, 0.2, 0.3, 0.2], 
-            [1.0, 0.2, 0.3, 0.2]
+        finger_dimensions = [ #d1, d2, d3, d12
+            [1.0, 0.5, 0.3, 0.4], #carpal
+            [3.0, 0.5, 0.3, 0.2], #metacarpal
+            [1.5, 0.2, 0.3, 0.2], #pp
+            [1.0, 0.2, 0.3, 0.2], #m                             p
+            [1.0, 0.2, 0.3, 0.2]  #dp
         ]
-        node_identifier = create_finger_nodes(fieldmodule, node_identifier, finger_dimensions, carpal_nodes[0])
-        node_identifier = create_finger_nodes(fieldmodule, node_identifier, finger_dimensions, carpal_nodes[1])
-        node_identifier = create_finger_nodes(fieldmodule, node_identifier, finger_dimensions, carpal_nodes[2])
-        node_identifier = create_finger_nodes(fieldmodule, node_identifier, finger_dimensions, carpal_nodes[3])
-        
+        node_identifier = create_finger_nodes_new(fieldmodule, node_identifier, finger_dimensions, carpal_nodes[0])
+        node_identifier = create_finger_nodes_new(fieldmodule, node_identifier, finger_dimensions, carpal_nodes[1])
+        node_identifier = create_finger_nodes_new(fieldmodule, node_identifier, finger_dimensions, carpal_nodes[2])
+        node_identifier = create_finger_nodes_new(fieldmodule, node_identifier, finger_dimensions, carpal_nodes[3])
+        # Thumb
+        finger_dimensions = [ #d1, d2, d3, d12
+            [1.0, 0.5, 0.3, 0.4], #carpal
+            [2.0, 0.5, 0.3, 0.2], #metacarpal
+            [1, 0.2, 0.3, 0.2], #pp
+            [0.5, 0.2, 0.3, 0.2], #m                             p
+            [0.5, 0.2, 0.3, 0.2]  #dp
+        ]
+        node_identifier = create_thumb_nodes_new(fieldmodule, node_identifier, finger_dimensions[1:4], 17, thumb_angle_degrees)
+        # node_identifier = nodes.getSize() + 1
+        # node_identifier = create_thumb_nodes(fieldmodule, node_identifier, finger_dimensions[1:], 8)
+        # node_identifier = nodes.getSize() + 1
         # finger_dimensions = [
         #     [0.3, 0.5, 0.2, 0.4],
         #     [2.4, 0.5, 0.2, 0.2],
@@ -158,9 +169,6 @@ class MeshType_3d_hand1(Scaffold_base):
         # Finger 1 (thumb)
         # Get the finger 1 metacarpal node
 
-        node_identifier = nodes.getSize() + 1
-        node_identifier = create_thumb_nodes(fieldmodule, node_identifier, finger_dimensions[1:], 8, 0)
-        node_identifier = nodes.getSize() + 1
         #################
         # Create box elements
         #################
@@ -168,39 +176,43 @@ class MeshType_3d_hand1(Scaffold_base):
         # There is an extra row of elements on the metacarpal that represent the joint between
         # the palm and the finger, always needs to be there. 
         # Make sure to add 1 manually to the number of metacarpal elements when you add the options
-        number_elements = [1, 1+1, 1, 1, 1]
+        number_elements = [1, 2+1, 1, 1, 1]
         
-        scale_factor_matrix = create_scale_factor_matrix(fieldmodule, number_elements, node_identifier)
+        virtual_node_matrix = create_virtual_node_matrix(fieldmodule, number_elements, node_identifier, skin_elements=False)
         # Let it rip
-        scale_factor_matrix[2][3][1] = scale_factor_matrix[2][2][0] 
-        scale_factor_matrix[2][3][2] = scale_factor_matrix[2][2][3]
+        virtual_node_matrix[2][3][1] = virtual_node_matrix[2][2][0] 
+        virtual_node_matrix[2][3][2] = virtual_node_matrix[2][2][3]
 
-        scale_factor_matrix[2][5][1] = scale_factor_matrix[2][2][0] 
-        scale_factor_matrix[2][5][2] = scale_factor_matrix[2][2][3]
+        virtual_node_matrix[2][5][1] = virtual_node_matrix[2][2][0] 
+        virtual_node_matrix[2][5][2] = virtual_node_matrix[2][2][3]
         
-        scale_factor_matrix[2][8][1] = scale_factor_matrix[2][7][0] 
-        scale_factor_matrix[2][8][2] = scale_factor_matrix[2][7][3]
+        virtual_node_matrix[2][8][1] = virtual_node_matrix[2][7][0] 
+        virtual_node_matrix[2][8][2] = virtual_node_matrix[2][7][3]
 
-        scale_factor_matrix[2][10][1] = scale_factor_matrix[2][7][0] 
-        scale_factor_matrix[2][10][2] = scale_factor_matrix[2][7][3]
+        virtual_node_matrix[2][10][1] = virtual_node_matrix[2][7][0] 
+        virtual_node_matrix[2][10][2] = virtual_node_matrix[2][7][3]
         
-        scale_factor_matrix[2][13][1] = scale_factor_matrix[2][12][0] 
-        scale_factor_matrix[2][13][2] = scale_factor_matrix[2][12][3]
+        virtual_node_matrix[2][13][1] = virtual_node_matrix[2][12][0] 
+        virtual_node_matrix[2][13][2] = virtual_node_matrix[2][12][3]
 
-        scale_factor_matrix[2][15][1] = scale_factor_matrix[2][12][0] 
-        scale_factor_matrix[2][15][2] = scale_factor_matrix[2][12][3]
+        virtual_node_matrix[2][15][1] = virtual_node_matrix[2][12][0] 
+        virtual_node_matrix[2][15][2] = virtual_node_matrix[2][12][3]
 
+        z_len = len(virtual_node_matrix[0][0]) - 1
+        y_len = len(virtual_node_matrix[0]) -1
+        x_len = len(virtual_node_matrix) - 1
         element_identifier = 1
-        for k in range(3):
-            for j in range(18): 
-                for i in range(sum(number_elements)):
+        for k in range(z_len):
+            for j in range(y_len): 
+                for i in range(x_len):
+        
                     # if i != 3:
                     #     continue 
                     # if j not in [0, 1]:
                     #     continue
                     # if k not in [1]:
                     #     continue
-                    result = create_linear_cube_element(fieldmodule, element_identifier, scale_factor_matrix, i, j, k)
+                    result = create_linear_cube_element(fieldmodule, element_identifier, virtual_node_matrix, i, j, k)
                     if result == RESULT_OK:
                         element_identifier += 1
         return [], None
@@ -221,10 +233,10 @@ class MeshType_3d_hand1(Scaffold_base):
         mesh1d = fieldmodule.findMeshByDimension(1)
 
 
-def create_scale_factor_matrix(fieldmodule, number_elements, node_identifier):
+def create_virtual_node_matrix(fieldmodule, number_elements, node_identifier, skin_elements = True):
     c, mc, pp, mp, dp = number_elements
     # mc += 1 #To account for the transitionary element from palm to finger
-    scale_factor_matrix = [[[None for k in range(4)] for j in range(19)] for i in range(c+mc+pp+mp+dp+1)]
+    scale_factor_matrix = [[[None for k in range(4)] for j in range(30)] for i in range(c+mc+pp+mp+dp+1)]
     # Scale factors for d2 and d3
     bone_w = 1
     skin_w = 1.5
@@ -236,55 +248,58 @@ def create_scale_factor_matrix(fieldmodule, number_elements, node_identifier):
     bone_node_ids = {
         # Carpals
         1: {'y': [ ([1], -bone_w), ([2, 6], bone_w)]}, 
-        2: {'y': [([7, 11], bone_w)]}, 
-        3: {'y': [([12, 16], bone_w)]}, 
-        4: {'y': [([17], bone_w), ]}, 
-        # Metacarpals 
-        5: {'y': [ ([1], -bone_w), ([2, 6], bone_w)]}, 
         6: {'y': [([7, 11], bone_w)]}, 
-        7: {'y': [([12, 16], bone_w)]}, 
-        8: {'y': [([17], bone_w), ]}, 
+        11: {'y': [([12, 16], bone_w)]}, 
+        16: {'y': [([17], bone_w), ]}, 
+        # Metacarpals 
+        2: {'y': [ ([1], -bone_w), ([2, 6], bone_w)]}, 
+        7: {'y': [([7, 11], bone_w)]}, 
+        12: {'y': [([12, 16], bone_w)]}, 
+        17: {'y': [([17, 21], bone_w), ]}, 
+        # 21: {'y': [([22], bone_w), ]}, 
         # Proximal phalanx
-        9: {'y': [ ([1], -bone_w), ([2], bone_w), ]}, 
-        10: {'y': [([6], -bone_w), ([7], bone_w), ]}, 
-        11: {'y': [([11], -bone_w), ([12], bone_w), ]}, 
-        12: {'y': [([16], -bone_w), ([17], bone_w), ]}, 
+        3: {'y': [ ([1], -bone_w), ([2], bone_w), ]}, 
+        8: {'y': [([6], -bone_w), ([7], bone_w), ]}, 
+        13: {'y': [([11], -bone_w), ([12], bone_w), ]}, 
+        18: {'y': [([16], -bone_w), ([17], bone_w), ]}, 
+        # 22: {'y': [([21], -bone_w), ([22], bone_w), ]}, 
         # Middle phalanx 
-        13: {'y': [([1], -bone_w), ([2], bone_w), ]}, 
-        14: {'y': [ ([6], -bone_w), ([7], bone_w), ]}, 
-        15: {'y': [ ([11], -bone_w), ([12], bone_w), ]}, 
-        16: {'y': [ ([16], -bone_w), ([17], bone_w), ]}, 
+        4: {'y': [([1], -bone_w), ([2], bone_w), ]}, 
+        9: {'y': [ ([6], -bone_w), ([7], bone_w), ]}, 
+        14: {'y': [ ([11], -bone_w), ([12], bone_w), ]}, 
+        19: {'y': [ ([16], -bone_w), ([17], bone_w), ]}, 
+        # 23: {'y': [([21], -bone_w), ([22], bone_w), ]}, 
         # Distal phalanx
-        17: {'y': [ ([1], -bone_w), ([2], bone_w), ]}, 
-        18: {'y': [ ([6], -bone_w), ([7], bone_w), ]}, 
-        19: {'y': [ ([11], -bone_w), ([12], bone_w), ]}, 
+        5: {'y': [ ([1], -bone_w), ([2], bone_w), ]}, 
+        10: {'y': [ ([6], -bone_w), ([7], bone_w), ]}, 
+        15: {'y': [ ([11], -bone_w), ([12], bone_w), ]}, 
         20: {'y': [ ([16], -bone_w), ([17], bone_w), ]}, 
     }
     # The rows in the x and z direction follow a more basic algorithm, which still depends on the 
     # node_ids, but these can be somewhat automated. 
     # Carpals
     z_vals = [(1, -bone_h), (2, bone_h)]
-    for node_id in range(1, 5):
+    for node_id in [1, 6, 11, 16]:
         bone_node_ids[node_id]['x'] = [(i, i/c) for i in range(c)]
         bone_node_ids[node_id]['z'] = z_vals
     # Metacarpals
-    for node_id in range(5, 9):
-        bone_node_ids[node_id]['x'] = [(c+i, (i/mc)*0.7) for i in range(mc-1)]
-        bone_node_ids[node_id]['x'].append((c+mc-1, 0.7))
+    for node_id in [2, 7, 12, 17]:
+        bone_node_ids[node_id]['x'] = [(c+i, (i/mc)) for i in range(mc)]
+        # bone_node_ids[node_id]['x'].append((c+mc-1, 0.8))
         bone_node_ids[node_id]['z'] = z_vals
     # Proximal phalanx
-    for node_id in range(9, 13):
+    for node_id in [3, 8, 13, 18]:
         bone_node_ids[node_id]['x'] = [(i+c+mc, i/pp) for i in range(pp)]
         bone_node_ids[node_id]['z'] = z_vals
     # Middle phalanx 
-    for node_id in range(13, 17):
+    for node_id in [4, 9, 14, 19]:
         bone_node_ids[node_id]['x'] = [(i+c+mc+pp, i/mp) for i in range(mp)]
         bone_node_ids[node_id]['z'] = z_vals
         # Distal phalanx
-    for node_id in range(17, 21):
+    for node_id in [5, 10, 15, 20]:
         bone_node_ids[node_id]['x'] = [(i+c+mc+pp+mp, i/mp) for i in range(dp+1)]
         bone_node_ids[node_id]['z'] = z_vals
-        
+    a0 = 1
     for node_id, node_factors in bone_node_ids.items():
             for x in node_factors['x']:
                 for z in node_factors['z']: 
@@ -292,7 +307,6 @@ def create_scale_factor_matrix(fieldmodule, number_elements, node_identifier):
                         for j in y[0]:
                             i = x[0]
                             k = z[0]
-                            a0 = 1
                             a1 = x[1]
                             a2 = y[1]
                             a3 = z[1]
@@ -301,6 +315,42 @@ def create_scale_factor_matrix(fieldmodule, number_elements, node_identifier):
                                     Node.VALUE_LABEL_VALUE: [node_id, a0, a1, a2, a3], 
                                     'Type': 'bone'
                                 } 
+    # Thumb metacarpal
+    node_id = 21
+    for k in [1, 2]:
+        for j in [22]:
+            for i in [1, 2]:
+                a1 = 1/2 if j == 22 else 1
+                a2 = bone_w if i == 1 else -bone_w
+                a3 = -bone_h if k == 1 else bone_h  
+                scale_factor_matrix[i][j][k] = {
+                                            Node.VALUE_LABEL_VALUE: [node_id, a0, a1, a2, a3], 
+                                            'Type': 'bone'
+                                        } 
+    # Thumb proximal phalanx
+    node_id = 22
+    for k in [1, 2]:
+        for j in [23]:
+            for i in [1, 2]:
+                a1 = 0 if j == 23 else 1
+                a2 = bone_w if i == 1 else -bone_w
+                a3 = -bone_h if k == 1 else bone_h  
+                scale_factor_matrix[i][j][k] = {
+                                            Node.VALUE_LABEL_VALUE: [node_id, a0, a1, a2, a3], 
+                                            'Type': 'bone'
+                                        } 
+    # Thumb distal phalanx
+    node_id = 23
+    for k in [1, 2]:
+        for j in [24, 25]:
+            for i in [1, 2]:
+                a1 = 0 if j == 24 else 1
+                a2 = bone_w if i == 1 else -bone_w
+                a3 = -bone_h if k == 1 else bone_h  
+                scale_factor_matrix[i][j][k] = {
+                                            Node.VALUE_LABEL_VALUE: [node_id, a0, a1, a2, a3], 
+                                            'Type': 'bone'
+                                        } 
     ############
     # Skin nodes 
     ############
@@ -337,8 +387,7 @@ def create_scale_factor_matrix(fieldmodule, number_elements, node_identifier):
         skin_node_ids[node_id]['z'] = z_vals
     # Metacarpals
     for node_id in range(5, 9):
-        skin_node_ids[node_id]['x'] = [(c+i, (i/mc)*0.7) for i in range(mc-1)]
-        skin_node_ids[node_id]['x'].append((c+mc-1, 0.7))
+        skin_node_ids[node_id]['x'] = [(c+i, (i/mc)) for i in range(mc)]
         skin_node_ids[node_id]['z'] = z_vals
     # Proximal phalanx
     for node_id in range(9, 13):
@@ -353,6 +402,8 @@ def create_scale_factor_matrix(fieldmodule, number_elements, node_identifier):
         skin_node_ids[node_id]['x'] = [(i+c+mc+pp+mp, i/mp) for i in range(dp+1)]
         skin_node_ids[node_id]['z'] = z_vals
     # Assigning scale factors to the matrix
+    if skin_elements == False:
+        return scale_factor_matrix
     for node_id, node_factors in skin_node_ids.items():
         for x in node_factors['x']:
             for z in node_factors['z']: 
@@ -551,7 +602,7 @@ def create_linear_cube_element(fieldmodule, element_identifier, scale_factor_mat
             scale_factor_id = global_to_local_scale_factor_ids[1]
             d2_expression_terms[local_node] = [[l_node_id, label, scale_factor_id]]
             # d2_expression_terms[local_node-4] = [[l_node_id, label, scale_factor_id]]
-    # Create adn remap eft
+    # Create and remap eft
     if is_bicubic:
         # Bicubic linear element (skin)
         bicubic_linear_basis = fieldmodule.createElementbasis(3, Elementbasis.FUNCTION_TYPE_CUBIC_HERMITE_SERENDIPITY)
@@ -637,7 +688,64 @@ def add_skin_node(fieldmodule: Fieldmodule, bone_node_id: int, node_identifier: 
     node_identifier += 1
     return node_identifier
 
-def create_thumb_nodes(fieldmodule, node_identifier, finger_dimensions, metacarpal_node_id, angle_degrees=0):
+def create_thumb_nodes_new(fieldmodule, node_identifier, finger_dimensions, metacarpal_node_id, angle_degrees=45):
+    """
+    Docstring for create_finger_nodes
+    
+    :param fieldmodule: Description
+    :param node_identifier: Description
+    :param finger_dimensions: Description
+    :param carpal_node: Description
+    :return: Description
+    :rtype: Any
+    """
+    # Zinc setip
+    coordinates = find_or_create_field_coordinates(fieldmodule)
+    nodes = fieldmodule.findNodesetByFieldDomainType(Field.DOMAIN_TYPE_NODES)
+    nodetemplate = get_simple_nodetemplate(fieldmodule)
+    fieldcache = fieldmodule.createFieldcache()
+    # Set basic directions
+    x1 = [1, 0, 0]
+    x2 = [0, 1, 0]
+    x3 = [0, 0, 1]
+    # Thumb flexion angle 
+    x1 = rotate_about_z_axis(x1, math.radians(angle_degrees))
+    x2 = rotate_about_z_axis(x2, math.radians(angle_degrees))
+    # Obtaining the starting node position from the metacarpal node
+    metacarpal_node = nodes.findNodeByIdentifier(metacarpal_node_id)
+    fieldcache.setNode(metacarpal_node)
+    node_location = coordinates.getNodeParameters(fieldcache, -1, Node.VALUE_LABEL_VALUE, 1, 3)[1]
+    d1 = coordinates.getNodeParameters(fieldcache, -1, Node.VALUE_LABEL_D_DS1, 1, 3)[1]
+    d2 = coordinates.getNodeParameters(fieldcache, -1, Node.VALUE_LABEL_D_DS2, 1, 3)[1]
+    node_location = add(node_location, d2)
+    # node_location = add(node_location, d2)
+    node_location = add(node_location, mult(d1, 1/6))
+    
+    """
+    Finger bone dimensions have the format
+    finger_dimensions = [metacarpal, p_phalax, m_phalanx, d_phalanx]
+    and each bone has four corresponding dimensions
+    [length, box_width, height, bone_width]
+    """
+    finger_node_identifier = node_identifier
+    for i in range(3):
+        node = nodes.createNode(finger_node_identifier, nodetemplate)
+        fieldcache.setNode(node)
+        bone_dimensions = finger_dimensions[i]
+        d1 = mult(x1, bone_dimensions[0])
+        d2 = mult(x2, bone_dimensions[1])
+        d3 = mult(x3, bone_dimensions[2])
+        d12 = mult(x2, bone_dimensions[3])
+        x = node_location
+        setNodeFieldParameters(coordinates, fieldcache, x, d1, d2, d3, d12)
+        x = add(x, d1)
+        node_location = x
+        # 
+        finger_node_identifier += 1 
+    node_identifier += 1
+    return finger_node_identifier
+
+def create_thumb_nodes(fieldmodule, node_identifier, finger_dimensions, metacarpal_node_id, angle_degrees=45):
     """
     Docstring for create_finger_nodes
     
@@ -690,7 +798,50 @@ def create_thumb_nodes(fieldmodule, node_identifier, finger_dimensions, metacarp
         # 
         finger_node_identifier += 1 
     node_identifier += 1
-    return node_identifier
+    return finger_node_identifier
+
+def create_finger_nodes_new(fieldmodule, node_identifier, finger_dimensions, starting_location):
+    """
+    Docstring for create_finger_nodes
+    
+    :param fieldmodule: Description
+    :param node_identifier: Description
+    :param finger_dimensions: Description
+    :param carpal_node: Description
+    :return: Description
+    :rtype: Any
+    """
+    coordinates = find_or_create_field_coordinates(fieldmodule)
+    nodes = fieldmodule.findNodesetByFieldDomainType(Field.DOMAIN_TYPE_NODES)
+    nodetemplate = get_simple_nodetemplate(fieldmodule)
+    fieldcache = fieldmodule.createFieldcache()
+    # Set basic directions
+    x1 = [1, 0, 0]
+    x2 = [0, 1, 0]
+    x3 = [0, 0, 1]
+    """
+    Finger bone dimensions have the format
+    finger_dimensions = [metacarpal, p_phalax, m_phalanx, d_phalanx]
+    and each bone has four corresponding dimensions
+    [length, box_width, height, bone_width]
+    """
+    node_location = starting_location
+    finger_node_identifier = node_identifier
+    for i in range(len(finger_dimensions)):
+        node = nodes.createNode(finger_node_identifier, nodetemplate)
+        fieldcache.setNode(node)
+        bone_dimensions = finger_dimensions[i]
+        d1 = mult(x1, bone_dimensions[0])
+        d2 = mult(x2, bone_dimensions[1])
+        d3 = mult(x3, bone_dimensions[2])
+        d12 = mult(x2, bone_dimensions[3])
+        x = node_location
+        setNodeFieldParameters(coordinates, fieldcache, x, d1, d2, d3, d12)
+        x = add(x, d1)
+        node_location = x
+        # 
+        finger_node_identifier += 1 
+    return finger_node_identifier
 
 def create_finger_nodes(fieldmodule, node_identifier, finger_dimensions, carpal_node):
     """
