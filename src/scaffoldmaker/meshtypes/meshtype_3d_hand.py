@@ -34,6 +34,7 @@ from scaffoldmaker.utils.read_vagus_data import load_vagus_data
 from scaffoldmaker.utils.zinc_utils import (
     define_and_fit_field, find_or_create_field_zero_fibres, fit_hermite_curve, generate_curve_mesh, generate_datapoints,\
     generate_mesh_marker_points)
+from scaffoldmaker.utils.geometry import sampleEllipsePoints
 
 
 
@@ -106,10 +107,7 @@ class MeshType_3d_hand1(Scaffold_base):
         node_identifier = 1
         carpal_nodes = [[0, 0, 0]]
 
-        for i in range(4):
-            x = carpal_nodes[-1]
-            x = add(x, mult([0, 1, 0], 1))
-            carpal_nodes.append(x)
+        
         # Fingers 2 - 4 (finger 1, thumb, is added later)
         finger_dimensions = [ #d1, d2, d3, d12
             [1.0, 0.5, 0.3, 0.4], #carpal
@@ -118,6 +116,11 @@ class MeshType_3d_hand1(Scaffold_base):
             [1.0, 0.2, 0.3, 0.2], #m                             p
             [1.0, 0.2, 0.3, 0.2]  #dp
         ]
+        d2 = finger_dimensions[0][1]
+        for i in range(4):
+            x = carpal_nodes[-1]
+            x = add(x, mult([0, 1, 0], d2*2))
+            carpal_nodes.append(x)
         node_identifier = create_finger_nodes_new(fieldmodule, node_identifier, finger_dimensions, carpal_nodes[0])
         node_identifier = create_finger_nodes_new(fieldmodule, node_identifier, finger_dimensions, carpal_nodes[1])
         node_identifier = create_finger_nodes_new(fieldmodule, node_identifier, finger_dimensions, carpal_nodes[2])
@@ -125,7 +128,7 @@ class MeshType_3d_hand1(Scaffold_base):
         # Thumb
         finger_dimensions = [ #d1, d2, d3, d12
             [1.0, 0.5, 0.3, 0.4], #carpal
-            [2.0, 0.5, 0.3, 0.2], #metacarpal
+            [2.0, 0.6, 0.3, 0.2], #metacarpal
             [1, 0.2, 0.3, 0.2], #pp
             [0.5, 0.2, 0.3, 0.2], #m                             p
             [0.5, 0.2, 0.3, 0.2]  #dp
@@ -182,26 +185,26 @@ class MeshType_3d_hand1(Scaffold_base):
         
         virtual_node_matrix, node_identifier = generate_internal_node_matrix(fieldmodule, number_elements, node_identifier, virtual_node_matrix)
 
-        # virtual_node_matrix = generate_external_node_matrix(fieldmodule, number_elements, node_identifier, virtual_node_matrix)
+        generate_external_node_matrix(fieldmodule, number_elements, node_identifier, virtual_node_matrix)
         # virtual_node_matrix = create_virtual_node_matrix(fieldmodule, number_elements, node_identifier, skin_elements=False)
         # Let it rip
-        virtual_node_matrix[3][3][1] = virtual_node_matrix[3][2][0] 
-        virtual_node_matrix[3][3][2] = virtual_node_matrix[3][2][3]
+        # virtual_node_matrix[3][3][1] = virtual_node_matrix[3][2][0] 
+        # virtual_node_matrix[3][3][2] = virtual_node_matrix[3][2][3]
 
-        virtual_node_matrix[3][5][1] = virtual_node_matrix[3][2][0] 
-        virtual_node_matrix[3][5][2] = virtual_node_matrix[3][2][3]
+        # virtual_node_matrix[3][5][1] = virtual_node_matrix[3][2][0] 
+        # virtual_node_matrix[3][5][2] = virtual_node_matrix[3][2][3]
         
-        virtual_node_matrix[3][8][1] = virtual_node_matrix[3][7][0] 
-        virtual_node_matrix[3][8][2] = virtual_node_matrix[3][7][3]
+        # virtual_node_matrix[3][8][1] = virtual_node_matrix[3][7][0] 
+        # virtual_node_matrix[3][8][2] = virtual_node_matrix[3][7][3]
 
-        virtual_node_matrix[3][10][1] = virtual_node_matrix[3][7][0] 
-        virtual_node_matrix[3][10][2] = virtual_node_matrix[3][7][3]
+        # virtual_node_matrix[3][10][1] = virtual_node_matrix[3][7][0] 
+        # virtual_node_matrix[3][10][2] = virtual_node_matrix[3][7][3]
         
-        virtual_node_matrix[3][13][1] = virtual_node_matrix[3][12][0] 
-        virtual_node_matrix[3][13][2] = virtual_node_matrix[3][12][3]
+        # virtual_node_matrix[3][13][1] = virtual_node_matrix[3][12][0] 
+        # virtual_node_matrix[3][13][2] = virtual_node_matrix[3][12][3]
 
-        virtual_node_matrix[3][15][1] = virtual_node_matrix[3][12][0] 
-        virtual_node_matrix[3][15][2] = virtual_node_matrix[3][12][3]
+        # virtual_node_matrix[3][15][1] = virtual_node_matrix[3][12][0] 
+        # virtual_node_matrix[3][15][2] = virtual_node_matrix[3][12][3]
 
         z_len = len(virtual_node_matrix[0][0]) - 1
         y_len = len(virtual_node_matrix[0]) -1
@@ -389,7 +392,247 @@ def generate_internal_node_matrix(fieldmodule, number_elements, node_identifier,
 
 
 def generate_external_node_matrix(fieldmodule, number_elements, node_identifier, node_matrix):
-    
+    c, mc, pp, mp, dp = number_elements
+    # Finger elements are created in reverse order, from 5 (little) to 1 (thumb)
+    # Palm skin nodes are sampled from an ellipse surrounding the internal node
+    x, d1, d2, d3 = getNodeFieldParameters(fieldmodule, 'coordinates', 6)
+    center = add(x, d2) # Ellipse center
+    a = 5*magnitude(d2)
+    b = 3*magnitude(d3)
+    major_axis = mult([0, -1, 0], a)
+    minor_axis = mult([0, 0, 1], b)
+    outer_nodes = sampleEllipsePoints(center, major_axis, minor_axis, math.pi/2, 2*math.pi + math.pi/2, 10)
+    upper_ellipse_loc = [outer_nodes[0][i] for i in [8, 9, 0, 1, 2]]
+    upper_ellipse_d2 = [outer_nodes[1][i] for i in [8, 9, 0, 1, 2]]
+    lower_ellipse_loc = [outer_nodes[0][i] for i in [7, 6, 5, 4, 3]]
+    lower_ellipse_d2 = [outer_nodes[1][i] for i in [7, 6, 5, 4, 3]]
+    parent_node = 1
+    # Propagate a single node forward 
+    a0 = 1
+    # Finger 
+    node_id = 0
+    y = 1
+    jj = 0
+    # Carpal
+    for f in range(4):
+        node_id += 1
+        x = 0
+        y_val = [y, y+1] if f == 0 else [y+1]
+        x_val = [x+i for i in range(c)]
+        for j in y_val:
+            for k in [1, 2]:
+                ellipse_loc = upper_ellipse_loc if k == 2 else lower_ellipse_loc
+                ellipse_d2 = upper_ellipse_d2 if k ==2 else lower_ellipse_d2
+                d1 = getNodeFieldParameters(fieldmodule, 'coordinates', parent_node)[1]
+                d1 = mult(d1, 1/c)
+                a3 = -1 if k == 1 else 1
+                if j == 1 or j == 17:
+                    a2 = -1 if j == 1 else 1
+                    for i in x_val:
+                        node_matrix[i][j+a2][k] = {
+                            Node.VALUE_LABEL_VALUE: [node_identifier, 1, 0, 0, 0], 
+                                'Type': 'skin'
+                        }
+                        node_matrix[i][j][k+a3] = {
+                            Node.VALUE_LABEL_VALUE: [node_identifier, 1, 0, 0, 0], 
+                                'Type': 'skin'
+                        }
+                        node_loc = ellipse_loc[jj]
+                        d2 = ellipse_d2[jj]
+                        node_identifier = add_skin_node_new(fieldmodule, node_identifier, node_loc, [d1, d2])
+                        node_loc = add(node_loc, d1)
+                        ellipse_loc[jj] = node_loc
+                else:
+                    for i in x_val:
+                        node_matrix[i][j][k+a3] = {
+                            Node.VALUE_LABEL_VALUE: [node_identifier, 1, 0, 0, 0], 
+                                'Type': 'skin'
+                        }
+                        node_matrix[i][j+4][k+a3] = {
+                            Node.VALUE_LABEL_VALUE: [node_identifier, 1, 0, 0, 0], 
+                                'Type': 'skin'
+                        }
+                        node_loc = ellipse_loc[jj]
+                        d2 = ellipse_d2[jj]
+                        node_identifier = add_skin_node_new(fieldmodule, node_identifier, node_loc, [d1, d2])
+                        node_loc = add(node_loc, d1)
+                        ellipse_loc[jj] = node_loc
+            jj += 1
+        y += 5
+        parent_node += 5
+
+    # Metacarpal
+    parent_node = 2
+    jj = 0
+    n = mc
+    x += c
+    y = 1
+    for f in range(4):
+        y_val = [y, y+1] if f == 0 else [y+1]
+        x_val = [x+i for i in range(n)]
+        z_val = [1, 2]
+        for j in y_val:
+            for k in z_val:
+                ellipse_loc = upper_ellipse_loc if k == 2 else lower_ellipse_loc
+                ellipse_d2 = upper_ellipse_d2 if k ==2 else lower_ellipse_d2
+                d1 = getNodeFieldParameters(fieldmodule, 'coordinates', parent_node)[1]
+                d1 = mult(d1, 1/n)
+                a3 = -1 if k == 1 else 1
+                if j == 1 or j == 17:
+                    a2 = -1 if j == 1 else 1
+                    for i in x_val:
+                        node_matrix[i][j+a2][k] = {
+                            Node.VALUE_LABEL_VALUE: [node_identifier, 1, 0, 0, 0], 
+                                'Type': 'skin'
+                        }
+                        node_matrix[i][j][k+a3] = {
+                            Node.VALUE_LABEL_VALUE: [node_identifier, 1, 0, 0, 0], 
+                                'Type': 'skin'
+                        }
+                        node_loc = ellipse_loc[jj]
+                        d2 = ellipse_d2[jj]
+                        node_identifier = add_skin_node_new(fieldmodule, node_identifier, node_loc, [d1, d2])
+                        node_loc = add(node_loc, d1)
+                        ellipse_loc[jj] = node_loc
+                else:
+                    for i in x_val:
+                        node_matrix[i][j][k+a3] = {
+                            Node.VALUE_LABEL_VALUE: [node_identifier, 1, 0, 0, 0], 
+                                'Type': 'skin'
+                        }
+                        node_matrix[i][j+4][k+a3] = {
+                            Node.VALUE_LABEL_VALUE: [node_identifier, 1, 0, 0, 0], 
+                                'Type': 'skin'
+                        }
+                        node_loc = ellipse_loc[jj]
+                        d2 = ellipse_d2[jj]
+                        node_identifier = add_skin_node_new(fieldmodule, node_identifier, node_loc, [d1, d2])
+                        node_loc = add(node_loc, d1)
+                        ellipse_loc[jj] = node_loc
+            jj += 1
+        y += 5
+        parent_node += 5
+
+    # Fingers 5 to 2 
+    parent_node = 3
+    y = 1
+    n = pp
+    jj = 0
+    a = 2
+    b = 1.5
+    z_val = [1, 2]
+    for f in range(4):
+        # PP
+        x = c + mc 
+        n = pp
+        y_val = [y, y+1]
+        x_val = [x+i for i in range(n)]
+        # Estimate ellipse
+        center, d1, d2, d3 = getNodeFieldParameters(fieldmodule, 'coordinates', parent_node)
+        major_axis = mult(d2, -a)
+        minor_axis = mult(d3, b)
+        ellipse = sampleEllipsePoints(center, major_axis, minor_axis, - math.pi/4, 2*math.pi - math.pi/4, 4)
+        ellipse_loc = [ellipse[0][i] for i in [0, 1, 3, 2]]
+        ellipse_d2 = [ellipse[1][i] for i in [0, 1, 3, 2]]
+        jj = 0
+        for j in y_val:
+            for k in z_val:
+                d1 = getNodeFieldParameters(fieldmodule, 'coordinates', parent_node)[1]
+                d1 = mult(d1, 1/n)
+                a2 = -1 if j == y else 1
+                a3 = -1 if k == 1 else 1  
+                for i in x_val:
+                    node_loc = ellipse_loc[jj]
+                    d2 = ellipse_d2[jj]
+                    node_matrix[i][j+a2][k] = {
+                        Node.VALUE_LABEL_VALUE: [node_identifier, 1, 0, 0, 0], 
+                            'Type': 'skin'
+                    }
+                    node_matrix[i][j][k+a3] = {
+                        Node.VALUE_LABEL_VALUE: [node_identifier, 1, 0, 0, 0], 
+                            'Type': 'skin'
+                    }
+                    node_identifier = add_skin_node_new(fieldmodule, node_identifier, node_loc, [d1, d2])
+                    node_loc = add(node_loc, d1)
+                    ellipse_loc[jj] = node_loc
+                jj += 1
+        
+        
+        # MP
+        parent_node += 1
+        x = c + mc + pp
+        n = mp
+        jj = 0
+        y_val = [y, y+1]
+        x_val = [x+i for i in range(n)]
+        # Estimate ellipse
+        center, d1, d2, d3 = getNodeFieldParameters(fieldmodule, 'coordinates', parent_node)
+        major_axis = mult(d2, -a)
+        minor_axis = mult(d3, b)
+        ellipse = sampleEllipsePoints(center, major_axis, minor_axis, -math.pi/4, 2*math.pi - math.pi/4, 4)
+        ellipse_loc = [ellipse[0][i] for i in [0, 1, 3, 2]]
+        ellipse_d2 = [ellipse[1][i] for i in [0, 1, 3, 2]]
+        jj = 0
+        for j in y_val:
+            for k in z_val:
+                d1 = getNodeFieldParameters(fieldmodule, 'coordinates', parent_node)[1]
+                d1 = mult(d1, 1/n)
+                a2 = -1 if j == y else 1
+                a3 = -1 if k == 1 else 1  
+                for i in x_val:
+                    node_loc = ellipse_loc[jj]
+                    d2 = ellipse_d2[jj]
+                    node_matrix[i][j+a2][k] = {
+                        Node.VALUE_LABEL_VALUE: [node_identifier, 1, 0, 0, 0], 
+                            'Type': 'skin'
+                    }
+                    node_matrix[i][j][k+a3] = {
+                        Node.VALUE_LABEL_VALUE: [node_identifier, 1, 0, 0, 0], 
+                            'Type': 'skin'
+                    }
+                    node_identifier = add_skin_node_new(fieldmodule, node_identifier, node_loc, [d1, d2])
+                    node_loc = add(node_loc, d1)
+                    ellipse_loc[jj] = node_loc
+                jj += 1
+        # DP
+        parent_node += 1
+        x = c + mc + pp + mp
+        n = dp
+        jj = 0
+        y_val = [y, y+1]
+        x_val = [x+i for i in range(n)]
+        # Estimate ellipse
+        center, d1, d2, d3 = getNodeFieldParameters(fieldmodule, 'coordinates', parent_node)
+        major_axis = mult(d2, -a)
+        minor_axis = mult(d3, b)
+        ellipse = sampleEllipsePoints(center, major_axis, minor_axis, -math.pi/4, 2*math.pi - math.pi/4, 4)
+        ellipse_loc = [ellipse[0][i] for i in [0, 1, 3, 2]]
+        ellipse_d2 = [ellipse[1][i] for i in [0, 1, 3, 2]]
+        jj = 0
+        for j in y_val:
+            for k in z_val:
+                d1 = getNodeFieldParameters(fieldmodule, 'coordinates', parent_node)[1]
+                d1 = mult(d1, 1/(n-1))
+                a2 = -1 if j == y else 1
+                a3 = -1 if k == 1 else 1  
+                for i in x_val:
+                    node_loc = ellipse_loc[jj]
+                    d2 = ellipse_d2[jj]
+                    node_matrix[i][j+a2][k] = {
+                        Node.VALUE_LABEL_VALUE: [node_identifier, 1, 0, 0, 0], 
+                            'Type': 'skin'
+                    }
+                    node_matrix[i][j][k+a3] = {
+                        Node.VALUE_LABEL_VALUE: [node_identifier, 1, 0, 0, 0], 
+                            'Type': 'skin'
+                    }
+                    node_identifier = add_skin_node_new(fieldmodule, node_identifier, node_loc, [d1, d2])
+                    node_loc = add(node_loc, d1)
+                    ellipse_loc[jj] = node_loc
+                jj += 1
+        y += 5
+        parent_node += 3
+
     return node_matrix, node_identifier
 
 def create_virtual_node_matrix(fieldmodule, number_elements, node_identifier, skin_elements = True):
@@ -705,6 +948,22 @@ def create_linear_cube_element(fieldmodule, element_identifier, scale_factor_mat
     # element_identifier += 1
     return RESULT_OK
 
+
+def add_skin_node_new(fieldmodule: Fieldmodule, node_identifier: int, node_location: list, directions: list):
+    # Zinc setup
+    coordinates = find_or_create_field_coordinates(fieldmodule)
+    nodes = fieldmodule.findNodesetByFieldDomainType(Field.DOMAIN_TYPE_NODES)
+    nodetemplate = get_simple_nodetemplate(fieldmodule)
+    fieldcache = fieldmodule.createFieldcache()
+    # Create skin node
+    skin_node = nodes.createNode(node_identifier, nodetemplate)
+    fieldcache.setNode(skin_node)
+    d1, d2 = directions
+    d3 = [0, 0, 0]
+    setNodeFieldParameters(coordinates, fieldcache, node_location, d1, d2, d3)
+    node_identifier += 1
+    return node_identifier
+
 def add_node(fieldmodule: Fieldmodule, bone_node_id: int, node_identifier: int, scale_factors: list):
     # Zinc setup
     coordinates = find_or_create_field_coordinates(fieldmodule)
@@ -733,8 +992,8 @@ def add_node(fieldmodule: Fieldmodule, bone_node_id: int, node_identifier: int, 
     skin_node = nodes.createNode(node_identifier, nodetemplate)
     fieldcache.setNode(skin_node)
     d1 = node_params[1]
-    d2 = node_params[2]
-    d3 = node_params[3]
+    d2 = [0, 0, 0]
+    d3 = [0, 0, 0]
     setNodeFieldParameters(coordinates, fieldcache, x, d1, d2, d3)
     node_identifier += 1
     return node_identifier
@@ -1031,3 +1290,31 @@ def setNodeFieldVersionDerivatives(field, fieldcache, version, d1, d2, d3, d12=N
         field.setNodeParameters(fieldcache, -1, Node.VALUE_LABEL_D2_DS1DS2, version, d12)
     if d13:
         field.setNodeParameters(fieldcache, -1, Node.VALUE_LABEL_D2_DS1DS3, version, d13)
+
+def getNodeFieldParameters(fieldmodule, field_name, node_identifier, d12=None, d13=None):
+    """
+    Retrieve node field parameters x, d1, d2, d3 of field.
+    :param field: Field parameters to assign.
+    :param x: Parameters to set for Node.VALUE_LABEL_VALUE.
+    :param d1: Parameters to set for Node.VALUE_LABEL_D_DS1.
+    :param d2: Parameters to set for Node.VALUE_LABEL_D_DS2.
+    :param d3: Parameters to set for Node.VALUE_LABEL_D_DS3.
+    :param d12: Optional parameters to set for Node.VALUE_LABEL_D2_DS1DS2.
+    :param d13: Optional parameters to set for Node.VALUE_LABEL_D2_DS1DS3.
+    :return:
+    """
+    fieldcache = fieldmodule.createFieldcache()
+    nodes = fieldmodule.findNodesetByFieldDomainType(Field.DOMAIN_TYPE_NODES)
+    node = nodes.findNodeByIdentifier(node_identifier)
+    fieldcache.setNode(node)
+    field = find_or_create_field_coordinates(fieldmodule, field_name)
+    params = []
+    params.append(field.getNodeParameters(fieldcache, -1, Node.VALUE_LABEL_VALUE, 1, 3)[1])
+    params.append(field.getNodeParameters(fieldcache, -1, Node.VALUE_LABEL_D_DS1, 1, 3)[1])
+    params.append(field.getNodeParameters(fieldcache, -1, Node.VALUE_LABEL_D_DS2, 1, 3)[1])
+    params.append(field.getNodeParameters(fieldcache, -1, Node.VALUE_LABEL_D_DS3, 1, 3)[1])
+    if d12:
+        params.append(field.getNodeParameters(fieldcache, -1, Node.VALUE_LABEL_D_DS3, 1, 3)[1])
+    if d13:
+        params.append(field.getNodeParameters(fieldcache, -1, Node.VALUE_LABEL_D_DS3, 1, 3)[1])
+    return params
