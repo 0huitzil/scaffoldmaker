@@ -127,12 +127,14 @@ class MeshType_3d_hand1(Scaffold_base):
         node_identifier = create_finger_nodes_new(fieldmodule, node_identifier, finger_dimensions, carpal_nodes[3])
         # Thumb
         finger_dimensions = [ #d1, d2, d3, d12
-            [1.0, 0.5, 0.3, 0.4], #carpal
-            [2.0, 0.6, 0.3, 0.2], #metacarpal
-            [1, 0.2, 0.3, 0.2], #pp
-            [0.5, 0.2, 0.3, 0.2], #m                             p
+            [1.0, 0.7, 0.3, 0.4], #carpal
+            [2.0, 0.5, 0.3, 0.2], #metacarpal
+            [1, 0.4, 0.3, 0.2], #pp
+            [0.5, 0.3, 0.3, 0.2], #m                             p
             [0.5, 0.2, 0.3, 0.2]  #dp
         ]
+
+
         node_identifier = create_thumb_nodes_new(fieldmodule, node_identifier, finger_dimensions[1:4], 17, thumb_angle_degrees)
         # node_identifier = nodes.getSize() + 1
         # node_identifier = create_thumb_nodes(fieldmodule, node_identifier, finger_dimensions[1:], 8)
@@ -353,7 +355,7 @@ def generate_internal_node_matrix(fieldmodule, number_elements, node_identifier,
     node_id += 1
     y = 22
     for k in [1, 2]:
-        for j in [22]:
+        for j in [y]:
             for i in [1, 2]:
                 a1 = 1/2 
                 a2 = bone_w if i == 1 else -bone_w
@@ -368,7 +370,7 @@ def generate_internal_node_matrix(fieldmodule, number_elements, node_identifier,
     for k in [1, 2]:
         for j in [y]:
             for i in [1, 2]:
-                a1 = 0 if j == 23 else 1
+                a1 = 0 if j == y else 1
                 a2 = bone_w if i == 1 else -bone_w
                 a3 = -bone_h if k == 1 else bone_h  
                 node_matrix[i][j][k] = {
@@ -377,7 +379,7 @@ def generate_internal_node_matrix(fieldmodule, number_elements, node_identifier,
                                         } 
     y += 1
     # DP
-    node_id = 23
+    node_id += 1
     for k in [1, 2]:
         for j in [y, y+1]:
             for i in [1, 2]:
@@ -398,19 +400,18 @@ def generate_external_node_matrix(fieldmodule, number_elements, node_identifier,
     x, d1, d2, d3 = getNodeFieldParameters(fieldmodule, 'coordinates', 6)
     center = add(x, d2) # Ellipse center
     a = 5*magnitude(d2)
-    b = 2*magnitude(d3)
+    b = 2.5*magnitude(d3)
     major_axis = mult([0, -1, 0], a)
     minor_axis = mult([0, 0, 1], b)
-    outer_nodes = sampleEllipsePoints(center, major_axis, minor_axis, math.pi/2, 2*math.pi + math.pi/2, 10)
-    upper_ellipse_x = [outer_nodes[0][i] for i in [8, 9, 0, 1, 2]]
-    upper_ellipse_d2 = [outer_nodes[1][i] for i in [8, 9, 0, 1, 2]]
-    lower_ellipse_x = [outer_nodes[0][i] for i in [7, 6, 5, 4, 3]]
-    lower_ellipse_d2 = [outer_nodes[1][i] for i in [7, 6, 5, 4, 3]]
+    ellipse = sampleEllipsePoints(center, major_axis, minor_axis, math.pi/2, 2*math.pi + math.pi/2, 10)
+    upper_ellipse_x = [ellipse[0][i] for i in [8, 9, 0, 1, 2]]
+    upper_ellipse_d2 = [ellipse[1][i] for i in [8, 9, 0, 1, 2]]
+    lower_ellipse_x = [ellipse[0][i] for i in [7, 6, 5, 4, 3]]
+    lower_ellipse_d2 = [ellipse[1][i] for i in [7, 6, 5, 4, 3]]
     ellipse_d3 = [sub(lower_ellipse_x[i],upper_ellipse_x[i]) for i in range(5)]
     parent_node = 1
     # Propagate a single node forward 
     a0 = 1
-    # Finger 
     node_id = 0
     y = 1
     jj = 0
@@ -487,7 +488,7 @@ def generate_external_node_matrix(fieldmodule, number_elements, node_identifier,
                 d1 = getNodeFieldParameters(fieldmodule, 'coordinates', parent_node)[1]
                 d1 = mult(d1, 1.0/n)
                 a3 = -1 if k == 1 else 1
-                if j == 1 or j == 17:
+                if j == 1:
                     a2 = -1 if j == 1 else 1
                     for i in x_val:
                         node_matrix[i][j+a2][k] = {
@@ -497,6 +498,33 @@ def generate_external_node_matrix(fieldmodule, number_elements, node_identifier,
                                 'Type': 'skin'
                         }
                         node_matrix[i][j][k+a3] = {
+                            Node.VALUE_LABEL_VALUE: [node_identifier, 1, 0, 0, 0], 
+                            Node.VALUE_LABEL_D_DS1: [node_identifier, 0, 1, 0, 0], 
+                            Node.VALUE_LABEL_D_DS2: [node_identifier, 0, 0, 1, 0], 
+                                'Type': 'skin'
+                        }
+                        node_loc = ellipse_x[jj]
+                        d2 = ellipse_d2[jj]
+                        node_identifier = add_skin_node_new(fieldmodule, node_identifier, node_loc, d1, d2)
+                        node_loc = add(node_loc, d1)
+                        ellipse_x[jj] = node_loc
+                elif j == 17:
+                    a2 = -1 if j == 1 else 1
+                    for i in x_val:
+                        # node_matrix[i][j+a2][k] = {
+                        #         Node.VALUE_LABEL_VALUE: [node_identifier, 1, 0, 0, 0], 
+                        #         Node.VALUE_LABEL_D_DS1: [node_identifier, 0, 1, 0, 0], 
+                        #         Node.VALUE_LABEL_D_DS2: [node_identifier, 0, 0, 1, 0], 
+                        #             'Type': 'skin'
+                        #     }
+                        node_matrix[i][j][k+a3] = {
+                            Node.VALUE_LABEL_VALUE: [node_identifier, 1, 0, 0, 0], 
+                            Node.VALUE_LABEL_D_DS1: [node_identifier, 0, 1, 0, 0], 
+                            Node.VALUE_LABEL_D_DS2: [node_identifier, 0, 0, 1, 0], 
+                                'Type': 'skin'
+                        }
+                        
+                        node_matrix[i][j+4][k+a3] = {
                             Node.VALUE_LABEL_VALUE: [node_identifier, 1, 0, 0, 0], 
                             Node.VALUE_LABEL_D_DS1: [node_identifier, 0, 1, 0, 0], 
                             Node.VALUE_LABEL_D_DS2: [node_identifier, 0, 0, 1, 0], 
@@ -540,15 +568,16 @@ def generate_external_node_matrix(fieldmodule, number_elements, node_identifier,
             node_id = node_matrix[i][j-1][kk][Node.VALUE_LABEL_VALUE][0]
             # print(i, j, k, node_id)
             # print(i, j+2, k, node_id)
+            # node_matrix[i][j-1][kk][Node.VALUE_LABEL_D_DS1] = [node_id, 0, 1, 0.25, 0]
             node_matrix[i][j][k] = {
                     Node.VALUE_LABEL_VALUE: [node_id, 1, 0, 0, 0], 
-                    Node.VALUE_LABEL_D_DS1: [node_id, 0, 1, 0.25, 0], 
+                    Node.VALUE_LABEL_D_DS1: [node_id, 0, 1, 0.0, 0], 
                     Node.VALUE_LABEL_D_DS2: [node_id, 0, 0, 0, 1], 
                     'Type': 'skin'
             }
             node_matrix[i][j+2][k] = {
                     Node.VALUE_LABEL_VALUE: [node_id, 1, 0, 0, 0], 
-                    Node.VALUE_LABEL_D_DS1: [node_id, 0, 1, 0.25, 0], 
+                    Node.VALUE_LABEL_D_DS1: [node_id, 0, 1, 0.0, 0], 
                     Node.VALUE_LABEL_D_DS2: [node_id, 0, 0, 0, -1], 
                     'Type': 'skin'
             }
@@ -683,20 +712,69 @@ def generate_external_node_matrix(fieldmodule, number_elements, node_identifier,
                 jj += 1
         y += 5
         parent_node += 3
+    # Thumb MC 
+    parent_node = 21
+    y = 21
+    x = 1
+    n = 2
+    x_val = [x+1, x]
+    z_val = [1, 2]
+    y_val = [y+1] 
+    # Estimate ellipse
+    center, d1, d2, d3 = getNodeFieldParameters(fieldmodule, 'coordinates', parent_node)
+    center = add(center, mult(d1, 1/n)) 
+    major_axis = mult(d2, -a)
+    minor_axis = mult(d3, b)
+    ellipse = sampleEllipsePoints(center, major_axis, minor_axis, - math.pi/4, 2*math.pi - math.pi/4, 4)
+    ellipse_x = [ellipse[0][i] for i in [0, 1, 3, 2]]
+    ellipse_d2 = [ellipse[1][i] for i in [0, 1, 3, 2]]
+    jj = 0
+    for i in x_val:
+        for k in z_val:
+            d1 = getNodeFieldParameters(fieldmodule, 'coordinates', parent_node)[1]
+            d1 = mult(d1, 1/n) 
+            a1 = -1 if i == x else 1 
+            a3 = -1 if k == 1 else 1
+            for j in y_val:
+                node_loc = ellipse_x[jj]
+                d2 = ellipse_d2[jj]
+                # node_matrix[i+a1][j][k] = {
+                #     Node.VALUE_LABEL_VALUE: [node_identifier, 1, 0, 0, 0], 
+                #     Node.VALUE_LABEL_D_DS1: [node_identifier, 0, 1, 0, 0], 
+                #     Node.VALUE_LABEL_D_DS2: [node_identifier, 0, 0, 1, 0], 
+                #         'Type': 'skin'
+                # }
+                # node_matrix[i][j][k+a3] = {
+                #     Node.VALUE_LABEL_VALUE: [node_identifier, 1, 0, 0, 0], 
+                #     Node.VALUE_LABEL_D_DS1: [node_identifier, 0, 1, 0, 0], 
+                #     Node.VALUE_LABEL_D_DS2: [node_identifier, 0, 0, 1, 0], 
+                #         'Type': 'skin'
+                # }
+                node_identifier = add_skin_node_new(fieldmodule, node_identifier, node_loc, d1, d2)
+                node_loc = add(node_loc, d1)
+                ellipse_x[jj] = node_loc
+            jj += 1
+    y += n
+    parent_node += 1
+    
+    # Thumb PP
+
+
+    # x_val = 
 
     return node_matrix, node_identifier
 
 
 
-def create_linear_cube_element(fieldmodule, element_identifier, scale_factor_matrix, x, y, z):
+def create_linear_cube_element(fieldmodule, element_identifier, node_matrix, x, y, z):
     # Zinc setup
     mesh3d = fieldmodule.findMeshByDimension(3)
     coordinates = find_or_create_field_coordinates(fieldmodule)
     # 
     # Criteria to identify the z axis of the element
-    corner_1 = scale_factor_matrix[x][y][z]
-    corner_3 = scale_factor_matrix[x+1][y+1][z]
-    corner_5 = scale_factor_matrix[x+1][y+1][z+1]
+    corner_1 = node_matrix[x][y][z]
+    corner_3 = node_matrix[x+1][y+1][z]
+    corner_5 = node_matrix[x+1][y+1][z+1]
     if corner_1 is None or corner_3 is None or corner_5 is None:
         return -2
     corner_5_skin = True if corner_5['Type'] == 'skin' else False 
@@ -754,7 +832,7 @@ def create_linear_cube_element(fieldmodule, element_identifier, scale_factor_mat
         ret = []
         i, j, k = index
         local_node += 1
-        virtual_node = scale_factor_matrix[x+i][y+j][z+k]
+        virtual_node = node_matrix[x+i][y+j][z+k]
         if virtual_node is None:
             return -2 
         virtual_node = virtual_node[Node.VALUE_LABEL_VALUE]
@@ -814,7 +892,7 @@ def create_linear_cube_element(fieldmodule, element_identifier, scale_factor_mat
             et = []
             ret = []
             i, j, k = indices[local_node-1]
-            virtual_node = scale_factor_matrix[x+i][y+j][z+k]
+            virtual_node = node_matrix[x+i][y+j][z+k]
             virtual_node = virtual_node[label]
             for factor in range(len(virtual_node)):
                 if factor == 0:
@@ -851,7 +929,7 @@ def create_linear_cube_element(fieldmodule, element_identifier, scale_factor_mat
             et = []
             ret = []
             i, j, k = indices[local_node-1]
-            virtual_node = scale_factor_matrix[x+i][y+j][z+k]
+            virtual_node = node_matrix[x+i][y+j][z+k]
             virtual_node = virtual_node[label]
             for factor in range(len(virtual_node)):
                 if factor == 0:
@@ -1050,6 +1128,8 @@ def create_thumb_nodes_new(fieldmodule, node_identifier, finger_dimensions, meta
     # node_location = add(node_location, d2)
     node_location = add(node_location, mult(d1, 1/6))
     
+    # Manually override the width of the thumb node? 
+    finger_dimensions[0][1] = magnitude(d1)/6
     """
     Finger bone dimensions have the format
     finger_dimensions = [metacarpal, p_phalax, m_phalanx, d_phalanx]
