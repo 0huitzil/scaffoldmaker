@@ -13,7 +13,7 @@ from cmlibs.zinc.node import Node
 from cmlibs.zinc.region import Region
 from cmlibs.zinc.fieldmodule import Fieldmodule
 from cmlibs.zinc.result import RESULT_OK
-from cmlibs.maths.vectorops import rotate_about_z_axis
+from cmlibs.maths.vectorops import rotate_about_z_axis, rotate_vector_around_vector
 from scaffoldfitter.fitter import Fitter as GeometryFitter
 from scaffoldfitter.fitterstepfit import FitterStepFit
 from scaffoldmaker.annotation.annotationgroup import AnnotationGroup, findOrCreateAnnotationGroupForTerm, \
@@ -59,7 +59,7 @@ class MeshType_3d_hand1(Scaffold_base):
         baseParameterSetName = 'Human Left Vagus 1' if (parameterSetName == 'Default') else parameterSetName
         options = {
             'Base parameter set': baseParameterSetName,
-            'Thumb angle': 90.0,
+            'Thumb angle': 25.0,
         }
         return options
 
@@ -110,8 +110,8 @@ class MeshType_3d_hand1(Scaffold_base):
         
         # Fingers 2 - 4 (finger 1, thumb, is added later)
         finger_dimensions = [ #d1, d2, d3, d12
-            [1.0, 0.6, 0.3, 0.4], #carpal
-            [3.0, 0.6, 0.3, 0.2], #metacarpal
+            [1.0, 0.4, 0.3, 0.4], #carpal
+            [3.0, 0.4, 0.3, 0.2], #metacarpal
             [1.5, 0.2, 0.3, 0.2], #pp
             [1.0, 0.2, 0.3, 0.2], #m                             p
             [1.0, 0.2, 0.3, 0.2]  #dp
@@ -121,17 +121,52 @@ class MeshType_3d_hand1(Scaffold_base):
             x = carpal_nodes[-1]
             x = add(x, mult([0, 1, 0], d2*2))
             carpal_nodes.append(x)
-        node_identifier = create_finger_nodes_new(fieldmodule, node_identifier, finger_dimensions, carpal_nodes[0])
-        node_identifier = create_finger_nodes_new(fieldmodule, node_identifier, finger_dimensions, carpal_nodes[1])
-        node_identifier = create_finger_nodes_new(fieldmodule, node_identifier, finger_dimensions, carpal_nodes[2])
-        node_identifier = create_finger_nodes_new(fieldmodule, node_identifier, finger_dimensions, carpal_nodes[3])
+
+
+        # Zinc setup
+        coordinates = find_or_create_field_coordinates(fieldmodule)
+        nodes = fieldmodule.findNodesetByFieldDomainType(Field.DOMAIN_TYPE_NODES)
+        nodetemplate = get_simple_nodetemplate(fieldmodule)
+        fieldcache = fieldmodule.createFieldcache()
+        # Set basic directions
+        x1 = [1, 0, 0]
+        x2 = [0, 1, 0]
+        x3 = [0, 0, 1]    
+        for j in range(0, 4):
+            node_location = carpal_nodes[j]
+            finger_node_identifier = node_identifier
+            for i in range(len(finger_dimensions)):
+                node = nodes.createNode(finger_node_identifier, nodetemplate)
+                fieldcache.setNode(node)
+                bone_dimensions = finger_dimensions[i]
+                d1 = mult(x1, bone_dimensions[0])
+                d2 = mult(x2, bone_dimensions[1])
+                d3 = mult(x3, bone_dimensions[2])
+                d12 = mult(x2, bone_dimensions[3])
+                x = node_location
+                if i == 2:
+                    x = add(x, mult(d2, -1 + 2*j/3))
+                # if j == 0 and i == 2:
+                #     x = add(x, mult(d2, -1))
+                # elif j == 3 and i == 2:
+                #      x = add(x, mult(d2, 1))
+                setNodeFieldParameters(coordinates, fieldcache, x, d1, d2, d3, d12)
+                x = add(x, d1)
+                node_location = x
+                # 
+                finger_node_identifier += 1 
+            node_identifier = finger_node_identifier
+        # node_identifier = create_finger_nodes_new(fieldmodule, node_identifier, finger_dimensions, carpal_nodes[0], 5)
+        # node_identifier = create_finger_nodes_new(fieldmodule, node_identifier, finger_dimensions, carpal_nodes[1], 4)
+        # node_identifier = create_finger_nodes_new(fieldmodule, node_identifier, finger_dimensions, carpal_nodes[2], 3)
+        # node_identifier = create_finger_nodes_new(fieldmodule, node_identifier, finger_dimensions, carpal_nodes[3], 2)
         # Thumb
         finger_dimensions = [ #d1, d2, d3, d12
-            [1.0, 0.7, 0.3, 0.4], #carpal
-            [2.0, 0.5, 0.3, 0.2], #metacarpal
-            [1, 0.4, 0.3, 0.2], #pp
-            [0.5, 0.3, 0.3, 0.2], #m                             p
-            [0.5, 0.2, 0.3, 0.2]  #dp
+            [1.5, 0.7, 0.3, 0.4], #carpal
+            [1.5, 0.5, 0.3, 0.2], #metacarpal
+            [1.0, 0.4, 0.25, 0.2], #pp
+            [1.0, 0.3, 0.25, 0.2], #m                             p
+            [1.0, 0.2, 0.25, 0.2]  #dp
         ]
 
 
@@ -187,27 +222,9 @@ class MeshType_3d_hand1(Scaffold_base):
         
         virtual_node_matrix, node_identifier = generate_internal_node_matrix(fieldmodule, number_elements, node_identifier, virtual_node_matrix)
 
-        generate_external_node_matrix(fieldmodule, number_elements, node_identifier, virtual_node_matrix)
+        # generate_external_node_matrix(fieldmodule, number_elements, node_identifier, virtual_node_matrix)
         # virtual_node_matrix = create_virtual_node_matrix(fieldmodule, number_elements, node_identifier, skin_elements=False)
         # Let it rip
-        # virtual_node_matrix[3][3][1] = virtual_node_matrix[3][2][0] 
-        # virtual_node_matrix[3][3][2] = virtual_node_matrix[3][2][3]
-
-        # virtual_node_matrix[3][5][1] = virtual_node_matrix[3][6][0] 
-        # virtual_node_matrix[3][5][2] = virtual_node_matrix[3][6][3]
-        
-        # virtual_node_matrix[3][8][1] = virtual_node_matrix[3][7][0] 
-        # virtual_node_matrix[3][8][2] = virtual_node_matrix[3][7][3]
-
-        # virtual_node_matrix[3][10][1] = virtual_node_matrix[3][11][0] 
-        # virtual_node_matrix[3][10][2] = virtual_node_matrix[3][11][3]
-        
-        # virtual_node_matrix[3][13][1] = virtual_node_matrix[3][12][0] 
-        # virtual_node_matrix[3][13][2] = virtual_node_matrix[3][12][3]
-
-        # virtual_node_matrix[3][15][1] = virtual_node_matrix[3][16][0] 
-        # virtual_node_matrix[3][15][2] = virtual_node_matrix[3][12][3]
-
         z_len = len(virtual_node_matrix[0][0]) - 1
         y_len = len(virtual_node_matrix[0]) -1
         x_len = len(virtual_node_matrix) - 1
@@ -215,13 +232,6 @@ class MeshType_3d_hand1(Scaffold_base):
         for k in range(z_len):
             for j in range(y_len): 
                 for i in range(x_len):
-        
-                    # if i != 3:
-                    #     continue 
-                    # if j not in [0, 1]:
-                    #     continue
-                    # if k not in [1]:
-                    #     continue
                     result = create_linear_cube_element(fieldmodule, element_identifier, virtual_node_matrix, i, j, k)
                     if result == RESULT_OK:
                         element_identifier += 1
@@ -243,8 +253,6 @@ class MeshType_3d_hand1(Scaffold_base):
         mesh1d = fieldmodule.findMeshByDimension(1)
 
 
-
-
 def generate_internal_node_matrix(fieldmodule, number_elements, node_identifier, node_matrix):
     c, mc, pp, mp, dp = number_elements
     # Finger elements are created in reverse order, from 5 (little) to 1 (thumb)
@@ -252,14 +260,15 @@ def generate_internal_node_matrix(fieldmodule, number_elements, node_identifier,
     bone_w = 1
     bone_h = 1
     a0 = 1
-    # Finger 
     node_id = 0
     y = 1
+    # Finger 
     for f in range(4):
         # Carpal
         node_id += 1
         x = 0
         y_val = [y, y+1] if f == 0 else [y+1]
+        y_val = [y, y+1]
         x_val = [(x+i, i/c) for i in range(c)]
         for k in [1, 2]:
             for j in y_val:
@@ -268,23 +277,30 @@ def generate_internal_node_matrix(fieldmodule, number_elements, node_identifier,
                     i = i[0]
                     a2 = -bone_w if j == y else bone_w
                     a3 = -bone_h if k == 1 else bone_h  
-                    if node_matrix[i][j][k] is None: 
+                    if j == y: 
+                        if node_matrix[i][j][k] is None:
+                            node_matrix[i][j][k] = {
+                                Node.VALUE_LABEL_VALUE: [node_identifier, 1, 0, 0, 0], 
+                                'Type': 'bone'
+                            }
+                    elif j == y+1:
                         node_matrix[i][j][k] = {
                             Node.VALUE_LABEL_VALUE: [node_identifier, 1, 0, 0, 0], 
                             'Type': 'bone'
                         } 
-                        node_matrix[i][j+4][k] = {
+                        node_matrix[i][y+5][k] = {
                             Node.VALUE_LABEL_VALUE: [node_identifier, 1, 0, 0, 0], 
                             'Type': 'bone'
                         } 
-                        node_identifier = add_node(
-                                fieldmodule, node_id, node_identifier, [a0, a1, a2, a3])
-
+                    node_identifier = add_node(
+                            fieldmodule, node_id, node_identifier, [a0, a1, a2, a3])                         
+                    
         x = c
         # Metacarpal
         node_id += 1
-        y_val = [y, y+1, y+5]
-        x_val = [(x+i, i/mc) for i in range(mc)]
+        y_val = [y, y+1, y+5] if y != 16 else [y, y+1] 
+        # x_val = [(x+i, i/mc) for i in range(mc)]
+        x_val = [(x, 0), (x+1, 0.45), (x+2, 0.9)]
         for k in [1, 2]:
             for j in y_val:
                 for i in x_val:
@@ -352,44 +368,79 @@ def generate_internal_node_matrix(fieldmodule, number_elements, node_identifier,
         y += 5
     # Thumb 
     # Metacarpal
+    # y = 21
+    # Metacarpal
+    mc = 1
+    y += 5
+    x = c
     node_id += 1
-    y = 22
+    y_val = [y, y+1] 
+    x_val = [(x+i, i/mc) for i in range(mc)]
     for k in [1, 2]:
-        for j in [y]:
-            for i in [1, 2]:
-                a1 = 1/2 
-                a2 = bone_w if i == 1 else -bone_w
+        for j in y_val:
+            for i in x_val:
+                a1 = i[1]
+                i = i[0]
+                a2 = bone_w if j == y+1 else -bone_w
                 a3 = -bone_h if k == 1 else bone_h  
-                node_matrix[i][j][k] = {
-                                            Node.VALUE_LABEL_VALUE: [node_id, a0, a1, a2, a3], 
-                                            'Type': 'bone'
-                                        } 
-    y += 1
+                if node_matrix[i][j][k] is None: 
+                                node_matrix[i][j][k] = {
+                                    Node.VALUE_LABEL_VALUE: [node_id, a0, a1, a2, a3], 
+                                    'Type': 'bone'
+                                } 
+                if i == 1 and j == y+1:
+                    node_matrix[0][y-4][k] = {
+                                    Node.VALUE_LABEL_VALUE: [node_id, a0, a1, a2, a3], 
+                                    'Type': 'bone'
+                                } 
+    x = c + mc
     # PP
     node_id += 1
+    y_val = [y, y+1]
+    x_val = [(x+i, i/pp) for i in range(pp)]
     for k in [1, 2]:
-        for j in [y]:
-            for i in [1, 2]:
-                a1 = 0 if j == y else 1
-                a2 = bone_w if i == 1 else -bone_w
+        for j in y_val:
+            for i in x_val:
+                a1 = i[1]
+                i = i[0]
+                a2 = -bone_w if j == y else bone_w
                 a3 = -bone_h if k == 1 else bone_h  
-                node_matrix[i][j][k] = {
-                                            Node.VALUE_LABEL_VALUE: [node_id, a0, a1, a2, a3], 
-                                            'Type': 'bone'
-                                        } 
-    y += 1
+                if node_matrix[i][j][k] is None: 
+                                node_matrix[i][j][k] = {
+                                    Node.VALUE_LABEL_VALUE: [node_id, a0, a1, a2, a3], 
+                                    'Type': 'bone'
+                                } 
+    x = c + mc + pp
     # DP
     node_id += 1
+    y_val = [y, y+1]
+    x_val = [(x+i, i/mp) for i in range(dp)]
     for k in [1, 2]:
-        for j in [y, y+1]:
-            for i in [1, 2]:
-                a1 = 0 if j == y else 1
-                a2 = bone_w if i == 1 else -bone_w
+        for j in y_val:
+            for i in x_val:
+                a1 = i[1]
+                i = i[0]
+                a2 = -bone_w if j == y else bone_w
                 a3 = -bone_h if k == 1 else bone_h  
-                node_matrix[i][j][k] = {
-                                            Node.VALUE_LABEL_VALUE: [node_id, a0, a1, a2, a3], 
-                                            'Type': 'bone'
-                                        } 
+                if node_matrix[i][j][k] is None: 
+                                node_matrix[i][j][k] = {
+                                    Node.VALUE_LABEL_VALUE: [node_id, a0, a1, a2, a3], 
+                                    'Type': 'bone'
+                                } 
+    # Intermediate metacarpal connections
+    z_val = [1, 2]
+    for k in z_val:
+        # Bottom connection
+        node_matrix[1][y-5][k] = node_matrix[0][y-9][k]
+        node_matrix[1][y-4][k] = node_matrix[1][y+1][k]
+        node_matrix[2][y-5][k] = node_matrix[1][y-9][k]
+        node_matrix[2][y-4][k] = node_matrix[1][y][k]
+        # Intermediate connection
+        node_matrix[4][y-5][k] = node_matrix[1][y-9][k]
+        node_matrix[4][y-4][k] = node_matrix[1][y][k]
+        node_matrix[5][y-5][k] = node_matrix[2][y-9][k]
+        node_matrix[5][y-4][k] = node_matrix[2][y][k]
+
     return node_matrix, node_identifier
 
 
@@ -428,7 +479,7 @@ def generate_external_node_matrix(fieldmodule, number_elements, node_identifier,
                 d1 = getNodeFieldParameters(fieldmodule, 'coordinates', parent_node)[1]
                 d1 = mult(d1, 1/c)
                 a3 = -1 if k == 1 else 1
-                if j == 1 or j == 17:
+                if j == 1:
                     a2 = -1 if j == 1 else 1
                     for i in x_val:
                         node_matrix[i][j+a2][k] = {
@@ -438,6 +489,32 @@ def generate_external_node_matrix(fieldmodule, number_elements, node_identifier,
                                 'Type': 'skin'
                         }
                         node_matrix[i][j][k+a3] = {
+                            Node.VALUE_LABEL_VALUE: [node_identifier, 1, 0, 0, 0], 
+                            Node.VALUE_LABEL_D_DS1: [node_identifier, 0, 1, 0, 0], 
+                            Node.VALUE_LABEL_D_DS2: [node_identifier, 0, 0, 1, 0], 
+                                'Type': 'skin'
+                        }
+                        node_loc = ellipse_x[jj]
+                        d2 = ellipse_d2[jj]
+                        node_identifier = add_skin_node_new(fieldmodule, node_identifier, node_loc, d1, d2)
+                        node_loc = add(node_loc, d1)
+                        ellipse_x[jj] = node_loc
+                elif j == 17:
+                    a2 = -1 if j == 1 else 1
+                    for i in x_val:
+                        node_matrix[i][j+a2][k] = {
+                            Node.VALUE_LABEL_VALUE: [node_identifier, 1, 0, 0, 0], 
+                            Node.VALUE_LABEL_D_DS1: [node_identifier, 0, 1, 0, 0], 
+                            Node.VALUE_LABEL_D_DS2: [node_identifier, 0, 0, 1, 0], 
+                                'Type': 'skin'
+                        }
+                        node_matrix[i][j][k+a3] = {
+                            Node.VALUE_LABEL_VALUE: [node_identifier, 1, 0, 0, 0], 
+                            Node.VALUE_LABEL_D_DS1: [node_identifier, 0, 1, 0, 0], 
+                            Node.VALUE_LABEL_D_DS2: [node_identifier, 0, 0, 1, 0], 
+                                'Type': 'skin'
+                        }
+                        node_matrix[i][j+4][k+a3] = {
                             Node.VALUE_LABEL_VALUE: [node_identifier, 1, 0, 0, 0], 
                             Node.VALUE_LABEL_D_DS1: [node_identifier, 0, 1, 0, 0], 
                             Node.VALUE_LABEL_D_DS2: [node_identifier, 0, 0, 1, 0], 
@@ -511,12 +588,13 @@ def generate_external_node_matrix(fieldmodule, number_elements, node_identifier,
                 elif j == 17:
                     a2 = -1 if j == 1 else 1
                     for i in x_val:
-                        # node_matrix[i][j+a2][k] = {
-                        #         Node.VALUE_LABEL_VALUE: [node_identifier, 1, 0, 0, 0], 
-                        #         Node.VALUE_LABEL_D_DS1: [node_identifier, 0, 1, 0, 0], 
-                        #         Node.VALUE_LABEL_D_DS2: [node_identifier, 0, 0, 1, 0], 
-                        #             'Type': 'skin'
-                        #     }
+                        if i > 1:
+                            node_matrix[i][j+a2][k] = {
+                                    Node.VALUE_LABEL_VALUE: [node_identifier, 1, 0, 0, 0], 
+                                    Node.VALUE_LABEL_D_DS1: [node_identifier, 0, 1, 0, 0], 
+                                    Node.VALUE_LABEL_D_DS2: [node_identifier, 0, 0, 1, 0], 
+                                        'Type': 'skin'
+                                }
                         node_matrix[i][j][k+a3] = {
                             Node.VALUE_LABEL_VALUE: [node_identifier, 1, 0, 0, 0], 
                             Node.VALUE_LABEL_D_DS1: [node_identifier, 0, 1, 0, 0], 
@@ -524,12 +602,12 @@ def generate_external_node_matrix(fieldmodule, number_elements, node_identifier,
                                 'Type': 'skin'
                         }
                         
-                        node_matrix[i][j+4][k+a3] = {
-                            Node.VALUE_LABEL_VALUE: [node_identifier, 1, 0, 0, 0], 
-                            Node.VALUE_LABEL_D_DS1: [node_identifier, 0, 1, 0, 0], 
-                            Node.VALUE_LABEL_D_DS2: [node_identifier, 0, 0, 1, 0], 
-                                'Type': 'skin'
-                        }
+                        # node_matrix[i][j+2][k+a3] = {
+                        #     Node.VALUE_LABEL_VALUE: [node_identifier, 1, 0, 0, 0], 
+                        #     Node.VALUE_LABEL_D_DS1: [node_identifier, 0, 1, 0, 0], 
+                        #     Node.VALUE_LABEL_D_DS2: [node_identifier, 0, 0, 1, 0], 
+                        #         'Type': 'skin'
+                        # }
                         node_loc = ellipse_x[jj]
                         d2 = ellipse_d2[jj]
                         node_identifier = add_skin_node_new(fieldmodule, node_identifier, node_loc, d1, d2)
@@ -566,18 +644,16 @@ def generate_external_node_matrix(fieldmodule, number_elements, node_identifier,
         for k in z_val:
             kk = 0 if k == 1 else 3
             node_id = node_matrix[i][j-1][kk][Node.VALUE_LABEL_VALUE][0]
-            # print(i, j, k, node_id)
-            # print(i, j+2, k, node_id)
-            # node_matrix[i][j-1][kk][Node.VALUE_LABEL_D_DS1] = [node_id, 0, 1, 0.25, 0]
+
             node_matrix[i][j][k] = {
                     Node.VALUE_LABEL_VALUE: [node_id, 1, 0, 0, 0], 
-                    Node.VALUE_LABEL_D_DS1: [node_id, 0, 1, 0.0, 0], 
+                    Node.VALUE_LABEL_D_DS1: [node_id, 0, 1, 0, 0], 
                     Node.VALUE_LABEL_D_DS2: [node_id, 0, 0, 0, 1], 
                     'Type': 'skin'
             }
             node_matrix[i][j+2][k] = {
                     Node.VALUE_LABEL_VALUE: [node_id, 1, 0, 0, 0], 
-                    Node.VALUE_LABEL_D_DS1: [node_id, 0, 1, 0.0, 0], 
+                    Node.VALUE_LABEL_D_DS1: [node_id, 0, 1, 0, 0], 
                     Node.VALUE_LABEL_D_DS2: [node_id, 0, 0, 0, -1], 
                     'Type': 'skin'
             }
@@ -713,54 +789,278 @@ def generate_external_node_matrix(fieldmodule, number_elements, node_identifier,
         y += 5
         parent_node += 3
     # Thumb MC 
+    mc = 1
     parent_node = 21
-    y = 21
-    x = 1
-    n = 2
-    x_val = [x+1, x]
+    jj = 0
+    n = mc
+    x = c
+    y += 5
+    y_val = [y, y+1]
+    x_val = [x+i for i in range(n)]
     z_val = [1, 2]
-    y_val = [y+1] 
+    
     # Estimate ellipse
     center, d1, d2, d3 = getNodeFieldParameters(fieldmodule, 'coordinates', parent_node)
-    center = add(center, mult(d1, 1/n)) 
     major_axis = mult(d2, -a)
     minor_axis = mult(d3, b)
     ellipse = sampleEllipsePoints(center, major_axis, minor_axis, - math.pi/4, 2*math.pi - math.pi/4, 4)
     ellipse_x = [ellipse[0][i] for i in [0, 1, 3, 2]]
     ellipse_d2 = [ellipse[1][i] for i in [0, 1, 3, 2]]
     jj = 0
-    for i in x_val:
+    for j in y_val:
         for k in z_val:
             d1 = getNodeFieldParameters(fieldmodule, 'coordinates', parent_node)[1]
-            d1 = mult(d1, 1/n) 
-            a1 = -1 if i == x else 1 
-            a3 = -1 if k == 1 else 1
-            for j in y_val:
+            d1 = mult(d1, 1/(n))
+            a2 = -1 if j == y else 1
+            a3 = -1 if k == 1 else 1  
+            for i in x_val:
                 node_loc = ellipse_x[jj]
                 d2 = ellipse_d2[jj]
-                # node_matrix[i+a1][j][k] = {
-                #     Node.VALUE_LABEL_VALUE: [node_identifier, 1, 0, 0, 0], 
-                #     Node.VALUE_LABEL_D_DS1: [node_identifier, 0, 1, 0, 0], 
-                #     Node.VALUE_LABEL_D_DS2: [node_identifier, 0, 0, 1, 0], 
-                #         'Type': 'skin'
-                # }
-                # node_matrix[i][j][k+a3] = {
-                #     Node.VALUE_LABEL_VALUE: [node_identifier, 1, 0, 0, 0], 
-                #     Node.VALUE_LABEL_D_DS1: [node_identifier, 0, 1, 0, 0], 
-                #     Node.VALUE_LABEL_D_DS2: [node_identifier, 0, 0, 1, 0], 
-                #         'Type': 'skin'
-                # }
+
+                node_matrix[i][j][k+a3] = {
+                    Node.VALUE_LABEL_VALUE: [node_identifier, 1, 0, 0, 0], 
+                    Node.VALUE_LABEL_D_DS1: [node_identifier, 0, 1, 0, 0], 
+                    Node.VALUE_LABEL_D_DS2: [node_identifier, 0, 0, 1, 0], 
+                        'Type': 'skin'
+                }
+                if j == y+1:
+                    node_matrix[i][j+a2][k] = {
+                        Node.VALUE_LABEL_VALUE: [node_identifier, 1, 0, 0, 0], 
+                        Node.VALUE_LABEL_D_DS1: [node_identifier, 0, 1, 0, 0], 
+                        Node.VALUE_LABEL_D_DS2: [node_identifier, 0, 0, 1, 0], 
+                            'Type': 'skin'
+                    }
+                    # if i == 1: #Thumb-palm connection elements
+                    #     node_matrix[i-1][j-3][k+a3] = {
+                    #     Node.VALUE_LABEL_VALUE: [node_identifier, 1, 0, 0, 0], 
+                    #     Node.VALUE_LABEL_D_DS1: [node_identifier, 0, 0, -1, 0], 
+                    #     Node.VALUE_LABEL_D_DS2: [node_identifier, 0, 1, 0, 0], 
+                    #         'Type': 'skin'
+                    # }
+                # else:
+                #     node_matrix[i][y][k+a3] = {
+                #         Node.VALUE_LABEL_VALUE: [node_identifier, 1, 0, 0, 0], 
+                #         Node.VALUE_LABEL_D_DS1: [node_identifier, 0, 1, 0, 0], 
+                #         Node.VALUE_LABEL_D_DS2: [node_identifier, 0, 0, 1, 0], 
+                #             'Type': 'skin'
+                #     }
+                    
                 node_identifier = add_skin_node_new(fieldmodule, node_identifier, node_loc, d1, d2)
                 node_loc = add(node_loc, d1)
                 ellipse_x[jj] = node_loc
             jj += 1
-    y += n
+
+    # PP 
     parent_node += 1
-    
-    # Thumb PP
+    # y += 1
+    x = c + mc 
+    n = pp
+    y_val = [y, y+1]
+    x_val = [x+i for i in range(n)]
+    # Estimate ellipse
+    center, d1, d2, d3 = getNodeFieldParameters(fieldmodule, 'coordinates', parent_node)
+    major_axis = mult(d2, -a)
+    minor_axis = mult(d3, b)
+    ellipse = sampleEllipsePoints(center, major_axis, minor_axis, - math.pi/4, 2*math.pi - math.pi/4, 4)
+    ellipse_x = [ellipse[0][i] for i in [0, 1, 3, 2]]
+    ellipse_d2 = [ellipse[1][i] for i in [0, 1, 3, 2]]
+    jj = 0
+    for j in y_val:
+        for k in z_val:
+            d1 = getNodeFieldParameters(fieldmodule, 'coordinates', parent_node)[1]
+            d1 = mult(d1, 1/n)
+            a2 = -1 if j == y else 1
+            a3 = -1 if k == 1 else 1  
+            for i in x_val:
+                node_loc = ellipse_x[jj]
+                d2 = ellipse_d2[jj]
+                node_matrix[i][j+a2][k] = {
+                    Node.VALUE_LABEL_VALUE: [node_identifier, 1, 0, 0, 0], 
+                    Node.VALUE_LABEL_D_DS1: [node_identifier, 0, 1, 0, 0], 
+                    Node.VALUE_LABEL_D_DS2: [node_identifier, 0, 0, 1, 0], 
+                        'Type': 'skin'
+                }
+                node_matrix[i][j][k+a3] = {
+                    Node.VALUE_LABEL_VALUE: [node_identifier, 1, 0, 0, 0], 
+                    Node.VALUE_LABEL_D_DS1: [node_identifier, 0, 1, 0, 0], 
+                    Node.VALUE_LABEL_D_DS2: [node_identifier, 0, 0, 1, 0], 
+                        'Type': 'skin'
+                }
+                node_identifier = add_skin_node_new(fieldmodule, node_identifier, node_loc, d1, d2)
+                node_loc = add(node_loc, d1)
+                ellipse_x[jj] = node_loc
+            jj += 1
+    # DP 
+    parent_node += 1
+    # y += 1
+    x = c + mc + pp
+    n = dp
+    y_val = [y, y+1]
+    x_val = [x+i for i in range(n)]
+    # Estimate ellipse
+    center, d1, d2, d3 = getNodeFieldParameters(fieldmodule, 'coordinates', parent_node)
+    major_axis = mult(d2, -a)
+    minor_axis = mult(d3, b)
+    ellipse = sampleEllipsePoints(center, major_axis, minor_axis, - math.pi/4, 2*math.pi - math.pi/4, 4)
+    ellipse_x = [ellipse[0][i] for i in [0, 1, 3, 2]]
+    ellipse_d2 = [ellipse[1][i] for i in [0, 1, 3, 2]]
+    jj = 0
+    for j in y_val:
+        for k in z_val:
+            d1 = getNodeFieldParameters(fieldmodule, 'coordinates', parent_node)[1]
+            d1 = mult(d1, 1/(n-1))
+            a2 = -1 if j == y else 1
+            a3 = -1 if k == 1 else 1  
+            for i in x_val:
+                node_loc = ellipse_x[jj]
+                d2 = ellipse_d2[jj]
+                node_matrix[i][j+a2][k] = {
+                    Node.VALUE_LABEL_VALUE: [node_identifier, 1, 0, 0, 0], 
+                    Node.VALUE_LABEL_D_DS1: [node_identifier, 0, 1, 0, 0], 
+                    Node.VALUE_LABEL_D_DS2: [node_identifier, 0, 0, 1, 0], 
+                        'Type': 'skin'
+                }
+                node_matrix[i][j][k+a3] = {
+                    Node.VALUE_LABEL_VALUE: [node_identifier, 1, 0, 0, 0], 
+                    Node.VALUE_LABEL_D_DS1: [node_identifier, 0, 1, 0, 0], 
+                    Node.VALUE_LABEL_D_DS2: [node_identifier, 0, 0, 1, 0], 
+                        'Type': 'skin'
+                }
+                node_identifier = add_skin_node_new(fieldmodule, node_identifier, node_loc, d1, d2)
+                node_loc = add(node_loc, d1)
+                ellipse_x[jj] = node_loc
+            jj += 1
+
+    # The Thumb-palm connection elements 
+    # It is against every fiber of my being that I am forced to set these manually
+
+    # Back of the thumb 
+    z_val = [0, 3]
+    for k in z_val:
+        a1 = -1 if k == 3 else 1 
+        a3 = -1 if k == 3 else 1 
+        node_id = node_matrix[0][y-9][k][Node.VALUE_LABEL_VALUE][0] #Get id from existing node
+        node_matrix[0][y-5][k+a3] = {
+                    Node.VALUE_LABEL_VALUE: [node_id, 1, 0, 0, 0], 
+                    Node.VALUE_LABEL_D_DS1: [node_id, 0, 0, -a1*0.5, 0], 
+                    Node.VALUE_LABEL_D_DS2: [node_id, 0, 0, 0.5, 0], 
+                        'Type': 'skin'
+                }
+        node_id = node_matrix[1][y+1][k][Node.VALUE_LABEL_VALUE][0] #Get id from existing node
+        node_matrix[0][y-4][k+a3] = {
+                    Node.VALUE_LABEL_VALUE: [node_id, 1, 0, 0, 0], 
+                    Node.VALUE_LABEL_D_DS1: [node_id, 0, 1, -a1, 0], 
+                    Node.VALUE_LABEL_D_DS2: [node_id, 0, 0, 1, 0], 
+                        'Type': 'skin'
+                }
+
+    # Bottom carpal-metacarpal connection
+    z_val = [0, 3]
+    for k in z_val:
+        a1 = -1 if k == 3 else 1 
+        a2 
+        node_id = node_matrix[1][y+1][k][Node.VALUE_LABEL_VALUE][0] #Get id from existing node
+        node_matrix[1][y-4][k] = {
+                    Node.VALUE_LABEL_VALUE: [node_id, 1, 0, 0, 0], 
+                    Node.VALUE_LABEL_D_DS1: [node_id, 0, 0, a1, 0], 
+                    Node.VALUE_LABEL_D_DS2: [node_id, 0, -a1, 1, 0], 
+                        'Type': 'skin'
+                }
+        
+        node_id = node_matrix[1][y][k][Node.VALUE_LABEL_VALUE][0]
+        node_matrix[2][y-4][k] = {
+                    Node.VALUE_LABEL_VALUE: [node_id, 1, 0, 0, 0], 
+                    Node.VALUE_LABEL_D_DS1: [node_id, 0, 0, a1, 0], 
+                    Node.VALUE_LABEL_D_DS2: [node_id, 0, -a1, 0, 0], 
+                        'Type': 'skin'
+                }
+
+        node_id = node_matrix[0][y-9][k][Node.VALUE_LABEL_VALUE][0]
+        node_matrix[1][y-5][k] = {
+                    Node.VALUE_LABEL_VALUE: [node_id, 1, 0, 0, 0], 
+                    Node.VALUE_LABEL_D_DS1: [node_id, 0, 1, 0, 0], 
+                    Node.VALUE_LABEL_D_DS2: [node_id, 0, 0, 0.5, 0], 
+                        'Type': 'skin'
+                }
+        
+        node_id = node_matrix[1][y-9][k][Node.VALUE_LABEL_VALUE][0]
+        node_matrix[2][y-5][k] = {
+                    Node.VALUE_LABEL_VALUE: [node_id, 1, 0, 0, 0], 
+                    Node.VALUE_LABEL_D_DS1: [node_id, 0, 1, 0, 0], 
+                    Node.VALUE_LABEL_D_DS2: [node_id, 0, 0, 0.5, 0], 
+                        'Type': 'skin'
+                }
+        
+    # Intermediate metacarpal connections
+    z_val = [0, 3]
+    for k in z_val:
+        a1 = -1 if k == 3 else 1 
+
+        node_id = node_matrix[1][y][k][Node.VALUE_LABEL_VALUE][0]
+        node_matrix[4][y-4][k] = {
+                    Node.VALUE_LABEL_VALUE: [node_id, 1, 0, 0, 0], 
+                    Node.VALUE_LABEL_D_DS1: [node_id, 0, 1, 0, 0], 
+                    Node.VALUE_LABEL_D_DS2: [node_id, 0, -a1, 0, 0], 
+                        'Type': 'skin'
+                }
+        
+
+        node_id = node_matrix[1][y-9][k][Node.VALUE_LABEL_VALUE][0]
+        node_matrix[4][y-5][k] = {
+                    Node.VALUE_LABEL_VALUE: [node_id, 1, 0, 0, 0], 
+                    Node.VALUE_LABEL_D_DS1: [node_id, 0, 1, 0, 0], 
+                    Node.VALUE_LABEL_D_DS2: [node_id, 0, 0, 0.5, 0], 
+                        'Type': 'skin'
+                }
+        
+        node_id = node_matrix[2][y][k][Node.VALUE_LABEL_VALUE][0]
+        node_matrix[5][y-4][k] = {
+                    Node.VALUE_LABEL_VALUE: [node_id, 1, 0, 0, 0], 
+                    Node.VALUE_LABEL_D_DS1: [node_id, 0, 1, 0, 0], 
+                    Node.VALUE_LABEL_D_DS2: [node_id, 0, 0, 0.5, 0], 
+                        'Type': 'skin'
+                }        
+
+        node_id = node_matrix[2][y-9][k][Node.VALUE_LABEL_VALUE][0]
+        node_matrix[5][y-5][k] = {
+                    Node.VALUE_LABEL_VALUE: [node_id, 1, 0, 0, 0], 
+                    Node.VALUE_LABEL_D_DS1: [node_id, 0, 1, 0, 0], 
+                    Node.VALUE_LABEL_D_DS2: [node_id, 0, 0, 0.5, 0], 
+                        'Type': 'skin'
+                }
+
+    # Front of the webbing
+    z_val = [0, 3]
+    for k in z_val:
+        a1 = -1 if k == 3 else 1 
+        a3 = -1 if k == 3 else 1 
+        node_id = node_matrix[2][y-9][k][Node.VALUE_LABEL_VALUE][0] #Get id from existing node
+        node_matrix[6][y-5][k+a3] = {
+                    Node.VALUE_LABEL_VALUE: [node_id, 1, 0, 0, 0], 
+                    Node.VALUE_LABEL_D_DS1: [node_id, 0, 0, -a1*0.5, 0], 
+                    Node.VALUE_LABEL_D_DS2: [node_id, 0, 0, 0.5, 0], 
+                        'Type': 'skin'
+                }
+        node_id = node_matrix[2][y][k][Node.VALUE_LABEL_VALUE][0] #Get id from existing node
+        node_matrix[6][y-4][k+a3] = {
+                    Node.VALUE_LABEL_VALUE: [node_id, 1, 0, 0, 0], 
+                    Node.VALUE_LABEL_D_DS1: [node_id, 0, 1, -a1, 0], 
+                    Node.VALUE_LABEL_D_DS2: [node_id, 0, 0, -1, 0], 
+                        'Type': 'skin'
+                } 
 
 
-    # x_val = 
+
+    # z_val = [1, 2]
+    # for k in z_val:
+    #     # node_id = node_matrix[1][17][k][Node.VALUE_LABEL_VALUE][0]
+    #     node_matrix[2][y-5][k] = node_matrix[2][y-9][k]
+    #     # node_id = node_matrix[2][17][k][Node.VALUE_LABEL_VALUE][0]
+    #     node_matrix[2][y-4][k] = node_matrix[2][y][k]
+    #     # node_id = node_matrix[1][22][k][Node.VALUE_LABEL_VALUE][0]
+        # node_matrix[2][20][k] = node_matrix[1][22][k]
+        # # node_id = node_matrix[2][22][k][Node.VALUE_LABEL_VALUE][0]
+        # node_matrix[2][20][k] = node_matrix[2][22][k]
 
     return node_matrix, node_identifier
 
@@ -770,31 +1070,60 @@ def create_linear_cube_element(fieldmodule, element_identifier, node_matrix, x, 
     # Zinc setup
     mesh3d = fieldmodule.findMeshByDimension(3)
     coordinates = find_or_create_field_coordinates(fieldmodule)
-    # 
-    # Criteria to identify the z axis of the element
-    corner_1 = node_matrix[x][y][z]
-    corner_3 = node_matrix[x+1][y+1][z]
-    corner_5 = node_matrix[x+1][y+1][z+1]
-    if corner_1 is None or corner_3 is None or corner_5 is None:
-        return -2
-    corner_5_skin = True if corner_5['Type'] == 'skin' else False 
-    corner_3_skin = True if corner_3['Type'] == 'skin' else False
-    corner_1_skin = True if corner_1['Type'] == 'skin' else False 
-    if not corner_1_skin and not corner_3_skin:
+    # New criteria
+    node_1 = node_matrix[x][y][z]
+    node_2 = node_matrix[x+1][y][z]
+    node_3 = node_matrix[x][y+1][z]
+    if node_1 is None or node_2 is None or node_3 is None:
+         return -2
+    n1_ext = True if node_1['Type'] == 'skin' else False #external
+    n2_ext = True if node_2['Type'] == 'skin' else False
+    n3_ext = True if node_3['Type'] == 'skin' else False
+    
+    # 6 possible cases, one for each face of a cube
+    if not n1_ext and not n2_ext and not n3_ext:
         ranges = [[0, 1], [0, 1], [0, 1]]
         order = [2, 1, 0]
-    elif not corner_1_skin and  corner_3_skin:
+    elif not n1_ext and not n2_ext and n3_ext:
         ranges = [[0, 1], [0, 1], [1, 0]]
-        order = [1, 2, 0]
-    elif  corner_1_skin and not corner_3_skin:
-        ranges = [[0, 1], [1, 0], [0, 1]]
-        order = [1, 2, 0]
-    elif corner_1_skin and corner_3_skin:
+        order = [1, 2, 0] 
+    elif n1_ext and n2_ext and n3_ext:
         ranges = [[0, 1], [1, 0], [1, 0]]
-        order = [2, 1, 0]
-    is_bicubic = True if corner_1_skin or corner_3_skin or corner_5_skin else False
+        order = [2, 1, 0] 
+    elif n1_ext and n2_ext and not n3_ext:
+        ranges = [[0, 1], [1, 0], [0, 1]]
+        order = [1, 2, 0] 
+    elif n1_ext and not n2_ext and n3_ext:
+        ranges = [[1, 0], [0, 1], [1, 0]]
+        order = [0, 2, 1]
+    else:
+        ranges = [[0, 1], [0, 1], [1, 0]]
+        order = [0, 2, 1]  
+    # # Criteria to identify the z axis of the element
+    # corner_1 = node_matrix[x][y][z]
+    # corner_3 = node_matrix[x+1][y+1][z]
+    # corner_5 = node_matrix[x+1][y+1][xz+1]
+    # if corner_1 is None or corner_3 is None or corner_5 is None:
+    #     return -2
+    # corner_5_skin = True if corner_5['Type'] == 'skin' else False 
+    # corner_3_skin = True if corner_3['Type'] == 'skin' else False
+    # corner_1_skin = True if corner_1['Type'] == 'skin' else False 
+    # if not corner_1_skin and not corner_3_skin:
+    #     ranges = [[0, 1], [0, 1], [0, 1]]
+    #     order = [2, 1, 0]
+    # elif not corner_1_skin and  corner_3_skin:
+    #     ranges = [[0, 1], [0, 1], [1, 0]]
+    #     order = [1, 2, 0]
+    # elif  corner_1_skin and not corner_3_skin:
+    #     ranges = [[0, 1], [1, 0], [0, 1]]
+    #     order = [1, 2, 0]
+    # elif corner_1_skin and corner_3_skin:
+    #     ranges = [[0, 1], [1, 0], [1, 0]]
+    #     order = [2, 1, 0]
+    # is_bicubic = True if corner_1_skin or corner_3_skin or corner_5_skin else False
     # Obtained the ordered list of indices to parse through
     reordered_ranges = [ranges[idx] for idx in order]
+    # 
     indices = []
     # Create the cartersian product
     for prod in product(*reordered_ranges):
@@ -806,6 +1135,7 @@ def create_linear_cube_element(fieldmodule, element_identifier, node_matrix, x, 
             row[original_axis] = val
         indices.append(row)
     # Extract information from nodes matrix and create expression terms
+    is_bicubic = False
     global_to_local_scale_factor_ids = {}
     local_node = 0
     local_node_ids = {}
@@ -835,6 +1165,8 @@ def create_linear_cube_element(fieldmodule, element_identifier, node_matrix, x, 
         virtual_node = node_matrix[x+i][y+j][z+k]
         if virtual_node is None:
             return -2 
+        if virtual_node['Type'] == 'skin':
+             is_bicubic = True
         virtual_node = virtual_node[Node.VALUE_LABEL_VALUE]
         # Value expression terms
         for factor in range(len(virtual_node)):
@@ -914,11 +1246,6 @@ def create_linear_cube_element(fieldmodule, element_identifier, node_matrix, x, 
                         [str(global_node_id).zfill(2), value_label_names[factor], str(scale_factor).zfill(4)]
                     )
             d1_expression_terms[local_node] = et 
-            # et = value_expression_terms[local_node][0]
-            # l_node_id = et[0]
-            # scale_factor_id = global_to_local_scale_factor_ids[1]
-            # d1_expression_terms[local_node] = [[l_node_id, label, scale_factor_id]]
-            # d1_expression_terms[local_node-4] = [[l_node_id, label, scale_factor_id]]
         # create d2 expression terms 
         d2_expression_terms[1] = value_expression_terms[3] + negative_value_ets[1]
         d2_expression_terms[2] = value_expression_terms[4] + negative_value_ets[2]
@@ -1116,8 +1443,9 @@ def create_thumb_nodes_new(fieldmodule, node_identifier, finger_dimensions, meta
     x2 = [0, 1, 0]
     x3 = [0, 0, 1]
     # Thumb flexion angle 
-    x1 = rotate_about_z_axis(x1, math.radians(angle_degrees))
-    x2 = rotate_about_z_axis(x2, math.radians(angle_degrees))
+    angle_radians = math.radians(angle_degrees)
+    x1 = rotate_vector_around_vector(x1, x3, angle_radians)
+    x2 = rotate_vector_around_vector(x2, x3, angle_radians)
     # Obtaining the starting node position from the metacarpal node
     metacarpal_node = nodes.findNodeByIdentifier(metacarpal_node_id)
     fieldcache.setNode(metacarpal_node)
@@ -1125,11 +1453,12 @@ def create_thumb_nodes_new(fieldmodule, node_identifier, finger_dimensions, meta
     d1 = coordinates.getNodeParameters(fieldcache, -1, Node.VALUE_LABEL_D_DS1, 1, 3)[1]
     d2 = coordinates.getNodeParameters(fieldcache, -1, Node.VALUE_LABEL_D_DS2, 1, 3)[1]
     node_location = add(node_location, d2)
+    node_location = add(node_location, d2)
     # node_location = add(node_location, d2)
-    node_location = add(node_location, mult(d1, 1/6))
+    # node_location = add(node_location, mult(d1, 1/6))
     
     # Manually override the width of the thumb node? 
-    finger_dimensions[0][1] = magnitude(d1)/6
+    # finger_dimensions[0][1] = magnitude(d1)/6
     """
     Finger bone dimensions have the format
     finger_dimensions = [metacarpal, p_phalax, m_phalanx, d_phalanx]
@@ -1146,6 +1475,8 @@ def create_thumb_nodes_new(fieldmodule, node_identifier, finger_dimensions, meta
         d3 = mult(x3, bone_dimensions[2])
         d12 = mult(x2, bone_dimensions[3])
         x = node_location
+        if i == 0:
+             x = add(x, d2)
         setNodeFieldParameters(coordinates, fieldcache, x, d1, d2, d3, d12)
         x = add(x, d1)
         node_location = x
@@ -1209,7 +1540,7 @@ def create_thumb_nodes(fieldmodule, node_identifier, finger_dimensions, metacarp
     node_identifier += 1
     return finger_node_identifier
 
-def create_finger_nodes_new(fieldmodule, node_identifier, finger_dimensions, starting_location):
+def create_finger_nodes_new(fieldmodule, node_identifier, finger_dimensions, starting_location, finger_number=1):
     """
     Docstring for create_finger_nodes
     
