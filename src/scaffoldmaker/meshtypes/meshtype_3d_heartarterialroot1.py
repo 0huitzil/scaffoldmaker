@@ -129,7 +129,7 @@ class MeshType_3d_heartarterialroot1(Scaffold_base):
             #     AnnotationGroup(region, get_heart_term("posterior cusp of aortic valve")),
             #     AnnotationGroup(region, get_heart_term("right cusp of aortic valve")),
             #     AnnotationGroup(region, get_heart_term("left cusp of aortic valve")) ]
-            cuspGroup = AnnotationGroup(region, get_heart_term("aortic valve leaflet")),
+            cuspGroup = AnnotationGroup(region, get_heart_term("aortic valve leaflet"))
             cuspGroups = [cuspGroup] * 3
         else:
             arterialRootGroup = AnnotationGroup(region, get_heart_term("root of pulmonary trunk"))
@@ -138,7 +138,7 @@ class MeshType_3d_heartarterialroot1(Scaffold_base):
             #     AnnotationGroup(region, get_heart_term("right cusp of pulmonary valve")),
             #     AnnotationGroup(region, get_heart_term("anterior cusp of pulmonary valve")),
             #     AnnotationGroup(region, get_heart_term("left cusp of pulmonary valve")) ]
-            cuspGroup = AnnotationGroup(region, get_heart_term("pulmonary valve leaflet")),
+            cuspGroup = AnnotationGroup(region, get_heart_term("pulmonary valve leaflet"))
             cuspGroups = [cuspGroup] * 3
 
         allGroups = [ arterialRootGroup ]  # groups that all elements in scaffold will go in
@@ -528,11 +528,9 @@ class MeshType_3d_heartarterialroot1(Scaffold_base):
         numberInXi2 = refineElementsCountSurface
         numberInXi3 = refineElementsCountThroughWall
         for cusp in range(3):
-            lastShareNodeIds = lastShareNodeCoordinates = None
             for e in range(2):
                 element = meshrefinement._sourceElementiterator.next()
-                lastShareNodeIds, lastShareNodeCoordinates = meshrefinement.refineElementCubeStandard3d(element, numberInXi1, numberInXi2, numberInXi3,
-                    addNewNodesToOctree=False, shareNodeIds=lastShareNodeIds, shareNodeCoordinates=lastShareNodeCoordinates)
+                meshrefinement.refineElementCubeStandard3d(element, numberInXi1, numberInXi2, numberInXi3)
 
 
 def getSemilunarValveSinusPoints(centre, axisSide1, axisSide2, radius, sinusRadialDisplacement, startMidCusp, elementsCountAround = 6):

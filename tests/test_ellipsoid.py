@@ -170,7 +170,7 @@ class EllipsoidScaffoldTestCase(unittest.TestCase):
         self.assertEqual(result, RESULT_OK)
         self.assertAlmostEqual(surface_area, 27.86848567909992, delta=TOL)
         # note exact ellipsoid volume is 4.0 / 3.0 * math.pi * a * b * c = 12.566370614359173
-        self.assertAlmostEqual(volume, 12.557389634764395, delta=TOL)
+        self.assertAlmostEqual(volume, 12.557389634764352, delta=TOL)
 
         for annotation_group in annotation_groups:
             name = annotation_group.getName()

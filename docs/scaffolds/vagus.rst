@@ -32,12 +32,15 @@ The following annotations could be used for vagus trunk:
 * left/right thoracic vagus nerve
 * left/right vagus X nerve trunk
 
-All vagal branches should be annotated with 'branch' or 'nerve' keyword. Each branch should have a distinct name,
-including accepted variant names containing letters A, B, C, etc., so there should not be multiple branches with
-the same name.
+All vagal branches should be annotated with either 'branch', 'nerve' or 'ganglion' keywords, but the above
+trunk names are checked for first.
+Branches no longer need to have unique names, but if there are multiple branches with the same name,
+separate branches are determined from connected elements in each branch group.
+Previous instructions to have separate variant branches distinguished by having A, B, C etc. in the name can still
+be used, and the final scaffold puts these in a common group without the variant letter.
 
-The input file should also have included some of the anatomical landmarks to be able to locate the vagus in the body
-and to estimate vagus nerve real length. The current minimum is two included landmarks as marker datapoints.
+The input file should also include at least two fiducial marker datapoints for anatomical landmarks which locate the
+vagus in the body and represent common material locations independent of the scale of the subject.
 The list of approved landmarks is as follows (and visualized in :numref:`fig-scaffoldmaker-vagus-material-markers`):
 
 * left/right level of superior border of jugular foramen on the vagus nerve
@@ -56,25 +59,30 @@ The list of approved landmarks is as follows (and visualized in :numref:`fig-sca
 
    Vagus nerve level markers shown in material ``vagus coordinates``.
 
-Orientation points could be included in the input file for better nerve fitting. If included, they should be listed as
-``nodes``, not ``datapoints``. The following annotation group names must be used for orientation nodes:
+Orientation points can be included in the input file to control the twist of the nerve trunk. These are just
+nodes (not datapoints) with coordinates slightly away from the trunk, and placed in one of the following annotation
+groups corresponding to 8 directions relative to the body:
 
 * orientation left
-* orientation anterior
 * orientation left anterior
+* orientation anterior
 * orientation right anterior
 * orientation right
 * orientation right posterior
 * orientation posterior
 * orientation left posterior
 
+A special orientation group 'orientation ignore' can be filled with any of the above orientation points that
+are to be ignored in the orientation calculation.
+
 Variants
 --------
 
-The vagus scaffold is provided with the following parameter sets:
+For future use it is strongly advised that you choose the appropriate parameter set from the following list for
+the left or right vagus nerve:
 
-* Human left vagus
-* Human right vagus
+* Human Left Vagus 1
+* Human Right Vagus 1
 
 Coordinates
 -----------

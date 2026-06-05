@@ -1,5 +1,5 @@
 """
-Generates a lung scaffold by deforming a hemisphere.
+Generates a lung scaffold by deforming an ellipsoid.
 """
 from cmlibs.utils.zinc.field import find_or_create_field_coordinates
 from cmlibs.zinc.field import Field
@@ -17,7 +17,7 @@ import math
 
 class MeshType_3d_lung3(Scaffold_base):
     """
-    Generates a lung scaffold by deforming a hemisphere.
+    Generates a lung scaffold by deforming an ellipsoid.
     """
 
     @classmethod
@@ -263,7 +263,7 @@ class MeshType_3d_lung3(Scaffold_base):
             axis3_x_rotation_radians = math.radians(90) - oblique_slope_radians
 
             ellipsoid = EllipsoidMesh(halfDepth, halfBreadth, halfHeight, elementCounts, elementsCountTransition,
-                                      axis2_x_rotation_radians, axis3_x_rotation_radians, surface_only)
+                                      surface_only)
 
             if lung == leftLung:
                 octant_group_lists = []
@@ -292,7 +292,7 @@ class MeshType_3d_lung3(Scaffold_base):
 
             ellipsoid.set_octant_group_lists(octant_group_lists)
 
-            ellipsoid.build()
+            ellipsoid.build(axis2_x_rotation_radians, axis3_x_rotation_radians)
             nodeIdentifier, elementIdentifier = ellipsoid.generate_mesh(fieldmodule, coordinates, nodeIdentifier, elementIdentifier)
 
         for lung in lungs:

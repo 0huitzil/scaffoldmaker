@@ -147,6 +147,8 @@ class Scaffold_base:
             if options.get('Refine'):
                 baseRegion = region.createRegion()
                 annotationGroups = cls.generateBaseMesh(baseRegion, options)[0]
+                # need faces to determine shared or boundary nodes during mesh refinement
+                baseRegion.getFieldmodule().defineAllFaces()
                 meshrefinement = MeshRefinement(baseRegion, region, annotationGroups)
                 cls.refineMesh(meshrefinement, options)
                 annotationGroups = meshrefinement.getAnnotationGroups()

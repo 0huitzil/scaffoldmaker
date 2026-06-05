@@ -1,12 +1,9 @@
 """
-Utilities for building 3-D triangle-topology meshes out of quad elements
+Utilities for building 2-D triangle-shaped meshes out of quad elements with cubic Hermite serendipity interpolation.
 """
-from cmlibs.maths.vectorops import add, cross, div, dot, magnitude, mult, normalize, set_magnitude
 from scaffoldmaker.utils.interpolation import (
-    DerivativeScalingMode, get_nway_point, getCubicHermiteCurvesLength, linearlyInterpolateVectors,
-    smoothCubicHermiteDerivativesLine)
+    DerivativeScalingMode, get_nway_point, linearlyInterpolateVectors, smoothCubicHermiteDerivativesLine)
 import copy
-import math
 
 
 class QuadTriangleMesh:
@@ -411,30 +408,50 @@ class QuadTriangleMesh:
             pix = abs(spix)
             self._nx[indexes[1]][indexes[0]][pix] = new_derivative
 
-    def build(self):
+    def build(self, regular_count2=0):
         """
         Determine interior coordinates from edge coordinates.
+        :param regular_count2: Optional number of rows of regular box elements in 2 direction.
         """
+        assert 0 <= regular_count2 <= (self._box_count2 - 1)
+        if regular_count2:
+            # sample regular row on common boundary with triangle
+            pointr1 = self._nx[0][regular_count2]
+            pointr2 = self._nx[self._element_count13][regular_count2]
+            rx, rd2, rd1 = self._sample_curve(
+                pointr1[0], pointr1[2], pointr1[1],
+                pointr2[0], [-d for d in pointr2[1]], pointr2[2],
+                self._element_count13)
+            self._set_coordinates_across([rx, rd1, rd2], [[0, 1, 2], [0, 2, 1]], [regular_count2, 0], [[0, 1]],
+                                         skip_start=True, skip_end=True)
+            # sample point coordinates of regular rows parallel to triangle
+            for r in range(1, regular_count2):
+                pointr1 = self._nx[0][r]
+                pointr2 = self._nx[self._element_count13][r]
+                px, _ = self._sample_curve(
+                    pointr1[0], pointr1[2], None, pointr2[0], [-d for d in pointr2[1]], None, self._element_count13)
+                self._set_coordinates_across([px], [[0]], [r, 0], [[0, 1]], skip_start=True, skip_end=True)
+
         # determine 3-way point location from mean curves between side points linking to it
         point12 = self._nx[0][self._box_count2]
-        point13 = self._nx[self._box_count3][0]
+        point13 = self._nx[self._box_count3][regular_count2]
         point23 = self._nx[self._element_count13][self._element_count12]
-
         x_3way, d_3way = get_nway_point(
             [point23[0], point13[0], point12[0]],
             [point23[1], point13[2], point12[2]],
-            [self._box_count1, self._box_count2, self._box_count3],
+            [self._box_count1, self._box_count2 - regular_count2, self._box_count3],
             self._sample_curve, self._move_x_to_surface,
             nway_d_factor=self._3_way_d_factor)
 
         # smooth sample from sides to 3-way points using end derivatives
-        min_weight = 1  # GRC revisit, remove?
+        min_weight = 1.0  # arbitrary but looks good
         ax, ad1, ad2 = self._sample_curve(
             point23[0], point23[1], point23[2], x_3way, d_3way[0], None, self._box_count1,
             start_weight=self._box_count1 + min_weight, end_weight=1.0 + min_weight, end_transition=True)
         bx, bd2, bd1 = self._sample_curve(
-            point13[0], point13[2], point13[1], x_3way, d_3way[1], None, self._box_count2,
-            start_weight=self._box_count2 + min_weight, end_weight=1.0 + min_weight, end_transition=True)
+            point13[0], point13[2], point13[1], x_3way, d_3way[1], None, self._box_count2 - regular_count2,
+            start_weight=self._box_count2 - regular_count2 + min_weight, end_weight=1.0 + min_weight,
+            end_transition=True)
         cx, cd2, cd1 = self._sample_curve(
             point12[0], point12[2], point12[1], x_3way, d_3way[2], None, self._box_count3,
             start_weight=self._box_count3 + min_weight, end_weight=1.0 + min_weight, end_transition=True)
@@ -442,13 +459,13 @@ class QuadTriangleMesh:
         bd1[-1] = ad1[-1]
         self._set_coordinates_across([ax, ad1, ad2], [[0, 1, 2]], [self._element_count12, self._element_count13],
                                      [[-1, -1]])
-        self._set_coordinates_across([bx, bd1, bd2], [[0, 1, 2]], [0, self._box_count3], [[1, 0]])
+        self._set_coordinates_across([bx, bd1, bd2], [[0, 1, 2]], [regular_count2, self._box_count3], [[1, 0]])
         self._set_coordinates_across([cx, cd1, cd2], [[0, 1, 2]], [self._box_count2, 0], [[0, 1]], skip_end=True)
 
-        # average point coordinates across 2 directions between edges and 3-way lines.
+        # average point coordinates across 2 directions between triangle edges and 3-way lines.
         # 1-2 curves
-        min_weight = 1  # GRC revisit, remove?
-        start_indexes = [0, 0]
+        min_weight = 1.0  # arbitrary but looks good
+        start_indexes = [regular_count2, 0]
         corner_indexes = [self._box_count2, 0]
         end_indexes = [self._element_count12, 0]
         for i in range(1, self._box_count3):
@@ -459,8 +476,8 @@ class QuadTriangleMesh:
             corner = self._nx[corner_indexes[1]][corner_indexes[0]]
             end = self._nx[end_indexes[1]][end_indexes[0]]
             px, _ = self._sample_curve(
-                start[0], start[1], None, corner[0], corner[1], None, self._box_count2,
-                start_weight=self._box_count2 + min_weight, end_weight=1.0 + min_weight)
+                start[0], start[1], None, corner[0], corner[1], None, self._box_count2 - regular_count2,
+                start_weight=self._box_count2 - regular_count2 + min_weight, end_weight=1.0 + min_weight)
             self._set_coordinates_across(
                 [px], [[0]], start_indexes, [[1, 0]], skip_start=True, skip_end=True)
             px, _ = self._sample_curve(
@@ -469,10 +486,10 @@ class QuadTriangleMesh:
             self._set_coordinates_across(
                 [px], [[0]], corner_indexes, [[1, 0]], skip_start=True, skip_end=True)
         # 1-3 curves
-        start_indexes = [0, 0]
-        corner_indexes = [0, self._box_count3]
-        end_indexes = [0, self._element_count13]
-        for i in range(1, self._box_count2):
+        start_indexes = [regular_count2, 0]
+        corner_indexes = [regular_count2, self._box_count3]
+        end_indexes = [regular_count2, self._element_count13]
+        for i in range(regular_count2 + 1, self._box_count2):
             start_indexes[0] += 1
             corner_indexes[0] += 1
             end_indexes[0] += 1
@@ -492,7 +509,7 @@ class QuadTriangleMesh:
         # 2-3 curves
         start_indexes = [self._element_count12, 0]
         corner_indexes = [self._element_count12, self._element_count13]
-        end_indexes = [0, self._element_count13]
+        end_indexes = [regular_count2, self._element_count13]
         for i in range(1, self._box_count1):
             start_indexes[0] -= 1
             corner_indexes[0] -= 1
@@ -507,8 +524,8 @@ class QuadTriangleMesh:
             self._set_coordinates_across(
                 [px], [[0]], start_indexes, [[0, 1]], skip_start=True, skip_end=True, blend=True)
             px, _ = self._sample_curve(
-                corner[0], [-d for d in corner[2]], None, end[0], [-d for d in end[2]], None, self._box_count2,
-                start_weight=1.0 + min_weight, end_weight=self._box_count2 + min_weight)
+                corner[0], [-d for d in corner[2]], None, end[0], [-d for d in end[2]], None, self._box_count2 - regular_count2,
+                start_weight=1.0 + min_weight, end_weight=self._box_count2 - regular_count2 + min_weight)
             self._set_coordinates_across(
                 [px], [[0]], corner_indexes, [[-1, 0]], skip_start=True, skip_end=True, blend=True)
 
@@ -519,6 +536,13 @@ class QuadTriangleMesh:
             start_indexes[1] += 1
             end_indexes[1] += 1
             self._smooth_derivative_across(start_indexes, end_indexes, [[1, 0]], [1],
+                fix_start_direction=True, fix_end_direction=True)
+        if regular_count2:
+            # need to smooth d2 through regular elements to 3-way point
+            start_indexes[1] += 1
+            end_indexes[0] = regular_count2
+            end_indexes[1] += 1
+            self._smooth_derivative_across(start_indexes, end_indexes, [[1, 0]], [2],
                 fix_start_direction=True, fix_end_direction=True)
         # smooth 1-3 curves
         start_indexes = [0, 0]

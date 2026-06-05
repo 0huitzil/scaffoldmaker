@@ -7,7 +7,8 @@ from __future__ import division
 import copy
 import math
 
-from cmlibs.maths.vectorops import add, distance, magnitude, mult, normalize, cross, set_magnitude, rejection
+from cmlibs.maths.vectorops import (
+    cross, distance, dot, magnitude, mult, normalize, projection, set_magnitude, rejection)
 from scaffoldmaker.utils.interpolation import (
     computeCubicHermiteDerivativeScaling, computeHermiteLagrangeDerivativeScaling, getCubicHermiteArcLength,
     interpolateHermiteLagrangeDerivative, linearlyInterpolateVectors, sampleCubicHermiteCurves,
@@ -150,31 +151,57 @@ def getEllipseRadiansToX(ax, bx, dx, initialTheta):
     return theta
 
 
-def getEllipsePointAtTrueAngle(a, b, angle_radians):
+def getEllipsePointAtTrueAngle(a, b, angle_radians, origin=[0.0, 0.0]):
     """
-    Get coordinates of intersection point of ellipse centred at origin with line radiating from origin at an angle.
+    Get coordinates of intersection point of ellipse centred at [0.0, 0.0] with line radiating from origin at an angle.
     :param a: x/major axis length.
     :param b: y/minor axis length.
     :param angle_radians: Angle in radians starting at x axis, increasing towards y axis.
-    :return: [x, y]
+    :param origin: Origin angles radiate from. Must be inside ellipsoid. Default is ellipsoid centre [0.0, 0.0].
+    :return: [x, y] on ellipse.
     """
     # ellipse equation: x ** 2 / a ** 2 + y ** 2 / b ** 2 - 1 = 0
-    cos_angle = math.cos(angle_radians)
-    sin_angle = math.sin(angle_radians)
+    aa = a * a
+    bb = b * b
+    assert (origin[0] * origin[0] / aa + (origin[1] * origin[1]) / bb) < 1.0
     # normal to line direction:
-    ni = sin_angle
-    nj = -cos_angle
-    # line equation: ni * x + nj * y = 0
+    # line equation: ni * x + nj * y - k = 0
+    ni = math.sin(angle_radians)
+    nj = -math.cos(angle_radians)
+    k = dot([ni, nj], origin)
+    ii = ni * ni
+    jj = nj * nj
+    kk = k * k
     if math.fabs(nj) > math.fabs(ni):
-        # substitute y and solve for x
-        denominator = 1.0 / (a * a) + (ni * ni) / (nj * nj * b * b)
-        x = math.copysign(math.sqrt(1.0 / denominator), cos_angle)
-        y = (-ni / nj) * x
+        # substitute y and solve for x with quadratic equation
+        jj_bb = jj * bb
+        qa = 1.0 / aa + ii / jj_bb
+        qb = -2.0 * k * ni / jj_bb
+        qc = kk / jj_bb - 1.0
+        det = qb * qb - 4.0 * qa * qc
+        sqrt_det = math.sqrt(det)
+        x1 = (-qb + sqrt_det) / (2.0 * qa)
+        x2 = (-qb - sqrt_det) / (2.0 * qa)
+        if x1 * nj < 0.0:
+            x = x1
+        else:
+            x = x2
+        y = (k - ni * x) / nj
     else:
-        # substitute y and solve for x
-        denominator = 1.0 / (b * b) + (nj * nj) / (ni * ni * a * a)
-        y = math.copysign(math.sqrt(1.0 / denominator), sin_angle)
-        x = (-nj / ni) * y
+        # substitute x and solve for y with quadratic equation
+        ii_aa = ii * aa
+        qa = 1.0 / bb + jj / ii_aa
+        qb = -2.0 * k * nj / ii_aa
+        qc = kk / ii_aa - 1.0
+        det = qb * qb - 4.0 * qa * qc
+        sqrt_det = math.sqrt(det)
+        y1 = (-qb + sqrt_det) / (2.0 * qa)
+        y2 = (-qb - sqrt_det) / (2.0 * qa)
+        if y1 * ni > 0.0:
+            y = y1
+        else:
+            y = y2
+        x = (k - nj * y) / ni
     return [x, y]
 
 
@@ -492,6 +519,22 @@ def moveDerivativeToEllipsoidSurface(a, b, c, x, start_d):
     return set_magnitude(rejection(start_d, n), magnitude(start_d))
 
 
+def moveDerivativeToEllipsoidSurfaceInPlane(a, b, c, x, pn, start_d):
+    """
+    Convert derivative at point on surface of ellipsoid to be tangential to it and normal to pn.
+    :param a: x-axis length.
+    :param b: y-axis length.
+    :param c: z-axis length.
+    :param x: Coordinates on surface of ellipsoid.
+    :param pn: Direction normal to plane to force result to be in plane.
+    :param start_d: Derivative near tangential to ellipsoid surface at x.
+    :return: Derivative made tangential to surface with same magnitude.
+    """
+    en = [2.0 * x[0] / (a * a), 2.0 * x[1] / (b * b), 2.0 * x[2] / (c * c)]
+    cp = cross(pn, en)
+    return set_magnitude(projection(start_d, cp), magnitude(start_d))
+
+
 def sampleCurveOnEllipsoid(a, b, c, start_x, start_d1, start_d2, end_x, end_d1, end_d2, elements_count,
                            start_weight=None, end_weight=None, overweighting=1.0, end_transition=False):
     """
@@ -514,7 +557,7 @@ def sampleCurveOnEllipsoid(a, b, c, start_x, start_d1, start_d2, end_x, end_d1, 
     by distance from the other end.
     :param overweighting: Multiplier of arc length to use with initial curve to exaggerate end derivatives.
     :param end_transition: If supplied with end_d1, modify size of last element to fit end_d1.
-    :return: x[], d1[], d2[]
+    :return: x[], d1[]{, d2[] if start_d2 supplied}
     """
     assert (not end_transition) or end_d1
     end_d1_mag = magnitude(end_d1) if end_d1 else None

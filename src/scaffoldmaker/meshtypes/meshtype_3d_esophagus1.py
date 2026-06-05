@@ -505,10 +505,6 @@ def createEsophagusMesh3d(region, options, networkLayout, nextNodeIdentifier, ne
     markerLocation = findOrCreateFieldStoredMeshLocation(fm, mesh, name="marker_location")
 
     nodes = fm.findNodesetByFieldDomainType(Field.DOMAIN_TYPE_NODES)
-    markerPoints = markerGroup.getOrCreateNodesetGroup(nodes)
-    markerTemplateInternal = nodes.createNodetemplate()
-    markerTemplateInternal.defineField(markerName)
-    markerTemplateInternal.defineField(markerLocation)
 
     markerNames = ["proximodorsal midpoint on serosa of upper esophageal sphincter",
                    "proximoventral midpoint on serosa of upper esophageal sphincter",
@@ -532,19 +528,15 @@ def createEsophagusMesh3d(region, options, networkLayout, nextNodeIdentifier, ne
                  [0.0, 1.0, 1.0],
                  [xi1Pi, 1.0, 1.0]]
 
+    esophagusNodesetGroup = esophagusGroup.getNodesetGroup(nodes)
     for n in range(len(markerNames)):
         markerGroup = findOrCreateAnnotationGroupForTerm(annotationGroups, region,
-                                                         get_esophagus_term(markerNames[n]))
+                                                         get_esophagus_term(markerNames[n]), isMarker=True)
         markerElement = mesh.findElementByIdentifier(markerElementIdentifiers[n])
         markerXi = markerXis[n]
-        cache.setMeshLocation(markerElement, markerXi)
-        markerPoint = markerPoints.createNode(nodeIdentifier, markerTemplateInternal)
+        markerNode = markerGroup.createMarkerNode(nodeIdentifier, element=markerElement, xi=markerXi)
+        esophagusNodesetGroup.addNode(markerNode)
         nodeIdentifier += 1
-        cache.setNode(markerPoint)
-        markerName.assignString(cache, markerGroup.getName())
-        markerLocation.assignMeshLocation(cache, markerElement, markerXi)
-        for group in [esophagusGroup, markerGroup]:
-            group.getNodesetGroup(nodes).addNode(markerPoint)
 
     fm.endChange()
 

@@ -1931,8 +1931,6 @@ class MeshType_3d_uterus1(Scaffold_base):
                                                            get_uterus_term(allMarkers[i]), isMarker=True)
                 markerNode = group.createMarkerNode(nodeIdentifier, element=element_junction, xi=xi_junction)
                 nodeIdentifier = markerNode.getIdentifier() + 1
-                for group in annotationGroups:
-                    group.getNodesetGroup(nodes).addNode(markerNode)
 
             annotationGroups.remove(fundusSerosa)
             annotationGroups.remove(cervixSerosa)

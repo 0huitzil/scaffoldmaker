@@ -121,9 +121,7 @@ class UterusScaffoldTestCase(unittest.TestCase):
                 continue
             annotationGroups.remove(annotationGroup)
         self.assertEqual(22, len(annotationGroups))
-        # also remove all faces and lines as not needed for refinement
-        mesh2d.destroyAllElements()
-        mesh1d.destroyAllElements()
+        # must keep all faces and lines as used for refinement
 
         refineRegion = region.createRegion()
         refineFieldmodule = refineRegion.getFieldmodule()

@@ -89,6 +89,10 @@ vagus_branch_terms = [
     ("inferior cervical cardiac branch of vagus nerve", "ILX:0788259", "FMA:6245"),
     ("thoracic cardiac branch of vagus nerve", "ILX:0794849"),
     ("esophageal vagus trunk", "ILX:0794853", "esophageal trunk"),
+    ("cardiac branch of the esophageal plexus of vagus nerve", "ILX:0794917", "cardiac branch of esophageal plexus of vagus nerve"),
+    ("esophageal branch of esophageal plexus of vagus nerve", "ILX:0794344"),
+    ("esophageal branches from esophageal plexus of vagus nerve", "ILX:0796116"),
+    ("esophageal plexus cardiopulmonary branches", "ILX:0796105"),
 
     # right vagus branches
     ("right vagus nerve", "ILX:0789705", "FMA:6219"),
@@ -125,8 +129,8 @@ vagus_branch_terms = [
     ("right cardiovascular branch of cervical vagus nerve", "ILX:0794846"),
     ("right cardiovascular branch of thoracic vagus nerve", "ILX:0794851"),
     ("right cervical cardiopulmonary branch of vagus nerve", "ILX:0794153"),
-    ("right thoracic cardiopulmonary branch of vagus nerve", "ILX:0794180"),
-    ("right pulmonary branch of vagus nerve", "ILX:0796017"),
+    ("right thoracic cardiopulmonary branch of vagus nerve", "ILX:0794180", "right thoracic cardiopulmonary branch"),
+    ("right pulmonary branch of vagus nerve", "ILX:0796017", "right pulmonary branch"),
     ("right lateral pulmonary branch of vagus nerve", "ILX:0794277"),
     ("right medial pulmonary branch of vagus nerve", "ILX:0794254"),
     ("bronchial branch of right vagus nerve", "ILX:0791364", "FMA:53613",),
@@ -149,10 +153,31 @@ vagus_branch_terms = [
     ("inferior cervical cardiac branch of right vagus nerve", "ILX:0789456", "FMA:6713"),
     ("thoracic cardiac branch of right vagus nerve", "ILX:0790057", "FMA:53604"),
     ("cardiac branch of right vagus to deep cardiac plexus", "ILX:0791784", "FMA:6711"),
-    # following listed as "right branch of thoracic vagus nerve to esophagus"
-    ("right branch of right vagus nerve to esophageal nerve plexus", "ILX:0794299"),
+    ("right branch of thoracic vagus nerve to esophagus", "ILX:0794299"),
+    ("right branch between cranial nerve bundle and superior cervical ganglion", "ILX:0796398"),
+    ("right branch between thoracic vagus nerve and 'branch between thoracic vagus nerve and thoracic vagus nerve'", "ILX:0794837"),
     ("right branch between of thoracic vagus nerve and esophagus plexus", "ILX:0796071", "right branch of thoracic vagus nerve to esophageal plexus"),
-
+    ("right branch between vagus nerve and C2 spinal nerve", "ILX:0793977"),
+    ("right branch between vagus nerve and cervical spinal nerves", "ILX:0795644"),
+    ("right branch between vagus nerve and cervical sympathetic trunk", "ILX:0794775", "right branch to cervical sympathetic trunk"),
+    ("right branch between cervical vagus nerve and a 'branch between cervical vagus nerve and cervical vagus nerve'", "ILX:0794821"),
+    ("right branch between cervical vagus and inferior root of ansa cervicalis", "ILX:0795597"),
+    ("right branch of inferior root of ansa cervicalis", "ILX:0796313"),
+    ("right branch of vagus nerve to ipsilateral carotid bifurcation", "ILX:0794089", "right branch to carotid bifurcation"),
+    ("right branch of vagus nerve to ipsilateral carotid sinus", "ILX:0794108"),
+    ("right branch of vagus nerve to ipsilateral common carotid artery", "ILX:0794068", "right branch to common carotid artery"),
+    ("right branch of vagus nerve to ipsilateral internal carotid artery", "ILX:0794086"),
+    ("right branch of vagus nerve to ipsilateral internal jugular vein", "ILX:0794077"),
+    ("right branch of vagus nerve to trachea", "ILX:0794756"),
+    ("cardiovascular and cardiopulmonary branch of right cervical vagus nerve", "ILX:0796422", "right cardiovascular and cardiopulmonary branch of cervical vagus nerve"),
+    ("right cardiovascular branch group of cervical vagus nerve", "ILX:0795379"),
+    ("right cardiovascular branch group of thoracic vagus nerve", "ILX:0795412"),
+    ("right cervical cardiac branch of vagus nerve", "ILX:0794165", "right cervical cardiac branch"),
+    ("right medial pulmonary branch of the esophageal plexus", "ILX:0796554"),
+    ("right pharyngeal branch of cranial nerve bundle", "ILX:0795526"),
+    ("right pharyngeal branch of vagus nerve", "ILX:0793987"),
+    ("right unknown branch of vagus nerve", "ILX:0793923"),
+    ("branch between right thoracic vagus trunk and tracheo-esophageal plexus", "ILX:0796658"),
 
     # posterior vagus, a continuation of right vagus
     ("posterior esophageal vagus trunk", "ILX:0794858"),
@@ -160,6 +185,8 @@ vagus_branch_terms = [
     ("greater posterior gastric nerve", "ILX:0788809", "FMA:6689"),
     # following not on interlex:
     # ("pyloric branch of greater posterior gastric nerve", "FMA:6677"),
+    ("left lateral pulmonary branch of the esophageal plexus", "ILX:0797435"),
+    ("posterior esophageal communicating branch", "ILX:0789876", "FMA:53632"),
 
     # left vagus branches
     ("left vagus nerve", "ILX:0785628", "FMA:6220"),
@@ -199,8 +226,6 @@ vagus_branch_terms = [
     ("left cardiovascular branch of cervical vagus nerve", "ILX:0794847"),
     ("left cardiovascular branch of thoracic vagus nerve", "ILX:0794852"),
     ("left cervical cardiopulmonary branch of vagus nerve", "ILX:0794159"),
-    ("left thoracic cardiopulmonary branch of vagus nerve", "ILX:0794191"),
-    ("left pulmonary branch of vagus nerve", "ILX:0794265"),
     ("left lateral pulmonary branch of vagus nerve", "ILX:0794288"),
     ("left medial pulmonary branch of vagus nerve", "ILX:0794265"),
     ("bronchial branch of left vagus nerve", "ILX:0791685", "FMA:53558"),
@@ -221,15 +246,33 @@ vagus_branch_terms = [
     ("inferior cervical cardiac branch of left vagus nerve", "ILX:0786047", "FMA:6714"),
     ("thoracic cardiac branch of left vagus nerve", "ILX:0791489", "FMA:53605"),
     ("cardiac branch of left vagus to deep cardiac plexus", "ILX:0795087"),
-    ("left branch of left vagus nerve to esophageal nerve plexus", "ILX:0794310"),
     ("left branch between thoracic vagus nerve and esophagus plexus", "ILX:0796087", "left branch of thoracic vagus nerve to esophageal plexus"),
+    ("left branch between recurrent laryngeal nerve and vagal trunk", "ILX:0794231"),
+    ("left branch between vagus nerve and carotid sinus nerve", "ILX:0794124"),
+    ("left branch between vagus nerve and cervical sympathetic trunk", "ILX:0794776"),
+    ("left branch between vagus nerve and cervical sympathetic trunk and or superior cervical ganglion", "ILX:0794048"),
+    ("left branch between vagus nerve and hypoglossal nerve", "ILX:0793914"),
+    ("left branch between vagus nerve and spinal accessory nerve", "ILX:0793960"),
+    ("left branch between vagus nerve and superior root of ansa cervicalis", "ILX:0793951"),
+    ("left branch of thoracic vagus nerve to aorta", "ILX:0796495"),
+    ("left branch of thoracic vagus nerve to esophagus", "ILX:0794310"),
+    ("left branch of vagus nerve to ipsilateral carotid bifurcation", "ILX:0794094"),
+    ("left branch of vagus nerve to ipsilateral common carotid artery", "ILX:0794072", "left branch to common carotid artery"),
+    ("left branch of vagus nerve to ipsilateral internal carotid artery", "ILX:0794087"),
+    ("left branch of vagus nerve to ipsilateral internal jugular vein", "ILX:0794081"),
+    ("left cardiovascular branch group of cervical vagus nerve", "ILX:0795395"),
+    ("left cardiovascular branch group of thoracic vagus nerve", "ILX:0795428"),
+    ("left cervical cardiac branch of vagus nerve", "ILX:0794171", "left cervical cardiac branch"),
+    ("left pulmonary branch of vagus nerve", "ILX:0796033", "left pulmonary branch"),
 
     # anterior vagus, a continuation of left vagus
     ("anterior esophageal vagus trunk", "ILX:0794854"),
+    ("anterior gastric branch of vagus nerve", "ILX:0787035", "FMA:272326"),
     ("hepatic branch of anterior vagal trunk", "ILX:0784595", "FMA:6666"),
     ("greater anterior gastric nerve", "ILX:0793831", "FMA:6684"),
     # not on interlex:
     # ("branch of greater anterior gastric nerve to coeliac nerve plexus", "FMA:53675"),
+    ("anterior esophageal communicating branch", "ILX:0792199", "FMA:53631"),
 
     # vagus built-in annotations
     ("vagus centroid", ""),
@@ -278,23 +321,23 @@ def get_left_vagus_marker_locations_list():
     # vagus markers location in material coordinates between 0 to 1
     left_termNameVagusLengthList = {
         # cervical region
-        "left level of superior border of jugular foramen on the vagus nerve": 0.02737296,
-        "left level of inferior border of jugular foramen on the vagus nerve": 0.04434952,
-        # "left level of inferior border of cranium on the vagus nerve": 0.0588,
-        # "left level of C1 transverse process on the vagus nerve": 0.10276128,
-        "left level of angle of the mandible on the vagus nerve": 0.12533074,
-        # "left level of greater horn of hyoid on the vagus nerve": 0.14595904,
-        "left level of carotid bifurcation on the vagus nerve": 0.15738364,
-        "left level of laryngeal prominence on the vagus nerve": 0.20541934,
+        "left level of superior border of jugular foramen on the vagus nerve": 0.044,
+        "left level of inferior border of jugular foramen on the vagus nerve": 0.06, # standardized
+        # "left level of inferior border of cranium on the vagus nerve": 0.072,
+        # "left level of C1 transverse process on the vagus nerve": 0.111,
+        "left level of angle of the mandible on the vagus nerve": 0.131,
+        # "left level of greater horn of hyoid on the vagus nerve": 0.149,
+        "left level of carotid bifurcation on the vagus nerve": 0.166, # calibrated to Feinstein REVA data
+        "left level of laryngeal prominence on the vagus nerve": 0.214, # calibrated to Feinstein REVA data
         # thoracic region
-        "left level of superior border of the clavicle on the vagus nerve": 0.33847976,
-        "left level of jugular notch on the vagus nerve": 0.38062311,
-        "left level of sternal angle on the vagus nerve": 0.48395264,
-        # "left level of 1 cm superior to start of esophageal plexus on the vagus nerve": 0.52988032,
+        "left level of superior border of the clavicle on the vagus nerve": 0.320, # standardized
+        "left level of jugular notch on the vagus nerve": 0.356,
+        "left level of sternal angle on the vagus nerve": 0.447,
+        # "left level of 1 cm superior to start of esophageal plexus on the vagus nerve": 0.487,
         # abdominal region
-        # "left level of esophageal hiatus on the vagus nerve": 0.813852428,
-        # "left level of aortic hiatus on the vagus nerve": 0.9323824,
-        # "left level of end of trunk": 1.0  # note this term is also not on the list of annotations
+        # "left level of esophageal hiatus on the vagus nerve": 0.738,
+        # "left level of aortic hiatus on the vagus nerve": 0.842,
+        # "left level of end of trunk": 0.902, # note this term is also not on the list of annotations
     }
     return left_termNameVagusLengthList
 
@@ -303,22 +346,22 @@ def get_right_vagus_marker_locations_list():
     # vagus markers location in material coordinates between 0 to 1
     right_termNameVagusLengthList = {
         # cervical region
-        "right level of superior border of jugular foramen on the vagus nerve": 0.02762944,
-        "right level of inferior border of jugular foramen on the vagus nerve": 0.04434952,
-        # "right level of inferior border of cranium on the vagus nerve": 0.0588,
-        # "right level of C1 transverse process on the vagus nerve": 0.10276128,
-        "right level of angle of the mandible on the vagus nerve": 0.12648368,
-        # "right level of greater horn of hyoid on the vagus nerve": 0.14595904,
-        "right level of carotid bifurcation on the vagus nerve": 0.17798550,
-        "right level of laryngeal prominence on the vagus nerve": 0.23144827,
+        "right level of superior border of jugular foramen on the vagus nerve": 0.044,
+        "right level of inferior border of jugular foramen on the vagus nerve": 0.06, # standardized
+        # "right level of inferior border of cranium on the vagus nerve": 0.072,
+        # "right level of C1 transverse process on the vagus nerve": 0.111,
+        "right level of angle of the mandible on the vagus nerve": 0.131,
+        # "right level of greater horn of hyoid on the vagus nerve": 0.149,
+        "right level of carotid bifurcation on the vagus nerve": 0.166, # calibrated to Feinstein REVA data
+        "right level of laryngeal prominence on the vagus nerve": 0.214, # calibrated to Feinstein REVA data
         # thoracic region
-        "right level of superior border of the clavicle on the vagus nerve": 0.33948916,
-        "right level of jugular notch on the vagus nerve": 0.38937585,
-        "right level of sternal angle on the vagus nerve": 0.48764507,
-        # "right level of 1 cm superior to start of esophageal plexus on the vagus nerve": 0.52988032,
+        "right level of superior border of the clavicle on the vagus nerve": 0.320, # standardized
+        "right level of jugular notch on the vagus nerve": 0.356,
+        "right level of sternal angle on the vagus nerve": 0.447,
+        # "right level of 1 cm superior to start of esophageal plexus on the vagus nerve": 0.487,
         # abdominal region
-        # "right level of esophageal hiatus on the vagus nerve": 0.813852428,
-        # "right level of aortic hiatus on the vagus nerve": 0.9323824,
+        # "right level of esophageal hiatus on the vagus nerve": 0.738,
+        # "right level of aortic hiatus on the vagus nerve": 0.842,
     }
     return right_termNameVagusLengthList
 

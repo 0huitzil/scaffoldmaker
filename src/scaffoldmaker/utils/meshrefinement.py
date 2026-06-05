@@ -1,18 +1,18 @@
 """
 Class for refining a mesh from one region to another.
 """
-from __future__ import division
-
-import math
-
 from cmlibs.utils.zinc.field import findOrCreateFieldCoordinates, findOrCreateFieldGroup, \
     findOrCreateFieldStoredMeshLocation, findOrCreateFieldStoredString
+from cmlibs.utils.zinc.general import ChangeManager
 from cmlibs.zinc.element import Element, Elementbasis
 from cmlibs.zinc.field import Field
 from cmlibs.zinc.node import Node
-from cmlibs.zinc.result import RESULT_OK as ZINC_OK
-from scaffoldmaker.annotation.annotationgroup import AnnotationGroup
+from cmlibs.zinc.result import RESULT_OK
+from scaffoldmaker.annotation.annotationgroup import AnnotationGroup, findAnnotationGroupByName
 from scaffoldmaker.utils.octree import Octree
+
+import copy
+import math
 
 
 class MeshRefinement:
@@ -35,22 +35,26 @@ class MeshRefinement:
         sourceNodes = self._sourceFm.findNodesetByFieldDomainType(Field.DOMAIN_TYPE_NODES)
         minimumsField = self._sourceFm.createFieldNodesetMinimum(self._sourceCoordinates, sourceNodes)
         result, minimums = minimumsField.evaluateReal(self._sourceCache, 3)
-        assert result == ZINC_OK, 'MeshRefinement failed to get minimum coordinates'
+        assert result == RESULT_OK, 'MeshRefinement failed to get minimum coordinates'
         maximumsField = self._sourceFm.createFieldNodesetMaximum(self._sourceCoordinates, sourceNodes)
         result, maximums = maximumsField.evaluateReal(self._sourceCache, 3)
-        assert result == ZINC_OK, 'MeshRefinement failed to get maximum coordinates'
+        assert result == RESULT_OK, 'MeshRefinement failed to get maximum coordinates'
         xrange = [(maximums[i] - minimums[i]) for i in range(3)]
         edgeTolerance = 0.5 * (max(xrange))
         if edgeTolerance == 0.0:
             edgeTolerance = 1.0
         minimums = [(minimums[i] - edgeTolerance) for i in range(3)]
         maximums = [(maximums[i] + edgeTolerance) for i in range(3)]
-        minimumsField = None
-        maximumsField = None
+        del minimumsField
+        del maximumsField
         self._sourceMesh = self._sourceFm.findMeshByDimension(3)
+        self._sourceFaceMesh = self._sourceFm.findMeshByDimension(2)
+        self._sourceLineMesh = self._sourceFm.findMeshByDimension(1)
         self._sourceNodes = self._sourceFm.findNodesetByFieldDomainType(Field.DOMAIN_TYPE_NODES)
         self._sourceElementiterator = self._sourceMesh.createElementiterator()
         self._octree = Octree(minimums, maximums)
+        self._tolerance = self._octree.getTolerance()
+        self._is_exterior_field = self._sourceFm.createFieldIsExterior()
 
         self._targetRegion = targetRegion
         self._targetFm = targetRegion.getFieldmodule()
@@ -75,15 +79,13 @@ class MeshRefinement:
         self._sourceAnnotationGroups = sourceAnnotationGroups
         self._annotationGroups = []
         self._sourceAndTargetMeshGroups = []
-        self._sourceAndTargetNodesetGroups = []
         for sourceAnnotationGroup in sourceAnnotationGroups:
-            targetAnnotationGroup = AnnotationGroup(self._targetRegion, sourceAnnotationGroup.getTerm())
+            targetAnnotationGroup = AnnotationGroup(
+                self._targetRegion, sourceAnnotationGroup.getTerm(), isMarker=sourceAnnotationGroup.isMarker())
             self._annotationGroups.append(targetAnnotationGroup)
             # assume have only highest dimension element or node/point annotation groups:
             if sourceAnnotationGroup.hasMeshGroup(self._sourceMesh):
                 self._sourceAndTargetMeshGroups.append((sourceAnnotationGroup.getMeshGroup(self._sourceMesh), targetAnnotationGroup.getMeshGroup(self._targetMesh)))
-            else:
-                self._sourceAndTargetNodesetGroups.append((sourceAnnotationGroup.getNodesetGroup(self._sourceNodes), targetAnnotationGroup.getNodesetGroup(self._targetNodes)))
 
         # prepare element -> marker point list map
         self.elementMarkerMap = {}
@@ -121,62 +123,237 @@ class MeshRefinement:
     def getAnnotationGroups(self):
         return self._annotationGroups
 
-    def refineElementCubeStandard3d(self, sourceElement, numberInXi1, numberInXi2, numberInXi3,
-                                    addNewNodesToOctree=True, shareNodeIds=None, shareNodeCoordinates=None):
+    def _face_add_line_ids_ending_in_x(self, face, x, line_ids: set):
+        """
+        Add identifiers of lines on face element with either end's coordinates within tolerance of x to supplied set.
+        :param face: Zinc 2-D face element.
+        :param x: 3 component coordinates list.
+        :param line_ids: Set of line identifiers.
+        """
+        for f in range(face.getNumberOfFaces()):
+            line = face.getFaceElement(f + 1)
+            if line.isValid():
+                line_id = line.getIdentifier()
+                if line_id not in line_ids:
+                    # add line if it has coordinates within tolerance of x at either end
+                    for xi in (0.0, 1.0):
+                        self._sourceCache.setMeshLocation(line, [xi])
+                        result, line_x = self._sourceCoordinates.evaluateReal(self._sourceCache, 3)
+                        if result == RESULT_OK:
+                            for c, line_c in zip(x, line_x):
+                                if math.fabs(c - line_c) > self._tolerance:
+                                    break
+                            else:
+                                line_ids.add(line_id)
+                                break
+
+    def _get_connected_exterior_face_ids(self, faces, x):
+        """
+        Get connected exterior face element identifiers with common lines to any pairs in faces list.
+        :param faces: List of at least 2 faces with common lines.
+        :param x: Coordinates of point; used only for > 2 faces.
+        :return: List of exterior boundary face identifiers from lowest to highest.
+        """
+        initial_face_count = len(faces)
+        assert initial_face_count > 1
+
+        # add faces passed in to set
+        # get common lines between them
+        face_ids = set()
+        face_line_ids = []
+        for face in faces:
+            face_ids.add(face.getIdentifier())
+            tmp_line_ids = []
+            for i in range(face.getNumberOfFaces()):
+                line = face.getFaceElement(i + 1)
+                if line.isValid():
+                    tmp_line_ids.append(line.getIdentifier())
+            face_line_ids.append(tmp_line_ids)
+        new_line_ids = set()
+        # if there is a single line between 2 faces can do less work later, but not if there are collapsed faces
+        single_line = initial_face_count < 3
+        for f1 in range(len(faces) - 1):
+            for f2 in range(f1 + 1, len(faces)):
+                add_count = 0
+                for line_id in face_line_ids[f1]:
+                    if line_id in face_line_ids[f2]:
+                        new_line_ids.add(line_id)
+                        add_count += 1
+                if add_count == 0:
+                    # assume collapsed face, so add all lines from both faces ending in x at either end
+                    single_line = False
+                    for fi in (f1, f2):
+                        self._face_add_line_ids_ending_in_x(faces[fi], x, new_line_ids)
+        line_ids = copy.copy(new_line_ids)
+
+        while True:
+            # ensure all parent elements of common lines are in face_ids set
+            new_face_ids = []
+            for line_id in new_line_ids:
+                line = self._sourceLineMesh.findElementByIdentifier(line_id)
+                for p in range(line.getNumberOfParents()):
+                    face = line.getParentElement(p + 1)
+                    face_id = face.getIdentifier()
+                    if face_id not in face_ids:
+                        new_face_ids.append(face_id)
+            face_ids.update(new_face_ids)
+
+            if single_line or (not new_face_ids):
+                break
+
+            new_line_ids.clear()
+            for face_id in new_face_ids:
+                face = self._sourceFaceMesh.findElementByIdentifier(face_id)
+                self._face_add_line_ids_ending_in_x(face, x, new_line_ids)
+            line_ids.update(new_line_ids)
+
+        exterior_face_ids = []
+        for face_id in face_ids:
+            face = self._sourceFaceMesh.findElementByIdentifier(face_id)
+            self._sourceCache.setElement(face)
+            result, value = self._is_exterior_field.evaluateReal(self._sourceCache, 1)
+            if (result == RESULT_OK) and (value != 0.0):
+                exterior_face_ids.append(face_id)
+
+        exterior_face_ids.sort()
+        return exterior_face_ids
+
+    cube_mid_face_xi = [
+        [0.0, 0.5, 0.5],
+        [1.0, 0.5, 0.5],
+        [0.5, 0.0, 0.5],
+        [0.5, 1.0, 0.5],
+        [0.5, 0.5, 0.0],
+        [0.5, 0.5, 1.0]
+    ]
+
+    square_mid_edge_xi = [
+        [0.0, 0.5],
+        [1.0, 0.5],
+        [0.5, 0.0],
+        [0.5, 1.0]
+    ]
+
+    def refineElementCubeStandard3d(self, sourceElement, numberInXi1, numberInXi2, numberInXi3):
         """
         Refine cube sourceElement to numberInXi1*numberInXi2*numberInXi3 linear cube
         sub-elements, evenly spaced in xi.
-        :param addNewNodesToOctree: If True (default) add newly created nodes to
-        octree to be found when refining later elements. Set to False when nodes are at the
-        same location and not intended to be shared.
-        :param shareNodeIds, shareNodeCoordinates: Arrays of identifiers and coordinates of
-        nodes which may be shared in refining this element. If supplied, these are preferentially
-        used ahead of points in the octree. Used to control merging with known nodes, e.g.
-        those returned by this function for elements which used addNewNodesToOctree=False.
         :return: Node identifiers, node coordinates used in refinement of sourceElement.
         """
-        assert (shareNodeIds and shareNodeCoordinates) or (not shareNodeIds and not shareNodeCoordinates), \
-            'refineElementCubeStandard3d.  Must supply both of shareNodeIds and shareNodeCoordinates, or neither'
-        shareNodesCount = len(shareNodeIds) if shareNodeIds else 0
+        # element_identifier = sourceElement.getIdentifier()
+        # print("refine element", element_identifier)
         meshGroups = []
         for sourceAndTargetMeshGroup in self._sourceAndTargetMeshGroups:
             if sourceAndTargetMeshGroup[0].containsElement(sourceElement):
                 meshGroups.append(sourceAndTargetMeshGroup[1])
+
+        faces = [None] * 6
+        exterior_faces = [False] * 6  # whether face is on exterior boundary of mesh
+        null_face_count = 0
+        if sourceElement.getNumberOfFaces() == 6:
+            for f in range(6):
+                face =  sourceElement.getFaceElement(f + 1)
+                if face and face.isValid():
+                    faces[f] = face
+                    self._sourceCache.setElement(face)
+                    result, value = self._is_exterior_field.evaluateReal(self._sourceCache, 1)
+                    exterior_faces[f] = (result == RESULT_OK) and (value != 0.0)
+                else:
+                    faces[f] = None
+                    null_face_count += 1
+        # collapsed elements have no face, so get all faces which are adjacent to collapsed face
+        # check there is at least one valid face and one null face
+        if 0 < null_face_count < 6:
+            for f, face in enumerate(faces):
+                if not face:
+                    # get coordinates at centre of face
+                    self._sourceCache.setMeshLocation(sourceElement, self.cube_mid_face_xi[f])
+                    result, mid_face_x = self._sourceCoordinates.evaluateReal(self._sourceCache, 3)
+                    if result != RESULT_OK:
+                        continue
+                    # get list of all faces with mid-edge coordinate within tolerance of mid_face_x
+                    adjacent_faces = []
+                    for f2, face2 in enumerate(faces):
+                        if face2 and not isinstance(face2, list):
+                            for xi in self.square_mid_edge_xi:
+                                self._sourceCache.setMeshLocation(face2, xi)
+                                result, mid_edge_x = self._sourceCoordinates.evaluateReal(self._sourceCache, 3)
+                                if result != RESULT_OK:
+                                    continue
+                                for c in range(3):
+                                    if math.fabs(mid_edge_x[c] - mid_face_x[c]) > self._tolerance:
+                                        break
+                                else:
+                                    adjacent_faces.append(face2)
+                                    if exterior_faces[f2]:
+                                        exterior_faces[f] = True
+                                    break
+                    if adjacent_faces:
+                        faces[f] = adjacent_faces
+
+        # 6 faces above + 1 extra face for not_a_face_index
+        not_a_face_index = 6
+        faces.append(None)
+        exterior_faces.append(False)
+
         # create nodes
         nids = []
         nx = []
         xi = [0.0, 0.0, 0.0]
         tol = self._octree._tolerance
         for k in range(numberInXi3 + 1):
-            kExterior = (k == 0) or (k == numberInXi3)
+            k_face_index = 4 if (k == 0) else 5 if (k == numberInXi3) else not_a_face_index
+            k_face = faces[k_face_index]
+            k_exterior = exterior_faces[k_face_index]
             xi[2] = k / numberInXi3
             for j in range(numberInXi2 + 1):
-                jExterior = kExterior or (j == 0) or (j == numberInXi2)
+                j_face_index = 2 if (j == 0) else 3 if (j == numberInXi2) else not_a_face_index
+                j_face = faces[j_face_index]
+                j_exterior = exterior_faces[j_face_index]
                 xi[1] = j / numberInXi2
                 for i in range(numberInXi1 + 1):
-                    iExterior = jExterior or (i == 0) or (i == numberInXi1)
+                    i_face_index = 0 if (i == 0) else 1 if (i == numberInXi1) else not_a_face_index
+                    i_face = faces[i_face_index]
+                    i_exterior = exterior_faces[i_face_index]
                     xi[0] = i / numberInXi1
                     self._sourceCache.setMeshLocation(sourceElement, xi)
                     result, x = self._sourceCoordinates.evaluateReal(self._sourceCache, 3)
-                    # only exterior points are ever common:
+                    shareable = False
+                    surface_face_ids = True  # since None is used for no extra data in Octree
+
+                    connected_faces = []
+                    for face in (i_face, j_face, k_face):
+                        if face:
+                            for tmp_face in face if isinstance(face, list) else [face]:
+                                if tmp_face not in connected_faces:
+                                    connected_faces.append(tmp_face)
+                    face_count = len(connected_faces)
+                    if face_count > 0:
+                        shareable = True
+                        exterior_count = (i_exterior, j_exterior, k_exterior).count(True)
+                        if face_count == 1:
+                            if exterior_count == 1:
+                                shareable = False  # nodes only belong to this element
+                            # else interior
+                        else:
+                            surface_face_ids = self._get_connected_exterior_face_ids(connected_faces, x)
+                            if not surface_face_ids:
+                                surface_face_ids = True
                     nodeId = None
-                    if iExterior:
-                        if shareNodeIds:
-                            for n in range(shareNodesCount):
-                                if (math.fabs(shareNodeCoordinates[n][0] - x[0]) <= tol) and \
-                                        (math.fabs(shareNodeCoordinates[n][1] - x[1]) <= tol) and \
-                                        (math.fabs(shareNodeCoordinates[n][2] - x[2]) <= tol):
-                                    nodeId = shareNodeIds[n]
-                                    break
-                        if nodeId is None:
-                            nodeId = self._octree.findObjectByCoordinates(x)
+                    if shareable:
+                        nodeId, extra_data = self._octree.findObjectByCoordinates(x, surface_face_ids)
+                        # if nodeId:
+                        #     print("Found existing node", nodeId, extra_data, "at", x)
                     if nodeId is None:
                         node = self._targetNodes.createNode(self._nodeIdentifier, self._nodetemplate)
                         self._targetCache.setNode(node)
                         result = self._targetCoordinates.setNodeParameters(self._targetCache, -1, Node.VALUE_LABEL_VALUE, 1, x)
                         nodeId = self._nodeIdentifier
-                        if iExterior and addNewNodesToOctree:
-                            self._octree.addObjectAtCoordinates(x, nodeId)
+                        if shareable:
+                            # print("Add shareable node", nodeId, surface_face_ids, "at", x)
+                            self._octree.addObjectAtCoordinates(x, (nodeId, surface_face_ids))
+                        # else:
+                        #     print("Add unique node", nodeId, surface_face_ids, "at", x)
                         self._nodeIdentifier += 1
                     nids.append(nodeId)
                     nx.append(x)
@@ -192,7 +369,7 @@ class MeshRefinement:
                     enids = [nids[bni], nids[bni + 1], nids[bni + oj], nids[bni + oj + 1],
                              nids[bni + ok], nids[bni + ok + 1], nids[bni + ok + oj], nids[bni + ok + oj + 1]]
                     result = element.setNodesByIdentifier(self._targetEft, enids)
-                    # if result != ZINC_OK:
+                    # if result != RESULT_OK:
                     # print('Element', self._elementIdentifier, result, enids)
                     self._elementIdentifier += 1
 
@@ -208,10 +385,10 @@ class MeshRefinement:
                 targetXi = [0.0] * 3
                 for marker in markerList:
                     markerName, sourceXi, sourceNodeIdentifier = marker
-                    sourceNode = self._sourceNodes.findNodeByIdentifier(sourceNodeIdentifier)
-                    node = self._targetMarkerNodes.createNode(self._nodeIdentifier, self._targetMarkerTemplate)
-                    self._targetCache.setNode(node)
-                    self._targetMarkerName.assignString(self._targetCache, markerName)
+                    annotationGroup = findAnnotationGroupByName(self._annotationGroups, markerName)
+                    if not annotationGroup:
+                        print("Could not find annotation group", markerName)
+                        continue
                     # determine which sub-element, targetXi that sourceXi maps to
                     targetElementIdentifier = startElementIdentifier
                     for i in range(3):
@@ -224,12 +401,19 @@ class MeshRefinement:
                             targetXi[i] = 1.0
                         targetElementIdentifier += el * elementOffset[i]
                     targetElement = self._targetMesh.findElementByIdentifier(targetElementIdentifier)
-                    result = self._targetMarkerLocation.assignMeshLocation(self._targetCache, targetElement, targetXi)
+                    markerNode = annotationGroup.createMarkerNode(
+                        self._nodeIdentifier, element=targetElement, xi=targetXi)
+                    # add marker node to target annotation groups for any non-marker source annotation groups
+                    # the source node was in. (Marker annotation groups all share the same 'marker' group.)
+                    for sourceAnnotationGroup in self._sourceAnnotationGroups:
+                        if not sourceAnnotationGroup.isMarker():
+                            if sourceAnnotationGroup.getNodesetGroup(self._sourceNodes).findNodeByIdentifier(
+                                    sourceNodeIdentifier).isValid():
+                                targetAnnotationGroup = findAnnotationGroupByName(
+                                    self._annotationGroups, sourceAnnotationGroup.getName())
+                                if targetAnnotationGroup:
+                                    targetAnnotationGroup.getNodesetGroup(self._targetNodes).addNode(markerNode)
                     self._nodeIdentifier += 1
-                    # add new node to matching annotation groups the previous one was in
-                    for sourceAndTargetNodesetGroup in self._sourceAndTargetNodesetGroups:
-                        if sourceAndTargetNodesetGroup[0].containsNode(sourceNode):
-                            sourceAndTargetNodesetGroup[1].addNode(node)
 
         return nids, nx
 

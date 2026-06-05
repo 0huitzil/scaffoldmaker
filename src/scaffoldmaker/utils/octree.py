@@ -1,6 +1,6 @@
-'''
+"""
 Octree for searching for objects by coordinates
-'''
+"""
 from __future__ import division
 
 import copy
@@ -8,16 +8,16 @@ import math
 
 
 class Octree:
-    '''
+    """
     Octree for searching for objects by coordinates
-    '''
+    """
 
     def __init__(self, minimums, maximums, tolerance = None):
-        '''
+        """
         :param minimums: List of 3 minimum coordinate values. Caller to include any edge allowance.
         :param maximums: List of 3 maximum coordinate values. Caller to include any edge allowance.
         :param tolerance: If supplied, tolerance to use, or None to compute as 1.0E-6*diagonal.
-        '''
+        """
         self._dimension = 3
         self._dimensionPower2 = 1 << self._dimension
         self._maxObjects = 20
@@ -34,26 +34,29 @@ class Octree:
         # exactly 2^self._dimension children, cycling in lowest x index fastest
         self._children = None
 
-
-    def _findObjectByCoordinates(self, x):
-        '''
+    def _findObjectByCoordinates(self, x, extra_data):
+        """
         Find closest existing object with |x - ox| < tolerance.
         :param x: 3 coordinates in a list.
+        :param extra_data: Extra data to compare with 2nd component of stored tuple (object, extra_data) or None if
+        not a tuple with extra data. Value must resolve to True, or be None.
         :return: nearest distance, nearest object or None, None if none found.
-        '''
+        """
         nearestDistance = None
-        nearestObject = None
+        nearestObject = (None, None) if extra_data else None
         if self._coordinatesObjects is not None:
             for coordinatesObject in self._coordinatesObjects:
                 # cheaply determine if in 2*tolerance sized box around object
-                inBox = True
+                cox = coordinatesObject[0]
                 for c in range(self._dimension):
-                    if math.fabs(x[c] - coordinatesObject[0][c]) > self._tolerance:
-                        inBox = False
+                    if math.fabs(x[c] - cox[c]) > self._tolerance:
                         break
-                if inBox:
+                else:
+                    if extra_data:
+                        if extra_data != coordinatesObject[1][1]:
+                            continue  # extra data does not match
                     # now test exact distance
-                    distance = math.sqrt(sum((x[i] - coordinatesObject[0][i])*(x[i] - coordinatesObject[0][i]) for i in range(self._dimension)))
+                    distance = math.sqrt(sum((x[c] - cox[c])*(x[c] - cox[c]) for c in range(self._dimension)))
                     if (distance < self._tolerance) and ((nearestDistance is None) or (distance < nearestDistance)):
                         nearestDistance = distance
                         nearestObject = coordinatesObject[1]
@@ -70,31 +73,33 @@ class Octree:
                         inBoundsPlusTolerance = False
                         break
                 if inBoundsPlusTolerance:
-                    distance, obj = self._children[i]._findObjectByCoordinates(x)
+                    distance, obj = self._children[i]._findObjectByCoordinates(x, extra_data)
                     if (distance is not None) and ((nearestDistance is None) or (distance < nearestDistance)):
                         nearestDistance = distance
                         nearestObject = obj
         return nearestDistance, nearestObject
 
-
-    def findObjectByCoordinates(self, x):
-        '''
+    def findObjectByCoordinates(self, x, extra_data=None):
+        """
         Find closest existing object with |x - ox| < tolerance.
         :param x: 3 coordinates in a list.
-        :return: nearest object or None if not found.
-        '''
-        nearestDistance, nearestObject = self._findObjectByCoordinates(x)
+        :param extra_data: Optional extra data to compare with 2nd component of stored tuple (object, extra_data).
+        Default/None means no tuple, no extra data.
+        :return: nearest object (or object tuple) or None (or (None, None) if extra_data) if not found.
+        """
+        nearestDistance, nearestObject = self._findObjectByCoordinates(x, extra_data)
         return nearestObject
 
 
     def addObjectAtCoordinates(self, x, obj):
-        '''
+        """
         Add object at coordinates to octree.
         Caller must have received None result for findObjectByCoordinates() first!
         Assumes caller has verified x is within range of Octree.
         :param x: 3 coordinates in a list.
-        :param obj: object to store with coordinates.
-        '''
+        :param obj: object to store with coordinates. Must be a tuple of (object, extra data) if needing to match
+        extra data when searching octree.
+        """
         if self._coordinatesObjects is not None:
             if len(self._coordinatesObjects) < self._maxObjects:
                 self._coordinatesObjects.append( (copy.deepcopy(x), obj) )
@@ -124,3 +129,6 @@ class Octree:
             if x[c] > centre[c]:
                 i += 1 << c
         self._children[i].addObjectAtCoordinates(x, obj)
+
+    def getTolerance(self):
+        return self._tolerance

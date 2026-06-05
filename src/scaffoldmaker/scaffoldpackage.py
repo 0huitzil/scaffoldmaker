@@ -291,6 +291,8 @@ class ScaffoldPackage:
         self._region = region
         fm = self._region.getFieldmodule()
         mesh = get_highest_dimension_mesh(fm)
+        if not mesh:
+            return
         meshDimension = mesh.getDimension()
         nodes = fm.findNodesetByFieldDomainType(Field.DOMAIN_TYPE_NODES)
         with ChangeManager(fm):

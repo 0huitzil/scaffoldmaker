@@ -1791,7 +1791,7 @@ def track_curve_side_direction(cx, cd1, start_direction, start_location, end_loc
 
 def linearlyInterpolateVectors(u, v, xi, magnitudeScalingMode=DerivativeScalingMode.ARITHMETIC_MEAN):
     """
-    Linearly interpolate two vectors less than 180 degrees apart to get an in-between vector
+    Linearly interpolate two 3-component vectors less than 180 degrees apart to get an in-between vector
     rotated from direction of u to direction of v proportionatly to xi, with magnitude linearly interpolated by xi.
     :param u: First vector.
     :param v: Second vector from 0 to less than 180 degrees away from u.
@@ -1820,7 +1820,10 @@ def linearlyInterpolateVectors(u, v, xi, magnitudeScalingMode=DerivativeScalingM
         cos_phi = math.cos(phi)
         sin_phi = math.sin(phi)
         axis1 = dirn_u
-        axis3 = normalize(cross(dirn_u, dirn_v))
+        cross_u_v = cross(dirn_u, dirn_v)
+        if magnitude(cross_u_v) == 0.0:
+            return [0.0, 0.0, 0.0]
+        axis3 = normalize(cross_u_v)
         axis2 = cross(axis3, dirn_u)
         dirn = add(mult(axis1, cos_phi), mult(axis2, sin_phi))
     return set_magnitude(dirn, mag)
@@ -1841,7 +1844,7 @@ def sampleHermiteCurve(start_x, start_d1, start_d2, end_x, end_d1, end_d2, eleme
     :param start_weight, end_weight: Optional relative weights for start/end d1.
     :param overweighting: Multiplier of arc length to use with initial curve to exaggerate end derivatives.
     :param end_transition: If supplied with end_d1, modify size of last element to fit end_d1.
-    :return: x[], d1[], d2[]
+    :return: x[], d1[]{, d2[] if start_d2 supplied}
     """
     assert (not end_transition) or end_d1
     end_d1_mag = magnitude(end_d1) if end_d1 else None

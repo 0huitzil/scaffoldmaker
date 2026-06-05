@@ -40,6 +40,7 @@ from scaffoldmaker.meshtypes.meshtype_3d_lens1 import MeshType_3d_lens1
 from scaffoldmaker.meshtypes.meshtype_3d_lung1 import MeshType_3d_lung1
 from scaffoldmaker.meshtypes.meshtype_3d_lung2 import MeshType_3d_lung2
 from scaffoldmaker.meshtypes.meshtype_3d_lung3 import MeshType_3d_lung3
+from scaffoldmaker.meshtypes.meshtype_3d_lung4 import MeshType_3d_lung4
 from scaffoldmaker.meshtypes.meshtype_3d_musclefusiform1 import MeshType_3d_musclefusiform1
 from scaffoldmaker.meshtypes.meshtype_3d_nerve1 import MeshType_3d_nerve1
 from scaffoldmaker.meshtypes.meshtype_3d_ostium1 import MeshType_3d_ostium1
@@ -106,6 +107,7 @@ class Scaffolds(object):
         MeshType_3d_lung1,
         MeshType_3d_lung2,
         MeshType_3d_lung3,
+        MeshType_3d_lung4,
         MeshType_3d_musclefusiform1,
         MeshType_3d_nerve1,
         MeshType_3d_ostium1,

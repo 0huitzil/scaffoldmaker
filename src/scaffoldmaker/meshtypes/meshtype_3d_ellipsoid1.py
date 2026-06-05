@@ -129,8 +129,7 @@ class MeshType_3d_ellipsoid1(Scaffold_base):
         fieldmodule = region.getFieldmodule()
         coordinates = find_or_create_field_coordinates(fieldmodule)
 
-        ellipsoid = EllipsoidMesh(a, b, c, element_counts, transition_element_count,
-                                  axis2_x_rotation_radians, axis3_x_rotation_radians, surface_only)
+        ellipsoid = EllipsoidMesh(a, b, c, element_counts, transition_element_count, surface_only)
 
         left_group = AnnotationGroup(region, ("left", ""))
         right_group = AnnotationGroup(region, ("right", ""))
@@ -157,7 +156,7 @@ class MeshType_3d_ellipsoid1(Scaffold_base):
         ellipsoid.set_nway_derivative_factor(nway_derivative_factor)
         ellipsoid.set_surface_d3_mode(surface_d3_mode)
 
-        ellipsoid.build()
+        ellipsoid.build(axis2_x_rotation_radians, axis3_x_rotation_radians)
         ellipsoid.generate_mesh(fieldmodule, coordinates)
 
         return annotation_groups, None
