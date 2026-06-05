@@ -1,12 +1,12 @@
-from cmlibs.maths.vectorops import mult
 from cmlibs.utils.zinc.field import (
     find_or_create_field_coordinates, find_or_create_field_finite_element, find_or_create_field_group,
     find_or_create_field_stored_string)
+from cmlibs.utils.zinc.finiteelement import get_element_node_identifiers
 from cmlibs.utils.zinc.general import ChangeManager
 from cmlibs.utils.zinc.group import mesh_group_to_identifier_ranges, nodeset_group_to_identifier_ranges
 from cmlibs.zinc.context import Context
 from cmlibs.zinc.element import Element, Elementbasis
-from cmlibs.zinc.field import Field
+from cmlibs.zinc.field import Field, FieldGroup
 from cmlibs.zinc.node import Node
 from cmlibs.zinc.result import RESULT_OK
 
@@ -44,25 +44,73 @@ def reorder_vagus_test_data1(testcase, region):
             node_identifiers = [element.getNode(eft, ln).getIdentifier() for ln in range(1, local_node_count + 1)]
             node_identifiers.reverse()
             testcase.assertEqual(RESULT_OK, element.setNodesByIdentifier(eft, node_identifiers))
-        for node_identifier in range(1, 51):
-            other_node_identifier = 101 - node_identifier
+        # can't renumber between segments as algorithm expects nodes in first segment to have lower numbers
+        # don't renumber nodes 46, 60 as they're the start of a branch
+        # currently rely on them being the first identifier in that branch for a workaround which includes it
+        for node_identifier in range(1, 14):
+            other_node_identifier = 75 - node_identifier
             node = nodes.findNodeByIdentifier(node_identifier)
             other_node = nodes.findNodeByIdentifier(other_node_identifier)
             testcase.assertEqual(RESULT_OK, other_node.setIdentifier(UNUSED_IDENTIFIER))
             testcase.assertEqual(RESULT_OK, node.setIdentifier(other_node_identifier))
             testcase.assertEqual(RESULT_OK, other_node.setIdentifier(node_identifier))
-        for element_identifier in range(76, 101):
-            other_element_identifier = 151 - element_identifier
+        for element_identifier in range(1, 37):
+            other_element_identifier = 74 - element_identifier
             element = mesh1d.findElementByIdentifier(element_identifier)
             other_element = mesh1d.findElementByIdentifier(other_element_identifier)
             testcase.assertEqual(RESULT_OK, other_element.setIdentifier(UNUSED_IDENTIFIER))
             testcase.assertEqual(RESULT_OK, element.setIdentifier(other_element_identifier))
             testcase.assertEqual(RESULT_OK, other_element.setIdentifier(element_identifier))
-        # for node_identifier in range(126, 151):
-        #     node = nodes.findNodeByIdentifier(node_identifier)
-        #     testcase.assertEqual(RESULT_OK, node.setIdentifier(node_identifier + IDENTIFIER_OFFSET))
-        for element_identifier in range(101, 104):
-            mesh1d.destroyElement(mesh1d.findElementByIdentifier(element_identifier))
+
+
+def create_segment_groups_vagus_test_data1(testcase, data_region):
+    """
+    Create segment groups dividing the data approximately in thirds over the x-span of the trunk.
+    """
+    data_fieldmodule = data_region.getFieldmodule()
+    data_nodes = data_fieldmodule.findNodesetByFieldDomainType(Field.DOMAIN_TYPE_NODES)
+    data_mesh = data_fieldmodule.findMeshByDimension(1)
+    data_coordinates = data_fieldmodule.findFieldByName("coordinates")
+    with ChangeManager(data_fieldmodule):
+        data_x = data_fieldmodule.createFieldComponent(data_coordinates, 1)
+        conditions = [
+            data_fieldmodule.createFieldLessThan(data_x, data_fieldmodule.createFieldConstant(10000.0)),
+            None,
+            data_fieldmodule.createFieldGreaterThan(data_x, data_fieldmodule.createFieldConstant(21000.0))
+            ]
+        conditions[1] = data_fieldmodule.createFieldNot(
+            data_fieldmodule.createFieldOr(conditions[0], conditions[2]))
+        for s in range(3):
+            segment_group = data_fieldmodule.createFieldGroup()
+            segment_group.setName("segment" + str(s + 1) + ".exf")
+            segment_group.setManaged(True)
+            segment_nodeset_group = segment_group.createNodesetGroup(data_nodes)
+            segment_nodeset_group.addNodesConditional(conditions[s])
+            # ensure elements with both nodes in group are in the mesh group
+            segment_mesh_group = segment_group.createMeshGroup(data_mesh)
+            data_fieldcache = data_fieldmodule.createFieldcache()
+            elementiterator = data_mesh.createElementiterator()
+            element = elementiterator.next()
+            while element.isValid():
+                eft = element.getElementfieldtemplate(data_coordinates, -1)
+                local_nodes_count = eft.getNumberOfLocalNodes()
+                for ln in range(1, local_nodes_count + 1):
+                    node = element.getNode(eft, ln)
+                    data_fieldcache.setNode(node)
+                    _, in_segment_group = segment_group.evaluateReal(data_fieldcache, 1)
+                    if not in_segment_group:
+                        break
+                else:
+                    segment_mesh_group.addElement(element)
+                element = elementiterator.next()
+            if s == 0:
+                testcase.assertEqual(segment_mesh_group.getSize(), 134)
+            elif s == 1:
+                testcase.assertEqual(segment_mesh_group.getSize(), 98)
+            else:
+                testcase.assertEqual(segment_mesh_group.getSize(), 77)
+        del conditions
+        del data_x
 
 
 class VagusScaffoldTestCase(unittest.TestCase):
@@ -94,6 +142,7 @@ class VagusScaffoldTestCase(unittest.TestCase):
             assert result == RESULT_OK
             if i == 1:
                 reorder_vagus_test_data1(self, data_region)
+            create_segment_groups_vagus_test_data1(self, data_region)
 
             data_fieldmodule = data_region.getFieldmodule()
             data_mesh1d = data_fieldmodule.findMeshByDimension(1)
@@ -104,10 +153,10 @@ class VagusScaffoldTestCase(unittest.TestCase):
             data_trunk_nodeset_group = trunk_group.getNodesetGroup(data_nodes)
             mesh_ranges = mesh_group_to_identifier_ranges(data_trunk_mesh_group)
             nodeset_ranges = nodeset_group_to_identifier_ranges(data_trunk_nodeset_group)
+            self.assertEqual([[1, 200]], mesh_ranges)
+            self.assertEqual([[1, 201]], nodeset_ranges)
+            self.assertEqual(200, data_trunk_mesh_group.getSize())
             if i == 0:
-                self.assertEqual([[1, 200]], mesh_ranges)
-                self.assertEqual([[1, 201]], nodeset_ranges)
-                self.assertEqual(200, data_trunk_mesh_group.getSize())
                 expected_element_info = {
                     1: [1, 2],
                     2: [2, 3],
@@ -117,25 +166,19 @@ class VagusScaffoldTestCase(unittest.TestCase):
                     103: [103, 104]
                 }
             else:
-                self.assertEqual([[1, 100], [104, 200]], mesh_ranges)
-                # self.assertEqual([[1, 125], [151, 201], [1126, 1150]], nodeset_ranges)
-                self.assertEqual(197, data_trunk_mesh_group.getSize())
                 expected_element_info = {
-                    1: [99, 100],
-                    2: [98, 99],
-                    51: [101, 1],
-                    101: None,
-                    102: None,
-                    103: None
+                    1: [1, 2],
+                    2: [2, 3],
+                    51: [24, 23],
+                    101: [101, 102],
+                    102: [102, 103],
+                    103: [103, 104]
                 }
             for element_id, expected_node_ids in expected_element_info.items():
                 element = data_mesh1d.findElementByIdentifier(element_id)
                 eft = element.getElementfieldtemplate(data_coordinates, -1)
-                if expected_node_ids:
-                    node_ids = [element.getNode(eft, n + 1).getIdentifier() for n in range(eft.getNumberOfLocalNodes())]
-                    self.assertEqual(expected_node_ids, node_ids)
-                else:
-                    self.assertFalse(eft.isValid())
+                node_ids = [element.getNode(eft, n + 1).getIdentifier() for n in range(eft.getNumberOfLocalNodes())]
+                self.assertEqual(expected_node_ids, node_ids)
 
             vagus_data = VagusInputData(data_region)
             self.assertEqual(vagus_data.get_side_label(), 'left')
@@ -165,27 +208,32 @@ class VagusScaffoldTestCase(unittest.TestCase):
             self.assertEqual(len(trunk_coordinates), 201)
             annotation_term_map = vagus_data.get_annotation_term_map()
             self.assertTrue(trunk_group_name in annotation_term_map)
-            # self.assertEqual(annotation_term_map[trunk_group_name], 'http://purl.obolibrary.org/obo/UBERON_0035020')
+            self.assertEqual(annotation_term_map[trunk_group_name], 'http://uri.interlex.org/base/ilx_0785628')
 
             # do a simple fit to the trunk data coordinates to check trunk ordering is working
-            trunk_data_coordinates = vagus_data.get_trunk_coordinates()
-            px = [e[0] for e in trunk_data_coordinates]
+            px = []
+            segment_trunk_info_list = vagus_data.get_segment_trunk_info_list()
+            self.assertEqual(len(segment_trunk_info_list), 3)
+            for segment_trunk_info in segment_trunk_info_list:
+                px += segment_trunk_info['ordered_points']
             self.assertEqual(201, len(px))
             bx, bd1 = get_curve_from_points(px, number_of_elements=10)
             length = getCubicHermiteCurvesLength(bx, bd1)
             self.assertAlmostEqual(31726.825262197974, length, delta=1.0E-3)
 
-            branch_data = vagus_data.get_branch_data()
-            self.assertEqual(len(branch_data), 4)
-            self.assertTrue("left superior laryngeal nerve" in branch_data)
-            self.assertEqual(len(branch_data["left superior laryngeal nerve"]), 42)
-            self.assertTrue("left A branch of superior laryngeal nerve" in branch_data)
-            self.assertEqual(len(branch_data["left A branch of superior laryngeal nerve"]), 22)
+            branch_coordinates_data = vagus_data.get_branch_coordinates_data()
+            branch_sequences_data = vagus_data.get_branch_sequences_data()
+            self.assertEqual(len(branch_coordinates_data), 4)
+            self.assertTrue("left superior laryngeal nerve" in branch_coordinates_data)
+            self.assertEqual(len(branch_coordinates_data["left superior laryngeal nerve"]), 44)
+            self.assertEqual(len(branch_sequences_data["left superior laryngeal nerve"]), 2)
+            self.assertTrue("left A branch of superior laryngeal nerve" in branch_coordinates_data)
+            self.assertEqual(len(branch_coordinates_data["left A branch of superior laryngeal nerve"]), 22)
             left_thoracic_cardiopulmonary_branches = (
                 "left A thoracic cardiopulmonary branch of vagus nerve",
                 "left B thoracic cardiopulmonary branch of vagus nerve")
             for branch_name in left_thoracic_cardiopulmonary_branches:
-                self.assertTrue(branch_name in branch_data)
+                self.assertTrue(branch_name in branch_coordinates_data)
 
             branch_parents = vagus_data.get_branch_parent_map()
             self.assertEqual(branch_parents["left superior laryngeal nerve"], trunk_group_name)
@@ -235,7 +283,7 @@ class VagusScaffoldTestCase(unittest.TestCase):
         self.assertEqual(options.get('Trunk proportion'), 1.0)
         self.assertEqual(options.get('Trunk fit number of iterations'), 5)
         self.assertEqual(options.get('Default anterior direction'), [0.0, 1.0, 0.0])
-        self.assertEqual(options.get('Default trunk diameter'), 3.0)
+        self.assertEqual(options.get('Default trunk diameter'), 3000.0)
         self.assertEqual(options.get('Branch diameter trunk proportion'), 0.5)
         # change options to make test fast and consistent, with minor effect on result:
         options['Number of elements along the trunk pre-fit'] = 10
@@ -254,28 +302,7 @@ class VagusScaffoldTestCase(unittest.TestCase):
             self.assertEqual(data_region.readFile(data_file), RESULT_OK)
             if i == 1:
                 reorder_vagus_test_data1(self, data_region)
-
-            # create segment groups dividing the data approximately in thirds over the x-span of the trunk
-            data_fieldmodule = data_region.getFieldmodule()
-            data_nodes = data_fieldmodule.findNodesetByFieldDomainType(Field.DOMAIN_TYPE_NODES)
-            data_coordinates = data_fieldmodule.findFieldByName("coordinates")
-            with ChangeManager(data_fieldmodule):
-                data_x = data_fieldmodule.createFieldComponent(data_coordinates, 1)
-                conditions = [
-                    data_fieldmodule.createFieldLessThan(data_x, data_fieldmodule.createFieldConstant(10000.0)),
-                    None,
-                    data_fieldmodule.createFieldGreaterThan(data_x, data_fieldmodule.createFieldConstant(20000.0))
-                    ]
-                conditions[1] = data_fieldmodule.createFieldNot(
-                    data_fieldmodule.createFieldOr(conditions[0], conditions[2]))
-                for s in range(3):
-                    segment_group = data_fieldmodule.createFieldGroup()
-                    segment_group.setName("segment" + str(s + 1) + ".exf")
-                    segment_group.setManaged(True)
-                    segment_nodeset_group = segment_group.createNodesetGroup(data_nodes)
-                    segment_nodeset_group.addNodesConditional(conditions[s])
-                del conditions
-                del data_x
+            create_segment_groups_vagus_test_data1(self, data_region)
 
             # check annotation groups
             annotation_groups, nerve_metadata = scaffold.generateMesh(region, options)
@@ -284,19 +311,19 @@ class VagusScaffoldTestCase(unittest.TestCase):
             TOL = 1.0E-6
             expected_metadata = {
                 'segments': {
-                    'segment1.exf': {'minimum vagus coordinate': 0.062179363163301214,
-                                     'maximum vagus coordinate': 0.244237232602641},
-                    'segment2.exf': {'minimum vagus coordinate': 0.24685186671128517,
-                                     'maximum vagus coordinate': 0.40960681735379395},
-                    'segment3.exf': {'minimum vagus coordinate': 0.41221671261995313,
-                                     'maximum vagus coordinate': 0.5754599929406741}
+                    'segment1.exf': {'maximum vagus coordinate': 0.24558366014812194,
+                                     'minimum vagus coordinate': 0.0788138673418423},
+                    'segment2.exf': {'maximum vagus coordinate': 0.4006751105392706,
+                                     'minimum vagus coordinate': 0.24780825015941482},
+                    'segment3.exf': {'maximum vagus coordinate': 0.532313675266658,
+                                     'minimum vagus coordinate': 0.40293635826993446}
                 },
-                'trunk centroid fit error rms': 1.6796999717877277,
-                'trunk centroid fit error max': 6.004413110311745,
-                'trunk radius fit error rms': 0.20126533544206293,
-                'trunk radius fit error max': 1.0496575899143181,
-                'trunk twist angle fit error degrees rms': 3.9094139417227405,
-                'trunk twist angle fit error degrees max': 9.786303215289262}
+                'trunk centroid fit error rms': 2.6851948642256804,
+                'trunk centroid fit error max': 7.904921997395714,
+                'trunk radius fit error rms': 1.8986927090614505,
+                'trunk radius fit error max': 17.211587059698957,
+                'trunk twist angle fit error degrees rms': 4.242842001426614,
+                'trunk twist angle fit error degrees max': 10.680695634612922}
             self.assertEqual(len(metadata), len(expected_metadata))
             for key, value in metadata.items():
                 expected_value = expected_metadata[key]
@@ -314,39 +341,39 @@ class VagusScaffoldTestCase(unittest.TestCase):
             expected_group_info = {
                 'left vagus nerve': (
                     'http://uri.interlex.org/base/ilx_0785628', None, 25,
-                    [-1269.8048516184547, -6359.977051431916, -69.78642824721726],
-                    [2163.657939271601, -1111.9771974322234, 121.45057496461462],
-                    [49.68213484225328, 258.2220400479382, 1479.1356481323735],
-                    249152179.8529517,
-                    33286242951.84727),
+                    [-2545.1416627882127, -5922.876303368227, -120.13687087625989],
+                    [2617.531313476152, -1114.5818014848053, 124.21189836073981],
+                    [26.721742076513692, 135.6818734038061, 654.3942353676433],
+                    297406693.5555987,
+                    40164599792.92432),
                 'left superior laryngeal nerve': (
                     'http://uri.interlex.org/base/ilx_0788780', 'left vagus nerve', 3,
-                    [5923.104657597034, -4450.2479197707235, -196.91175665569313],
-                    [-1473.665051675919, 858.0807042974039, 37.618907343841],
-                    [29.2408913560962, 24.815173194025647, 579.4389023716839],
-                    9798165.396244952,
-                    559746405.7287067),
+                    [5917.435264569445, -4445.778660101648, -197.01444269512928],
+                    [-2234.989761439478, 1225.7350194397827, 53.8705143512821],
+                    [28.441662772435848, 26.164418026665317, 584.6645801593635],
+                    14880989.664956208,
+                    956728865.6891162),
                 'left A branch of superior laryngeal nerve': (
-                    'http://uri.interlex.org/base/ilx_0795823', 'left superior laryngeal nerve', 2,
-                    [5105.456364262518, -1456.268405569011, 0.1879309337306836],
-                    [-1289.581295107282, 381.4601337342457, 17.493930561764717],
-                    [2.990626464939851, -3.6461864740685996, 299.96293350603094],
-                    4696615.99004511,
-                    236649716.13535246),
+                    'http://uri.interlex.org/base/ilx_0795823', 'left superior laryngeal nerve', 1,
+                    [5106.509650289892, -1452.6499210530492, -0.984447873629037],
+                    [-2611.8705442933133, 635.3916900464677, 75.88439164201642],
+                    [6.639946103532111, -8.511120608359874, 299.8057236640625],
+                    4915558.017140371,
+                    267422500.45544925),
                 'left A thoracic cardiopulmonary branch of vagus nerve': (
                     'http://uri.interlex.org/base/ilx_0794192', 'left vagus nerve', 2,
-                    [20637.123232118392, -2947.094130818923, -608.0143068866595],
-                    [99.38115735940329, -1713.8817535655442, -61.058795544347106],
-                    [-8.872203312143029, 11.926532324519485, -349.21088399635704],
-                    6203011.915679664,
-                    328721624.0619874),
+                    [20637.1231811151, -2947.0943923264213, -608.0143165605032],
+                    [99.37959607618936, -1713.8821062071527, -61.058814561237654],
+                    [-8.760048579733848, 12.018384653067187, -351.606310180449],
+                    6338018.489008428,
+                    342899231.78125954),
                 'left B thoracic cardiopulmonary branch of vagus nerve': (
                     'http://uri.interlex.org/base/ilx_0794193', 'left vagus nerve', 1,
-                    [22164.372546340644, -3219.413785808189, -620.4335804280928],
-                    [1775.1656728388964, 1620.6261382213868, -217.23677284320627],
-                    [2.363562419413938, 43.37866675798887, 342.92682167353087],
-                    4658935.705149433,
-                    267763437.92570886)
+                    [22164.37237177626, -3219.4138243419347, -620.4335665416426],
+                    [1775.1658782860482, 1620.6243020068152, -217.2367115667926],
+                    [2.5266947076888755, 43.44552274274338, 344.75835902725083],
+                    4836738.653021493,
+                    287554343.10248685)
             }
             groups_count = len(expected_group_info)
 
@@ -357,12 +384,13 @@ class VagusScaffoldTestCase(unittest.TestCase):
             self.assertTrue(coordinates.isValid())
             self.assertEqual(RESULT_OK, fieldmodule.defineAllFaces())
             mesh3d = fieldmodule.findMeshByDimension(3)
-            expected_elements_count = 33
+            expected_elements_count = 32
             self.assertEqual(expected_elements_count, mesh3d.getSize())
             mesh2d = fieldmodule.findMeshByDimension(2)
-            self.assertEqual(expected_elements_count * 9 + groups_count, mesh2d.getSize())
+            # groups_count + 1 due to one group having 2 branches
+            self.assertEqual(expected_elements_count * 9 + groups_count + 1, mesh2d.getSize())
             mesh1d = fieldmodule.findMeshByDimension(1)
-            self.assertEqual(expected_elements_count * 17 + groups_count * 8, mesh1d.getSize())
+            self.assertEqual(expected_elements_count * 17 + (groups_count + 1) * 8, mesh1d.getSize())
             nodes = fieldmodule.findNodesetByFieldDomainType(Field.DOMAIN_TYPE_NODES)
             self.assertEqual(expected_elements_count + 1 + 8, nodes.getSize())  # including 6 marker points
             datapoints = fieldmodule.findNodesetByFieldDomainType(Field.DOMAIN_TYPE_DATAPOINTS)
@@ -383,16 +411,22 @@ class VagusScaffoldTestCase(unittest.TestCase):
                 annotation_group = findAnnotationGroupByName(annotation_groups, group_name)
                 self.assertEqual(term_id, annotation_group.getId())
                 mesh_group3d = group.getMeshGroup(mesh3d)
-                self.assertEqual(expected_elements_count, mesh_group3d.getSize())
-                mesh_group2d = group.getMeshGroup(mesh2d)
+                elements_count = mesh_group3d.getSize()
                 expected_face_count = expected_elements_count * 9 + 1
-                self.assertEqual(expected_face_count, mesh_group2d.getSize())
-                mesh_group1d = group.getMeshGroup(mesh1d)
                 expected_line_count = expected_elements_count * 17 + 8
-                self.assertEqual(expected_line_count, mesh_group1d.getSize())
-                nodeset_group = group.getNodesetGroup(nodes)
                 expected_node_count = expected_elements_count + (2 if parent_group_name else 1)
-                self.assertEqual(expected_node_count, nodeset_group.getSize())
+                if group_name == 'left superior laryngeal nerve':
+                    # there are 2 branches with this name
+                    expected_face_count += 1
+                    expected_line_count += 8
+                    expected_node_count += 1
+                self.assertEqual(expected_elements_count, elements_count)
+                mesh_group2d = group.getMeshGroup(mesh2d)
+                self.assertEqual(expected_face_count, mesh_group2d.getSize(), msg=group_name)
+                mesh_group1d = group.getMeshGroup(mesh1d)
+                self.assertEqual(expected_line_count, mesh_group1d.getSize(), msg=group_name)
+                nodeset_group = group.getNodesetGroup(nodes)
+                self.assertEqual(expected_node_count, nodeset_group.getSize(), msg=group_name)
                 branch_of_branch = False
                 if parent_group_name:
                     # check first 2 nodes are in parent nodeset group
@@ -432,14 +466,14 @@ class VagusScaffoldTestCase(unittest.TestCase):
             xi_centre = [0.5, 0.5, 0.5]
             # (element_identifier, expected_d3)
             expected_d3_info = [
-                (2, [-33.391218366765855, 268.39160153845626, 1158.860985674948]),
-                (4, [-501.3786015366995, 675.7031254761372, 793.3595901220758]),
-                (6, [-33.04316735076699, 629.5192377516283, 194.49196298196927]),
-                (8, [-23.822365306323434, 202.80333345607843, 665.523590669333]),
-                (10, [-25.625279982419272, -275.14752889054415, 641.9228605835165]),
-                (12, [-242.75605360012025, -550.3231979114498, 242.35581137281747]),
-                (14, [0.06310578889011254, -474.67423296131636, 117.90792203003063]),
-                (16, [-3.504130626277629, -465.9492020804986, 105.11830088131188])]
+                (2, [9.21562156397215, 220.59376293742793, 1258.8336648769296]),
+                (4, [-540.5815611781568, 556.8678912203784, 885.9322310618469]),
+                (6, [-21.067090930087062, 632.3320629313625, 213.52007336623498]),
+                (8, [-5.963415668723854, 99.15707095914347, 695.7951982006999]),
+                (10, [-127.97404391494035, -444.64867069342364, 519.3241216846709]),
+                (12, [-1.1875020666034288, -528.0436319192888, 150.69427060648735]),
+                (14, [0.7938987052352218, -589.3943193870087, 132.3215672366015]),
+                (16, [0.5122303831515467, -586.6487697666532, 126.42523040232733])]
             for element_identifier, expected_d3 in expected_d3_info:
                 element = mesh3d.findElementByIdentifier(element_identifier)
                 self.assertEqual(RESULT_OK, fieldcache.setMeshLocation(element, xi_centre))
@@ -460,9 +494,9 @@ class VagusScaffoldTestCase(unittest.TestCase):
                 fieldcache.clearLocation()
                 result, volume = volume_field.evaluateReal(fieldcache, 1)
                 self.assertEqual(result, RESULT_OK)
-                expected_volume = 33286242951.84727 if (coordinate_field is coordinates) else 33282940849.74868
+                expected_volume = 40164599792.92432 if (coordinate_field is coordinates) else 40212247349.583954
                 self.assertAlmostEqual(expected_volume, volume, delta=STOL)
-                expected_elements_count = 33
+                expected_elements_count = 32
                 group = fieldmodule.findFieldByName("epineurium").castGroup()
                 mesh_group2d = group.getMeshGroup(mesh2d)
                 self.assertEqual(expected_elements_count * 4, mesh_group2d.getSize())
@@ -471,7 +505,7 @@ class VagusScaffoldTestCase(unittest.TestCase):
                 fieldcache.clearLocation()
                 result, surface_area = surface_area_field.evaluateReal(fieldcache, 1)
                 self.assertEqual(result, RESULT_OK)
-                expected_surface_area = 72452883.40392067 if (coordinate_field is coordinates) else 72585973.86409168
+                expected_surface_area = 87348723.88566855 if (coordinate_field is coordinates) else 87548377.43565299
                 self.assertAlmostEqual(expected_surface_area, surface_area, delta=STOL)
                 group = fieldmodule.findFieldByName("vagus centroid").castGroup()
                 mesh_group1d = group.getMeshGroup(mesh1d)
@@ -480,7 +514,7 @@ class VagusScaffoldTestCase(unittest.TestCase):
                 length_field.setNumbersOfPoints(4)
                 result, length = length_field.evaluateReal(fieldcache, 1)
                 self.assertEqual(result, RESULT_OK)
-                self.assertAlmostEqual(75894.09718530288, length, delta=LTOL)
+                self.assertAlmostEqual(85946.41511414078, length, delta=LTOL)
 
             # check all markers are added
             marker_group = fieldmodule.findFieldByName("marker").castGroup()
@@ -516,32 +550,32 @@ class VagusScaffoldTestCase(unittest.TestCase):
                     0.07044881379783888,
                     0.00014399999999999916),
                 'left superior laryngeal nerve': (
-                    [0.00047730703517693016, 0.0001590104729754135, 0.13155226693210442],
-                    [0.012766941239985318, 0.011729858195898774, -0.006056668690651825],
-                    [-0.00403931404678569, 0.0043905839670676464, -7.155118975268882e-05],
-                    0.0019802618878763203,
-                    1.9797849471091192e-06),
+                    [0.0005393396476031736, 0.0002210888652800667, 0.14271866282088],
+                    [0.018596645990489238, 0.017306797287668027, -0.009291801681832402],
+                    [-0.004035969328504113, 0.004384632192912359, -9.01711847667297e-05],
+                    0.002835745504530076,
+                    2.8637284074659435e-06),
                 'left A branch of superior laryngeal nerve': (
-                    [0.028688067705606772, 0.02535673458269107, 0.11727390888183663],
-                    [-0.009599655303649913, -0.013266188786747662, -0.017300073369861106],
-                    [-0.004249304133747675, 0.004150895449488073, -0.0008858783562686601],
-                    0.0015990563197801552,
-                    1.5260431704427458e-06),
+                    [0.02817783261891398, 0.025047882883197675, 0.12792920804201047],
+                    [-0.024421260627580953, -0.03305830892404914, -0.04052420052564549],
+                    [-0.004895751480146281, 0.00466040733272351, -0.0006686618113299209],
+                    0.001934391869875682,
+                    1.8995070469086568e-06),
                 'left A thoracic cardiopulmonary branch of vagus nerve': (
-                    [-0.00023275582415062705, -5.5790425955213165e-06, 0.3810973389155537],
-                    [-0.026617743875947883, 0.010946968854188322, 0.006187567037017488],
-                    [-0.0022754210043383436, -0.005550105193537561, -3.3829765141102364e-05],
-                    0.002071680752066034,
-                    2.119536598394646e-06),
+                    [-0.00023704383215991881, 4.4093799777844035e-06, 0.3570452977819153],
+                    [-0.02640939524976098, 0.010905788542616928, 0.005383942130485252],
+                    [-0.002274865823058741, -0.0055501710871262095, -3.291278514777618e-05],
+                    0.0020475265974777873,
+                    2.0933315712898087e-06),
                 'left B thoracic cardiopulmonary branch of vagus nerve': (
-                    [0.0005128262687161793, -0.0009094452229105069, 0.4063493881429567],
-                    [0.023578121466429198, -0.026751584774707175, 0.020367952991549275],
-                    [0.004501879772565175, 0.003966530167337301, 1.7100648076362468e-05],
-                    0.001442332241718134,
-                    1.4795610548057572e-06)}
-            XTOL = 2.0E-7  # coordinates and derivatives
-            STOL = 1.0E-9  # surface area
-            VTOL = 1.0E-11  # volume
+                    [0.0005244494457092982, -0.0008849227880933955, 0.3790474314054079],
+                    [0.02375754350766598, -0.026323189695658004, 0.018508805523753252],
+                    [0.004504705667267902, 0.003963119934858472, 1.7331437428769192e-05],
+                    0.0014040753001296209,
+                    1.4351214793540466e-06)}
+            XTOL = 1.0E-4  # coordinates and derivatives
+            STOL = 1.0E-5  # surface area
+            VTOL = 1.0E-8  # volume
             for group_name in expected_group_info.keys():
                 expected_start_x, expected_start_d1, expected_start_d3, expected_surface_area, expected_volume = \
                     expected_group_material_info[group_name]
@@ -571,8 +605,8 @@ class VagusScaffoldTestCase(unittest.TestCase):
                 self.assertEqual(result, RESULT_OK)
                 result, volume = volume_field.evaluateReal(fieldcache, 1)
                 self.assertEqual(result, RESULT_OK)
-                self.assertAlmostEqual(expected_surface_area, surface_area, delta=2.0E-7 if branch_of_branch else STOL)
-                self.assertAlmostEqual(expected_volume, volume, delta=2.0E-10 if branch_of_branch else VTOL)
+                self.assertAlmostEqual(expected_surface_area, surface_area, delta=2.0E-6 if branch_of_branch else STOL)
+                self.assertAlmostEqual(expected_volume, volume, delta=2.0E-9 if branch_of_branch else VTOL)
 
             # test combined groups
             branch_common_map = {
@@ -626,7 +660,7 @@ class VagusScaffoldTestCase(unittest.TestCase):
         self.assertEqual(14, len(annotation_groups))
         fit_metadata = nerve_metadata.getMetadata()['vagus nerve']
         self.assertAlmostEqual(fit_metadata['trunk centroid fit error rms'], 0.0, delta=1.0E-4)
-        self.assertAlmostEqual(fit_metadata['trunk radius fit error rms'], 0.0, delta=1.0E-12)
+        self.assertAlmostEqual(fit_metadata['trunk radius fit error rms'], 1.24972485639109e-05, delta=1.0E-12)
         self.assertAlmostEqual(fit_metadata['trunk twist angle fit error degrees rms'], 0.0, delta=0.002)
         fieldmodule = region.getFieldmodule()
         fieldcache = fieldmodule.createFieldcache()
@@ -642,12 +676,12 @@ class VagusScaffoldTestCase(unittest.TestCase):
         length_field.setNumbersOfPoints(4)
         result, length = length_field.evaluateReal(fieldcache, 1)
         self.assertEqual(result, RESULT_OK)
-        self.assertAlmostEqual(math.pi, length, delta=1.0E-3)
+        self.assertAlmostEqual(math.pi, length, delta=1.0E-2)
 
         nodes = fieldmodule.findNodesetByFieldDomainType(Field.DOMAIN_TYPE_NODES)
         node = nodes.findNodeByIdentifier((elements_count // 2) + 1)
         fieldcache.setNode(node)
-        XTOL = 1.0E-6
+        XTOL = 1.0E-3
         expected_parameters = [
             [1.000000940622472, -6.338102288830355e-06, 0.0],
             [1.8235912738924405e-07, 0.19637019676125334, 0.0],

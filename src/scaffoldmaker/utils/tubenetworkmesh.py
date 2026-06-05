@@ -651,7 +651,7 @@ class TubeNetworkMeshSegment(NetworkMeshSegment):
         return rx, rd1, rd2
 
     def _generateCoreCoordinates(self, n2, centre):
-        """
+        r"""
         Sample core box and transition elements by sampling radial crossings along
         major -, minor |, diag1 /, diag2 \ directions.
         From these 3x3 array of points at the corners, centres and mid-sides of the box are determined,

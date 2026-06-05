@@ -1,9 +1,7 @@
-import math
-import logging
-
 from cmlibs.maths.vectorops import (
     add, cross, distance, dot, magnitude, matrix_mult, matrix_inv, mult, normalize, rejection, set_magnitude, sub)
 from cmlibs.utils.zinc.field import find_or_create_field_group, find_or_create_field_coordinates
+from cmlibs.utils.zinc.finiteelement import evaluate_field_nodeset_range
 from cmlibs.utils.zinc.general import ChangeManager
 from cmlibs.zinc.element import Element, Elementbasis, Elementfieldtemplate
 from cmlibs.zinc.field import Field, FieldFindMeshLocation, FieldGroup
@@ -27,8 +25,11 @@ from scaffoldmaker.utils.interpolation import (
     smoothCurveSideCrossDerivatives, track_curve_side_direction)
 from scaffoldmaker.utils.read_vagus_data import load_vagus_data
 from scaffoldmaker.utils.zinc_utils import (
-    define_and_fit_field, find_or_create_field_zero_fibres, fit_hermite_curve, generate_curve_mesh, generate_datapoints,\
-    generate_mesh_marker_points)
+    define_and_fit_field, find_or_create_field_zero_fibres, fit_hermite_curve, generate_curve_mesh,
+    generate_datapoints, generate_mesh_marker_points)
+import copy
+import logging
+import math
 
 
 logger = logging.getLogger(__name__)
@@ -60,7 +61,7 @@ class MeshType_3d_nerve1(Scaffold_base):
             'Trunk proportion': 1.0,
             'Trunk fit number of iterations': 5,
             'Default anterior direction': [0.0, 1.0, 0.0],
-            'Default trunk diameter': 3.0,
+            'Default trunk diameter': 3000.0,
             'Branch diameter trunk proportion': 0.5
         }
         return options
@@ -584,6 +585,8 @@ class MeshType_3d_nerve1(Scaffold_base):
 
         parent_parameters = {}
         parent_parameters[trunk_group_name] = (tx, td1, td2, td12, td3, td13, tnid)
+        parent_elements_counts = {}  # map of parent branch name to list of numbers of elements in branches
+        parent_elements_counts[trunk_group_name] = [trunk_elements_count]
         # the first branch node mainly marks connection on the parent/trunk centroid,
         # hence the following code starts branches from a proportion of parent radius
         # out, up to an upper limit on the proportion of the first segment:
@@ -605,22 +608,49 @@ class MeshType_3d_nerve1(Scaffold_base):
         # iterate over branches off trunk, and branches of branches
         visited_branches_order = []
         branch_root_parameters = {}
-        branch_data = vagus_data.get_branch_data()
+        branch_coordinates_data = vagus_data.get_branch_coordinates_data()
+        branch_sequences_data = vagus_data.get_branch_sequences_data()
         branch_parent_map = vagus_data.get_branch_parent_map()
         queue = [branch for branch in branch_parent_map.keys() if branch_parent_map[branch] == trunk_group_name]
-        while queue:
-            branch_name = queue.pop(0)
-            if branch_name in visited_branches_order:
-                logger.warning("already processed branch " + branch_name)
-                continue
-            visited_branches_order.append(branch_name)
+        branch_name = None
+        branch_parent_name = None
+        trunk_is_parent = False
+        branch_coordinates = []
+        branch_data_nodes_counts = []
+        branch_box_group = None
+        branch_box_mesh_group = None
+        branch_box_face_mesh_group = None
+        branch_box_line_mesh_group = None
 
-            branch_px = [branch_x[0] for branch_x in branch_data[branch_name]]
-            branch_parent_name = branch_parent_map[branch_name]
-            trunk_is_parent = branch_parent_name == trunk_group_name
-            # print(branch_name, '<--', branch_parent_name)
+        # iterate over branch names and distinct branches from the branch_sequences_data
+        while True:
+            if not branch_coordinates:
+                # get the next branch in queue
+                if not queue:
+                    break
+                branch_name = queue.pop(0)
+                if branch_name in visited_branches_order:
+                    logger.warning("already processed branch " + branch_name)
+                    continue
+                visited_branches_order.append(branch_name)
+                branch_parent_name = branch_parent_map[branch_name]
+                trunk_is_parent = branch_parent_name == trunk_group_name
+                # print(branch_name, '<--', branch_parent_name)
+                branch_coordinates = copy.copy(branch_coordinates_data[branch_name])
+                branch_data_nodes_counts = copy.copy(branch_sequences_data[branch_name])
+
+                # branch annotation groups
+                branch_box_group = AnnotationGroup(region, (branch_name, annotation_term_map[branch_name]))
+                annotation_groups.append(branch_box_group)
+                branch_box_mesh_group = branch_box_group.getMeshGroup(mesh3d)
+                branch_box_face_mesh_group = branch_box_group.getMeshGroup(mesh2d)
+                branch_box_line_mesh_group = branch_box_group.getMeshGroup(mesh1d)
 
             tx, td1, td2, td12, td3, td13, tnid = parent_parameters[branch_parent_name]
+            branch_nodes_count = branch_data_nodes_counts[0]
+            branch_px = branch_coordinates[:branch_nodes_count]
+            branch_coordinates = branch_coordinates[branch_nodes_count:]
+            branch_data_nodes_counts.pop(0)
 
             # get point in trunk volume closest to first point in branch data
             # parent_group = trunk_group
@@ -666,14 +696,24 @@ class MeshType_3d_nerve1(Scaffold_base):
                 logger.error("Nerve: branch " + branch_name + " fitted start point could not be found in parent nerve")
                 continue
             parent_first_element = parent_mesh_group.createElementiterator().next()
-            parent_location = (parent_element.getIdentifier() - parent_first_element.getIdentifier(), parent_xi[0])
-            if (not trunk_is_parent) and (parent_location[0] == 0):
-                # can't have branch from the root element of a branch
-                if parent_mesh_group.getSize() == 1:
-                    logger.error("Nerve: can't make branch " + branch_name +
-                                 " off single element parent " + branch_parent_name)
-                    continue
-                parent_location = (1, 0.0)
+            parent_index = parent_element.getIdentifier() - parent_first_element.getIdentifier()
+            branch_in_first_parent_element = False
+            # handle element indexes when there are several branches of the same name
+            # because the parent parameters are just appended after each branch = there isn't an element in between.
+            parent_start_index = 0
+            for elements_count in parent_elements_counts[branch_parent_name]:
+                if parent_index < (parent_start_index + elements_count):
+                    break
+                parent_index += 1
+                parent_start_index += elements_count + 1
+
+            parent_location = (parent_index, parent_xi[0])
+            if (not trunk_is_parent) and (parent_index - parent_start_index == 0):
+                if parent_location[0] < 0.99:
+                    logger.warning("Nerve: attaching branch " + branch_name +
+                                   " at end of first element of parent branch " + branch_parent_name +
+                                   " instead of calculated proportion " + str(parent_location[0]))
+                parent_location = (0, 1.0)
             cxd2 = 2.0 * (parent_xi[1] - 0.5)
             cxd3 = 2.0 * (parent_xi[2] - 0.5)
 
@@ -708,13 +748,6 @@ class MeshType_3d_nerve1(Scaffold_base):
             basis_to = [bd1, bd2, bd3]
             coefs = matrix_mult(basis_to, matrix_inv(basis_from))
 
-            # branch annotation groups
-            branch_box_group = AnnotationGroup(region, (branch_name, annotation_term_map[branch_name]))
-            annotation_groups.append(branch_box_group)
-            branch_box_mesh_group = branch_box_group.getMeshGroup(mesh3d)
-            branch_box_face_mesh_group = branch_box_group.getMeshGroup(mesh2d)
-            branch_box_line_mesh_group = branch_box_group.getMeshGroup(mesh1d)
-
             # get side derivatives, minimising rotation from trunk
             # dir2 = normalize(bd2)
             dir3 = normalize(bd3)
@@ -741,7 +774,12 @@ class MeshType_3d_nerve1(Scaffold_base):
 
                 if e == 0:
                     # branch root 3D element
-                    nids = [tnid[pn1], tnid[pn2], node_identifier]
+                    if parent_location[0] == 0:
+                        # special case of branch off first parent element
+                        # doesn't use the first local node as parent_location[1] == 1.0
+                        nids = [tnid[pn2], tnid[pn2], node_identifier]
+                    else:
+                        nids = [tnid[pn1], tnid[pn2], node_identifier]
                     scalefactors = [-1] + fns + dfns + [cxd2, cxd3] + coefs[0] + coefs[1] + coefs[2]
                     element = mesh3d.createElement(element_identifier, elementtemplate_branch_root)
                     element.setNodesByIdentifier(eft3dBR, nids)
@@ -773,7 +811,12 @@ class MeshType_3d_nerve1(Scaffold_base):
                     if e == 0:
                         # branch root 2D face
                         facetemplate_branch_root, eft2dBR = facetemplate_and_eft_list_branch_root[f]
-                        nids = [tnid[pn1], tnid[pn2], node_identifier]
+                        if parent_location[0] == 0:
+                            # special case of branch off first parent element
+                            # doesn't use the first local node as parent_location[1] == 1.0
+                            nids = [tnid[pn2], tnid[pn2], node_identifier]
+                        else:
+                            nids = [tnid[pn1], tnid[pn2], node_identifier]
                         scalefactors = scalefactors2d + fns + dfns + [cxd2, cxd3] + coefs[0] + coefs[1] + coefs[2]
                         face = mesh3d.createElement(face_identifier, facetemplate_branch_root)
                         face.setNodesByIdentifier(eft2dBR, nids)
@@ -795,7 +838,14 @@ class MeshType_3d_nerve1(Scaffold_base):
             child_branches = [branch for branch in branch_parent_map.keys() if branch_parent_map[branch] == branch_name]
             if child_branches:
                 queue = child_branches + queue
-                parent_parameters[branch_name] = (cx, cd1, cd2, cd12, cd3, cd13, cnid)
+                existing_parent_parameters = parent_parameters.get(branch_name)
+                if existing_parent_parameters:
+                    for dst, src in zip(existing_parent_parameters, (cx, cd1, cd2, cd12, cd3, cd13, cnid)):
+                        dst += src
+                    parent_elements_counts[branch_name].append(len(cx) - 1)
+                else:
+                    parent_parameters[branch_name] = existing_parent_parameters = (cx, cd1, cd2, cd12, cd3, cd13, cnid)
+                    parent_elements_counts[branch_name] = [len(cx) - 1]
 
         # =================================================
         # Add material coordinates and straight coordinates
@@ -987,17 +1037,21 @@ class MeshType_3d_nerve1(Scaffold_base):
         for branch_common_name, branch_names in branch_common_groups.items():
             term = get_vagus_term(branch_common_name)
             branch_common_group = findOrCreateAnnotationGroupForTerm(annotation_groups, region, term)
-            branch_common_mesh_group = branch_common_group.getMeshGroup(mesh3d)
 
             for branch_name in branch_names:
                 branch_group = findAnnotationGroupByName(annotation_groups, branch_name)
-                branch_mesh_group = branch_group.getMeshGroup(mesh3d)
-
-                el_iter = branch_mesh_group.createElementiterator()
-                element = el_iter.next()
-                while element.isValid():
-                    branch_common_mesh_group.addElement(element)
+                if not branch_group:
+                    logger.warning("Nerve: Could not find annotation for branch " + branch_name +
+                                   ". Can't add to common branch group")
+                    continue
+                for meshnd in [mesh1d, mesh2d, mesh3d]:
+                    branch_common_mesh_group = branch_common_group.getMeshGroup(meshnd)
+                    branch_mesh_group = branch_group.getMeshGroup(meshnd)
+                    el_iter = branch_mesh_group.createElementiterator()
                     element = el_iter.next()
+                    while element.isValid():
+                        branch_common_mesh_group.addElement(element)
+                        element = el_iter.next()
 
         # ============================================
         # Add trunk section groups: cervical, thoracic
@@ -1096,7 +1150,14 @@ def generate_trunk_1d(vagus_data, trunk_proportion, trunk_elements_count_prefit,
     is_left = vagus_data.get_side_label() == 'left'
     raw_marker_data = vagus_data.get_level_markers()
     px = [e[0] for e in trunk_data_coordinates]
-    bx, bd1 = get_curve_from_points(px, number_of_elements=trunk_elements_count_prefit)
+    segment_trunk_info_list = vagus_data.get_segment_trunk_info_list()
+    if segment_trunk_info_list:
+        ax = []
+        for segment_trunk_info in segment_trunk_info_list:
+            ax += segment_trunk_info['ordered_points']
+    else:
+        ax = px
+    bx, bd1 = get_curve_from_points(ax, number_of_elements=trunk_elements_count_prefit)
     length = getCubicHermiteCurvesLength(bx, bd1)
     # outlier_length = 0.025 * length
     # # needs to be bigger if fewer elements:
@@ -1221,13 +1282,45 @@ def generate_trunk_1d(vagus_data, trunk_proportion, trunk_elements_count_prefit,
 
         zero_fibres = find_or_create_field_zero_fibres(fieldmodule)
 
+        # create group for applying higher stiffness for multi-path segments
+        # elements are in this group if either end nodes are in the range of a multi-path segment
+        multi_path_group = fieldmodule.createFieldGroup()
+        multi_path_group.setName('multi-path')
+        multi_path_group.setManaged(True)  # if not managed, group settings are ignored
+        multi_path_group_name = multi_path_group.getName()  # in case name was in use
+        multi_path_mesh_group = multi_path_group.createMeshGroup(mesh1d)
+        data_multi_path_ranges = []
+        for segment_trunk_info in segment_trunk_info_list:
+            if not segment_trunk_info.get('ordered_coordinates'):
+                data_multi_path_ranges.append(segment_trunk_info['range'])
+                # print('segment', segment_trunk_info['name'], 'is multi-path')
+
+        node_in_data_multi_path_range = []
+        for x in ex:
+            in_data_multi_path_range = False
+            for data_multi_path_range in data_multi_path_ranges:
+                for c in range(3):
+                    if (x[c] < data_multi_path_range[0][c]) or (x[c] > data_multi_path_range[1][c]):
+                        break
+                else:
+                    in_data_multi_path_range = True
+                    break
+            node_in_data_multi_path_range.append(in_data_multi_path_range)
+        element_in_data_multi_path_range = []
+        for element_identifier in range(1, trunk_elements_count + 1):
+            if (node_in_data_multi_path_range[element_identifier - 1] or
+                    node_in_data_multi_path_range[element_identifier]):
+                multi_path_mesh_group.addElement(mesh1d.findElementByIdentifier(element_identifier))
+                # print("Element", element_identifier,"is in multi-path range")
+
     # note that fitting is very slow if done within ChangeManager as find mesh location is slow
     # this includes working with the user-supplied region which is called with ChangeManager on.
     fitter = GeometryFitter(region=fit_region)
     length = getCubicHermiteCurvesLength(ex, ed1)
-    outlier_length = 0.025 * length
-    fitter.getInitialFitterStepConfig().setGroupOutlierLength(None, outlierLength=outlier_length)
-    # fitter.setDiagnosticLevel(1)
+    outlier_length = 0.05 * length
+    config_step = fitter.getInitialFitterStepConfig()
+    config_step.setGroupOutlierLength(None, outlierLength=outlier_length)
+    fitter.setDiagnosticLevel(1)
     fitter.setModelCoordinatesField(coordinates)
     fitter.setFibreField(zero_fibres)
     del zero_fibres
@@ -1241,41 +1334,78 @@ def generate_trunk_1d(vagus_data, trunk_proportion, trunk_elements_count_prefit,
     points_count_calibration_factor = len(px) / 25000
     # calibration_length = 27840.0
     length_calibration_factor = length / 25000.0
-    strain_penalty = 1000.0 * points_count_calibration_factor * length_calibration_factor
-    curvature_penalty = 1.0E+8 * points_count_calibration_factor * (length_calibration_factor ** 3)
-    marker_weight = 10.0 * points_count_calibration_factor
-    sliding_factor = 0.0001
+    strain_penalty = 1.0E+4 * points_count_calibration_factor * length_calibration_factor
+    curvature_penalty = 1.0E+9 * points_count_calibration_factor * (length_calibration_factor ** 3)
+    marker_weight = 20.0 * points_count_calibration_factor
+    sliding_factor = 0.01
 
-    if trunk_fit_iterations > 0:
-        fit1 = FitterStepFit()
-        fitter.addFitterStep(fit1)
-        fit1.setGroupDataWeight("marker", marker_weight)
-        fit1.setGroupStrainPenalty(None, [strain_penalty])
-        fit1.setGroupCurvaturePenalty(None, [curvature_penalty])
-        fit1.setGroupDataSlidingFactor(None, sliding_factor)
-        fit1.run()
-        del fit1
+    for step in range(0, min(2, trunk_fit_iterations)):
+        fit_step = FitterStepFit()
+        fitter.addFitterStep(fit_step)
+        if step == 0:
+            fit_step.setGroupDataWeight("marker", marker_weight)
+            fit_step.setUpdateReferenceState(True)
+        weight = 1.0 if (step == 0) else 0.1
+        fit_step.setGroupStrainPenalty(None, [weight * strain_penalty])
+        fit_step.setGroupCurvaturePenalty(None, [weight * curvature_penalty])
+        fit_step.setGroupDataSlidingFactor(None, weight * sliding_factor)
 
-    if trunk_fit_iterations > 1:
-        fit2 = FitterStepFit()
-        fitter.addFitterStep(fit2)
-        fit2.setGroupStrainPenalty(None, [0.1 * strain_penalty])
-        fit2.setGroupCurvaturePenalty(None, [0.1 * curvature_penalty])
-        fit2.setGroupDataSlidingFactor(None, 0.1 * sliding_factor)
-        fit2.setNumberOfIterations(trunk_fit_iterations - 1)
-        fit2.run()
-        del fit2
+        fit_step.setGroupStrainPenalty(multi_path_group_name, [5.0 * weight * strain_penalty])
+        fit_step.setGroupCurvaturePenalty(multi_path_group_name, [50.0 * weight * curvature_penalty])
+
+        if step > 0:
+            fit_step.setNumberOfIterations(trunk_fit_iterations - 1)
+        fit_step.run()
+        del fit_step
 
     datapoints = fieldmodule.findNodesetByFieldDomainType(Field.DOMAIN_TYPE_DATAPOINTS)
     rms_error, max_error = fitter.getDataRMSAndMaximumProjectionError(trunk_group.getNodesetGroup(datapoints))
     nerve_metadata.set_name_rms_max_error("trunk centroid fit error", rms_error, max_error)
+
+    with ChangeManager(fieldmodule):
+        # make a real field which increases down the trunk proportional to vagus coordinates
+        trunk_distance = (fieldmodule.findFieldByName("cmiss_number") +
+                          fieldmodule.createFieldComponent(fieldmodule.findFieldByName("xi"), 1))
+        host_trunk_distance = fieldmodule.createFieldEmbedded(trunk_distance, fitter.getDataHostLocationField())
+        minimums, maximums = evaluate_field_nodeset_range(host_trunk_distance, trunk_group.getNodesetGroup(datapoints))
+        min_projection_node_number = math.ceil(minimums)
+        max_projection_node_number = math.floor(maximums)
+        del host_trunk_distance
 
     fitter.cleanup()
     del fitter
 
     # fit radius
     if pr:
-        gradient1_penalty = 1000.0 * points_count_calibration_factor * length_calibration_factor
+        # add default radius points at trunk nodes outside range of radius data projections
+        tx = []
+        fieldcache = fieldmodule.createFieldcache()
+        nodes = fieldmodule.findNodesetByFieldDomainType(Field.DOMAIN_TYPE_NODES)
+        nodeiterator = nodes.createNodeiterator()
+        node = nodeiterator.next()
+        for n in range(trunk_elements_count + 1):
+            nodeIdentifier = node.getIdentifier()
+            if (nodeIdentifier < min_projection_node_number) or (nodeIdentifier > max_projection_node_number):
+                fieldcache.setNode(node)
+                result, x = coordinates.getNodeParameters(fieldcache, -1, Node.VALUE_LABEL_VALUE, 1, components_count)
+                tx.append(x)
+            node = nodeiterator.next()
+        if tx:
+            field_names_and_values = [("radius", [default_trunk_diameter * 0.5] * len(tx))]
+            data_identifier = generate_datapoints(
+                fit_region, tx, data_identifier, field_names_and_values=field_names_and_values, group_name=trunk_group_name)
+
+        # add projection distance to radius
+        trunk_location = fieldmodule.createFieldFindMeshLocation(coordinates, coordinates, mesh1d)
+        trunk_location.setSearchMode(trunk_location.SEARCH_MODE_NEAREST)
+        projected_coordinates = fieldmodule.createFieldEmbedded(coordinates, trunk_location)
+        projection_distance = fieldmodule.createFieldMagnitude(projected_coordinates - coordinates)
+        new_radius = radius + projection_distance
+        trunk_datapoints = trunk_group.getNodesetGroup(datapoints)
+        fieldassignment = radius.createFieldassignment(new_radius)
+        fieldassignment.setNodeset(trunk_datapoints)
+        fieldassignment.assign()
+        gradient1_penalty = 10000.0 * points_count_calibration_factor * length_calibration_factor
         gradient2_penalty = 1.0E+8 * points_count_calibration_factor * (length_calibration_factor ** 3)
         rms_error, max_error = define_and_fit_field(
             fit_region, "coordinates", "coordinates", "radius",
@@ -1316,7 +1446,6 @@ def generate_trunk_1d(vagus_data, trunk_proportion, trunk_elements_count_prefit,
     datapoints = fieldmodule.findNodesetByFieldDomainType(Field.DOMAIN_TYPE_DATAPOINTS)
     datapoints.destroyAllNodes()
 
-    segments_trunk_coordinates = vagus_data.get_segments_trunk_coordinates()
     segments_metadata = {}
     with ChangeManager(fieldmodule):
         # make a real field which increases down the trunk proportional to vagus coordinates
@@ -1329,7 +1458,9 @@ def generate_trunk_1d(vagus_data, trunk_proportion, trunk_elements_count_prefit,
         datapoints_max_trunk_distance = fieldmodule.createFieldNodesetMaximum(host_trunk_distance, datapoints)
     fieldcache.clearLocation()
     distance_to_material = trunk_proportion / trunk_elements_count
-    for segment_name, sx in segments_trunk_coordinates.items():
+    for segment_trunk_info in segment_trunk_info_list:
+        segment_name = segment_trunk_info['name']
+        sx = segment_trunk_info['unordered_coordinates']
         generate_datapoints(fit_region, sx, start_data_identifier=1)
         min_result, segment_min_trunk_distance = datapoints_min_trunk_distance.evaluateReal(fieldcache, 1)
         max_result, segment_max_trunk_distance = datapoints_max_trunk_distance.evaluateReal(fieldcache, 1)
