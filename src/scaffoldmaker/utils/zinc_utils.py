@@ -5,7 +5,8 @@ from cmlibs.maths.vectorops import add, cross, div, magnitude, mult, normalize, 
 from cmlibs.utils.zinc.field import (
     find_or_create_field_coordinates, find_or_create_field_finite_element, find_or_create_field_group,
     find_or_create_field_stored_mesh_location, find_or_create_field_stored_string)
-from cmlibs.utils.zinc.finiteelement import get_maximum_element_identifier, get_maximum_node_identifier
+from cmlibs.utils.zinc.finiteelement import (
+    get_element_node_identifiers, get_maximum_element_identifier, get_maximum_node_identifier)
 from cmlibs.utils.zinc.general import ChangeManager, HierarchicalChangeManager
 from cmlibs.zinc.context import Context
 from cmlibs.zinc.element import Element, Elementbasis, MeshGroup
@@ -19,7 +20,11 @@ from scaffoldfitter.fitterstepconfig import FitterStepConfig
 from scaffoldfitter.fitterstepfit import FitterStepFit
 from scaffoldmaker.utils import interpolation as interp
 import copy
+import logging
 import math
+
+
+logger = logging.getLogger(__name__)
 
 
 def interpolateNodesCubicHermite(cache, coordinates, xi, normal_scale,
@@ -153,6 +158,32 @@ def get_mesh_first_element_with_node(mesh, field, node):
                     return element
         element = elementiterator.next()
     return None
+
+
+def get_mesh_node_identifier_sequences(mesh1d, field):
+    """
+    Get sequences of connected nodes in 1D mesh which field is directly defined on.
+    Implementation expects mesh to consist of only polylines i.e. not a network and for elements to be
+    consecutive and in the same orientation along each sequence.
+    :param mesh1d: 1-D mesh or mesh group which field is defined on in every element.
+    :param field: The field to get connectivity for. Must be finite element type.
+    :return: List of lists of node identifiers in each sequence.
+    """
+    node_ids_list = []
+    elementiterator = mesh1d.createElementiterator()
+    element = elementiterator.next()
+    while element.isValid():
+        eft = element.getElementfieldtemplate(field, -1)
+        if not eft.isValid():
+            logger.error("mesh_get_connected_node_identifier_sequences. Field not defined on element")
+            return []
+        node_ids = get_element_node_identifiers(element, eft)
+        if node_ids_list and (node_ids_list[-1][-1] == node_ids[0]):
+            node_ids_list[-1] += node_ids[1:]
+        else:
+            node_ids_list.append(node_ids)
+        element = elementiterator.next()
+    return node_ids_list
 
 
 def get_nodeset_field_parameters(nodeset, field, only_value_labels=None):
@@ -966,18 +997,17 @@ def fit_hermite_curve(bx, bd1, px, outlier_length=0.0, region=None, group_name=N
     fitter.defineCommonMeshFields()
     fitter.setDataCoordinatesField(coordinates)
     fitter.defineDataProjectionFields()
-    # aim for no more than 25 points per element:
-    points_per_element = 25
-    data_proportion = min(1.0, points_per_element * elements_count / points_count)
-    if data_proportion < 1.0:
-        fitter.getInitialFitterStepConfig().setGroupDataProportion(None, data_proportion)
     fitter.initializeFit()
 
+    # calibrated for 25 points / element
+    data_weight = (25.0 * elements_count) / points_count
+    strain_penalty = 1.0E-6 * curve_length
     # calibrated by scaling the model: a power of 3 relationship
-    curvature_penalty = ((points_count * data_proportion) / (points_per_element * elements_count) *
-                         1.0E-6 * (curve_length ** 3))
+    curvature_penalty = 1.0E-6 * (curve_length ** 3)
     fit1 = FitterStepFit()
     fitter.addFitterStep(fit1)
+    fit1.setGroupDataWeight(None, data_weight)
+    fit1.setGroupStrainPenalty(None, [strain_penalty])
     fit1.setGroupCurvaturePenalty(None, [curvature_penalty])
     fit1.run()
     del fit1

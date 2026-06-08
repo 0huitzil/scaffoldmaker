@@ -51,7 +51,7 @@ class ShieldMesh2D:
     def __init__(self, elementsCountAcross, elementsCountUpFull, elementsCountRim, trackSurface: TrackSurface=None,
                  elementsCountAlong=1, shieldMode=ShieldShape2D.SHIELD_SHAPE_LOWER_HALF,
                  shieldType=ShieldRimDerivativeMode.SHIELD_RIM_DERIVATIVE_MODE_REGULAR):
-        """
+        r"""
         Data structure for defining a shield-shaped mesh which is flat on the top and rounded around the bottom
         and/or the same mirror mirrored on top.
         It is represented as a regular box of elementsCountAcross x elementsCountUp

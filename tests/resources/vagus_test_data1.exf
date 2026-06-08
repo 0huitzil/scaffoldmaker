@@ -1686,6 +1686,16 @@ Node: 335
  -5.161084783385378e+03
  -1.361564654132272e+02
   0.000000000000000e+00
+Node: 336
+  8.773479487054547e+03
+ -1.285509252460388e+03
+ -2.958677308834912e+02
+  2.574722374853684e+02
+Node: 337
+  2.900467806037634e+04
+ -4.161084783385378e+03
+ -1.361564654132272e+02
+  0.000000000000000e+00
 !#mesh mesh1d, dimension=1, nodeset=nodes
 Define element template: element1
 Shape. Dimension=1, line
@@ -2649,6 +2659,9 @@ Element: 309
 Element: 310
  Nodes:
  314 315
+Element: 311
+ Nodes:
+ 60 336
 !#nodeset datapoints
 Define node template: node2
 Shape. Dimension=0
@@ -2697,17 +2710,17 @@ Element group:
 Group name: left superior laryngeal nerve
 !#nodeset nodes
 Node group:
-46,202..242
+46,60,202..242,336
 !#mesh mesh1d, dimension=1, nodeset=nodes
 Element group:
-201..240
+201..240,311
 Group name: http://uri.interlex.org/base/ilx_0788780
 !#nodeset nodes
 Node group:
-46,202..242
+46,60,202..242,336
 !#mesh mesh1d, dimension=1, nodeset=nodes
 Element group:
-201..240
+201..240,311
 Group name: left A thoracic cardiopulmonary branch of vagus nerve
 !#nodeset nodes
 Node group:
@@ -2757,7 +2770,11 @@ Node group:
 Group name: orientation anterior
 !#nodeset nodes
 Node group:
-316,318..320,322,324,326,328,330,332,334..335
+316,318..320,322,324,326,328,330,332,334..335,337
+Group name: orientation ignore
+!#nodeset nodes
+Node group:
+337
 Group name: orientation left
 !#nodeset nodes
 Node group:
