@@ -1052,43 +1052,79 @@ def generate_external_node_matrix(fieldmodule, number_elements, node_identifier,
     return virtual_node_matrix, node_identifier
 
 
-def create_cube_element(fieldmodule, element_identifier, node_matrix, x, y, z):
+def create_cube_element(fieldmodule, element_identifier, node_matrix, ix, iy, iz):
     """
-    Docstring for create_cube_element
-    First part of this function finds the orientation of the cube element
-                   z     x
-                   |    /
-                   |   /
-                   |  /
-                   | /
-        y ---------+
-    which is represented by by corresponding transformation
-    1) (x, y, z) (standard, unchanged)
+    A cube element is made of 8 corners, shown here in the 'canonical' orientation
+      8----6
+     /|   /|
+    7----5 |
+    | 4 -|-2
+    |/   |/
+    3----1
+    with an axis orientation given by
+        z  x
+        | /
+     y--+
+    First part of this function finds the orientation of the cube element.
+    There are six possible orientations, one for each face of the cube.
+    All six possible orientations can be mapped back into the canonical orientation
+    by the following transformation
+    1) (x, y, z) (unchanged)
     2) (x, z, -y)
     3) (x, -y, -z)
     4) (x, -x, y)
     5) (-z, x, -y)
     6) (z, x, -y)
+    Every possible orientation has a different ordering of the corners.
+    for example, in orientation 2), the corners are ordered in the following way
+      6----2
+     /|   /|
+    5----1 |
+    | 8 -|-4
+    |/   |/
+    7----3
+    which gives us an axis
+           x
+          /
+    z<---+
+         |
+         y
+    The first part of the function finds the correct orientation of the cube,
+    so that the bicubic face of the element (if it exists) is always made up of
+    corners 5, 6, 7 and 8. This is less important in the case of trilinear elements.
     Immediately after, the eight corner of the cube are reorganized according to this
     transformation and the value scale factors are collected from each virtual node.
-    If are of the virtual nodes are external, the scale factors for d1, d2 are either
-    collected from the virtual node or calculated (for the linear direction)
+    A virtual node always has the structure
+    [parent_node_id, value_scale_factor, d1_scale_factor, d2_scale_factor, d3_scale_factor].
+    These are mapped into a list of expression terms and a dictionary which
+    keeps track of the mapping between the real value and the element id of the scale factor.
+    If at least 1 node is tagged as external, the function also collects expression terms 
+    for the d1 and d2 directions of the corner.
+    The d1 and d2 direction of the 4 linear nodes (1, 2, 3, 4)
+    are given by the following expressions,
+    where v1, d11 and d21 are the position, d1 and d2 directions of node 1
+    d11 = v2 - v1,     d12 = v3 - v1
+    d21 = v2 - v1,     d22 = v4 - v2
+    d31 = v4 - v3,     d32 = v3 - v1
+    d41 = v4 - v3,     d42 = v4 - v2
+
     :param fieldmodule: Description
     :param element_identifier: Description
     :param node_matrix: Description
-    :param x: Description
-    :param y: Description
-    :param z: Description
-    :return: Description
-    :rtype: Any
+    :param ix: Description
+    :param iy: Description
+    :param iz: Description
+    :return: List containing a result code and a handle to the element
+        (None if the element construction failed)
+    :rtype: list
     """
     # Zinc setup
     mesh3d = fieldmodule.findMeshByDimension(3)
     coordinates = find_or_create_field_coordinates(fieldmodule)
     # Criteria to identify the z-axis of the element
-    node_1 = node_matrix[x][y][z]
-    node_2 = node_matrix[x + 1][y][z]
-    node_3 = node_matrix[x][y + 1][z]
+    node_1 = node_matrix[ix][iy][iz]
+    node_2 = node_matrix[ix + 1][iy][iz]
+    node_3 = node_matrix[ix][iy + 1][iz]
     if node_1 is None or node_2 is None or node_3 is None:
         return -2, None
     n1_ext = True if node_1["Type"] == "external" else False
@@ -1096,22 +1132,22 @@ def create_cube_element(fieldmodule, element_identifier, node_matrix, x, y, z):
     n3_ext = True if node_3["Type"] == "external" else False
     # 6 possible cases, one for each face of a cube
     if not n1_ext and not n2_ext and not n3_ext:
-        ranges = [[0, 1], [0, 1], [0, 1]]
+        ranges = [[0, 1], [0, 1], [0, 1]] # 1
         order = [2, 1, 0]
     elif not n1_ext and not n2_ext and n3_ext:
-        ranges = [[0, 1], [0, 1], [1, 0]]
+        ranges = [[0, 1], [0, 1], [1, 0]] # 2
         order = [1, 2, 0]
     elif n1_ext and n2_ext and n3_ext:
-        ranges = [[0, 1], [1, 0], [1, 0]]
+        ranges = [[0, 1], [1, 0], [1, 0]] # 3
         order = [2, 1, 0]
     elif n1_ext and n2_ext and not n3_ext:
-        ranges = [[0, 1], [1, 0], [0, 1]]
+        ranges = [[0, 1], [1, 0], [0, 1]] # 4
         order = [1, 2, 0]
     elif n1_ext and not n2_ext and n3_ext:
-        ranges = [[1, 0], [0, 1], [1, 0]]
+        ranges = [[1, 0], [0, 1], [1, 0]] # 5
         order = [0, 2, 1]
     else:
-        ranges = [[0, 1], [0, 1], [1, 0]]
+        ranges = [[0, 1], [0, 1], [1, 0]] # 6
         order = [0, 2, 1]
     # Obtained the ordered list of indices to parse through
     reordered_ranges = [ranges[idx] for idx in order]
@@ -1132,7 +1168,6 @@ def create_cube_element(fieldmodule, element_identifier, node_matrix, x, y, z):
     d1_expression_terms = {}
     d2_expression_terms = {}
     negative_value_ets = {}
-    readable_expression_terms = {}
     readable_negative_ets = {}
     n_local_nodes = 0
     n_scale_factors = 0
@@ -1146,7 +1181,7 @@ def create_cube_element(fieldmodule, element_identifier, node_matrix, x, y, z):
         ret = []
         i, j, k = index
         local_node += 1
-        virtual_node = node_matrix[x + i][y + j][z + k]
+        virtual_node = node_matrix[ix + i][iy + j][iz + k]
         if virtual_node is None:
             return -2, None
         if virtual_node["Type"] == "external":
@@ -1201,7 +1236,7 @@ def create_cube_element(fieldmodule, element_identifier, node_matrix, x, y, z):
             et = []
             ret = []
             i, j, k = indices[local_node - 1]
-            virtual_node = node_matrix[x + i][y + j][z + k]
+            virtual_node = node_matrix[ix + i][iy + j][iz + k]
             virtual_node = virtual_node[label]
             for global_node in virtual_node:
                 for factor in range(len(global_node)):
@@ -1240,7 +1275,7 @@ def create_cube_element(fieldmodule, element_identifier, node_matrix, x, y, z):
             et = []
             ret = []
             i, j, k = indices[local_node - 1]
-            virtual_node = node_matrix[x + i][y + j][z + k]
+            virtual_node = node_matrix[ix + i][iy + j][iz + k]
             virtual_node = virtual_node[label]
             for global_node in virtual_node:
                 for factor in range(len(global_node)):
