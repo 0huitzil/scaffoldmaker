@@ -84,18 +84,18 @@ class MeshType_3d_hand1(Scaffold_base):
         coordinates = find_or_create_field_coordinates(fieldmodule)
         nodes = fieldmodule.findNodesetByFieldDomainType(Field.DOMAIN_TYPE_NODES)
         fieldcache = fieldmodule.createFieldcache()
-        nodetemplate = get_simple_nodetemplate(fieldmodule)
+        nodetemplate = get_simple_nodetemplate(fieldmodule, d3=True)
         #################
         # Create nodes
         #################
         node_identifier = 1
         # Fingers 1 - 4 (finger 5, thumb, is added below)
         finger_dimensions = [  # d1, d2, d3, d12
-            [1.0, 0.4, 0.3, 0.4],  # carpal
-            [2.5, 0.4, 0.3, 0.2],  # metacarpal
-            [1.5, 0.3, 0.3, 0.2],  # proximal phalanx
-            [1.5, 0.2, 0.3, 0.2],  # middle phalanx
-            [1.0, 0.2, 0.25, 0.2],  # distal phalanx
+            [1.0, 0.4, 0.2, 0.4],  # carpal
+            [2.5, 0.4, 0.2, 0.2],  # metacarpal
+            [1.5, 0.3, 0.2, 0.2],  # proximal phalanx
+            [1.5, 0.2, 0.2, 0.2],  # middle phalanx
+            [1.0, 0.2, 0.2, 0.2],  # distal phalanx
         ]
         carpal_spacing = finger_dimensions[0][1] * 2.0
         index_carpal_node_id = None
@@ -112,18 +112,18 @@ class MeshType_3d_hand1(Scaffold_base):
                 d1 = mult(x1, bone_dimensions[0])
                 d2 = mult(x2, bone_dimensions[1])
                 d3 = mult(x3, bone_dimensions[2])
-                d12 = mult(x2, bone_dimensions[3])
+                # d12 = mult(x2, bone_dimensions[3])
                 if i == 2:
                     x = add(x, mult(d2, -1.0 + (2.0 / 3.0) * j))
-                setNodeFieldParameters(coordinates, fieldcache, x, d1, d2, d3, d12)
+                setNodeFieldParameters(coordinates, fieldcache, x, d1, d2, d3)
                 x = add(x, d1)
                 if (j == 3) and (i == 1):
                     index_carpal_node_id = node_identifier
                 node_identifier += 1
         thumb_dimensions = [  # d1, d2, d3, d12
-            [1.0, 0.3, 0.3, 0.2],  # metacarpal
-            [1.0, 0.3, 0.25, 0.2],  # proximal phalanx
-            [1.0, 0.3, 0.25, 0.2],  # distal phalanx
+            [1.0, 0.25, 0.2, 0.2],  # metacarpal
+            [1.0, 0.25, 0.2, 0.2],  # proximal phalanx
+            [1.0, 0.2, 0.2, 0.2],  # distal phalanx
         ]
         node_identifier = create_thumb_nodes(
             fieldmodule, node_identifier, thumb_dimensions, index_carpal_node_id, thumb_angle_degrees
@@ -454,7 +454,7 @@ def generate_external_node_matrix(fieldmodule, number_elements, node_identifier,
     finger_names = ["little finger", "ring finger", "middle finger", "index finger", "thumb"]
     center = add(x, d2)  # Ellipse center
     a = 5.5 * magnitude(d2)
-    b = 2.5 * magnitude(d3)
+    b = 3.5 * magnitude(d3)
     major_axis = mult([0, -1, 0], a)
     minor_axis = mult([0, 0, 1], b)
     ellipse = sampleEllipsePoints(center, major_axis, minor_axis, math.pi / 2, 2 * math.pi + math.pi / 2, 10)
@@ -654,7 +654,7 @@ def generate_external_node_matrix(fieldmodule, number_elements, node_identifier,
     n = pp
     jj = 0
     a = 2
-    b = 2
+    b = 2.75
     z_val = [1, 2]
     for f in range(4):
         # MP
@@ -740,7 +740,7 @@ def generate_external_node_matrix(fieldmodule, number_elements, node_identifier,
                         Node.VALUE_LABEL_D_DS1: [[node_identifier, 0, 1, 0, 0]],
                         Node.VALUE_LABEL_D_DS2: [[node_identifier, 0, 0, 1, 0]],
                         "Type": "external",
-                        "Annotation": [finger_name],
+                        "Annotation": ['distal phalanx', finger_name],
                     }
                     virtual_node_matrix[i][j + a2][k] = node
                     virtual_node_matrix[i][j][k + a3] = node
@@ -1373,7 +1373,12 @@ def add_node(fieldmodule: Fieldmodule, bone_node_id: int, node_identifier: int, 
     bone_node = nodes.findNodeByIdentifier(bone_node_id)
     fieldcache.setNode(bone_node)
     a0, a1, a2, a3 = scale_factors
-    value_labels = [Node.VALUE_LABEL_VALUE, Node.VALUE_LABEL_D_DS1, Node.VALUE_LABEL_D_DS2, Node.VALUE_LABEL_D_DS3]
+    value_labels = [
+        Node.VALUE_LABEL_VALUE,
+        Node.VALUE_LABEL_D_DS1,
+        Node.VALUE_LABEL_D_DS2,
+        Node.VALUE_LABEL_D_DS3
+        ]
     node_params = []
     for label in value_labels:
         node_params.append(coordinates.getNodeParameters(fieldcache, -1, label, 1, 3)[1])
@@ -1442,7 +1447,7 @@ def create_thumb_nodes(fieldmodule, node_identifier, finger_dimensions, metacarp
     # Zinc setip
     coordinates = find_or_create_field_coordinates(fieldmodule)
     nodes = fieldmodule.findNodesetByFieldDomainType(Field.DOMAIN_TYPE_NODES)
-    nodetemplate = get_simple_nodetemplate(fieldmodule)
+    nodetemplate = get_simple_nodetemplate(fieldmodule, d3=True)
     fieldcache = fieldmodule.createFieldcache()
     # Set basic directions
     x1 = [1, 0, 0]
@@ -1581,17 +1586,16 @@ def create_finger_nodes(fieldmodule, node_identifier, finger_dimensions, carpal_
     return node_identifier
 
 
-def get_simple_nodetemplate(fieldmodule):
+def get_simple_nodetemplate(fieldmodule, d3 = None):
     """ """
     coordinates = find_or_create_field_coordinates(fieldmodule)
     value_labels = [
         Node.VALUE_LABEL_VALUE,
         Node.VALUE_LABEL_D_DS1,
-        Node.VALUE_LABEL_D_DS2,
-        Node.VALUE_LABEL_D2_DS1DS2,
-        Node.VALUE_LABEL_D_DS3,
-        Node.VALUE_LABEL_D2_DS1DS3,
+        Node.VALUE_LABEL_D_DS2
     ]
+    if d3 is not None:
+        value_labels.append(Node.VALUE_LABEL_D_DS3)
     nodes = fieldmodule.findNodesetByFieldDomainType(Field.DOMAIN_TYPE_NODES)
     nodetemplate = nodes.createNodetemplate()
     nodetemplate.defineField(coordinates)
