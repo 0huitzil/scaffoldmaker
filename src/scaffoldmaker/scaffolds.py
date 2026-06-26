@@ -25,6 +25,7 @@ from scaffoldmaker.meshtypes.meshtype_3d_colonsegment1 import MeshType_3d_colons
 from scaffoldmaker.meshtypes.meshtype_3d_ellipsoid1 import MeshType_3d_ellipsoid1
 from scaffoldmaker.meshtypes.meshtype_3d_esophagus1 import MeshType_3d_esophagus1
 from scaffoldmaker.meshtypes.meshtype_3d_gastrointestinaltract1 import MeshType_3d_gastrointestinaltract1
+from scaffoldmaker.meshtypes.meshtype_3d_hand import MeshType_3d_hand1
 from scaffoldmaker.meshtypes.meshtype_3d_heart1 import MeshType_3d_heart1
 from scaffoldmaker.meshtypes.meshtype_3d_heart2 import MeshType_3d_heart2
 from scaffoldmaker.meshtypes.meshtype_3d_heartarterialroot1 import MeshType_3d_heartarterialroot1
@@ -80,6 +81,7 @@ class Scaffolds(object):
         MeshType_2d_sphere1,
         MeshType_2d_tube1,
         MeshType_2d_tubenetwork1,
+        MeshType_3d_hand1,
         MeshType_3d_bladder1,
         MeshType_3d_bladderurethra1,
         MeshType_3d_bone1,
