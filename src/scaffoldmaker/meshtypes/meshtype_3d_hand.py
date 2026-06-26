@@ -1,7 +1,7 @@
 import math
 from itertools import product
 
-from cmlibs.maths.vectorops import add, mult, rotate_vector_around_vector
+from cmlibs.maths.vectorops import add, mult, rotate_vector_around_vector, set_magnitude
 from cmlibs.utils.zinc.field import find_or_create_field_coordinates
 from cmlibs.zinc.element import Element, Elementbasis
 from cmlibs.zinc.field import Field
@@ -45,8 +45,8 @@ class MeshType_3d_hand1(Scaffold_base):
         options = {
             "Base parameter set": baseParameterSetName,
             "Thumb angle": 25.0,
-            'Create internal elements': False,
-            'Create external elements': False,
+            'Create internal elements': True,
+            'Create external elements': True,
         }
         return options
 
@@ -132,6 +132,9 @@ class MeshType_3d_hand1(Scaffold_base):
                 annotation_groups.append(finger_bone_group)
 
         element_identifier = 1
+        elements_along_per_finger = sum(hand_elements_along)
+        for i in range(4):
+            node_network.remove_node(1 + i * elements_along_per_finger)
         node_network.set_zinc_nodes()
         matrix = virtual_node_matrix.get_matrix()
         for k in range(iz - 1):
@@ -274,6 +277,10 @@ class Node_network():
     def get_node_identifier(self)-> int:
         return self.node_identifier
 
+    def remove_node(self, node_identifier):
+        nodes_dict = self.nodes_dict
+        nodes_dict.pop(node_identifier)
+
 class Virtual_node_matrix():
 
     def __init__(self, matrix_dimensions: list):
@@ -363,7 +370,10 @@ def generate_internal_nodes(node_network: Node_network, hand_elements_along: lis
             n_elements_along = hand_elements_along[i]
             bone_dimensions = finger_dimensions[i]
             d1 = mult(x1, bone_dimensions[0])
-            d1_spacing = mult(d1, 1 / n_elements_along)
+            if i == 4:
+                d1 = mult(d1, 1 / (n_elements_along - 1))
+            else:
+                d1 = mult(d1, 1 / n_elements_along)
             d2 = mult(x2, bone_dimensions[1])
             d3 = mult(x3, bone_dimensions[2])
             if i == 2:
@@ -371,9 +381,9 @@ def generate_internal_nodes(node_network: Node_network, hand_elements_along: lis
             if (j == 3) and (i == 1):
                 index_carpal_node_id = node_identifier
             for i_along in range(n_elements_along):
-                node_network.set_node_parameters([x, d1_spacing, d2, d3], node_identifier,
+                node_network.set_node_parameters([x, d1, d2, d3], node_identifier,
                                              internal_node=True)
-                x = add(x, d1_spacing)
+                x = add(x, d1)
                 node_identifier += 1
     thumb_dimensions = [  # d1, d2, d3, d12
             [1.0, 0.25, 0.2, 0.2],  # metacarpal
@@ -396,7 +406,10 @@ def generate_internal_nodes(node_network: Node_network, hand_elements_along: lis
         bone_dimensions = thumb_dimensions[i]
         n_elements_along = thumb_elements_along[i]
         d1 = mult(x1, bone_dimensions[0])
-        d1_spacing = mult(d1, 1 / n_elements_along)
+        if i == 2:
+            d1 = mult(d1, 1 / (n_elements_along - 1))
+        else:
+            d1 = mult(d1, 1 / n_elements_along)
         d2 = mult(x2, bone_dimensions[1])
         d3 = mult(x3, bone_dimensions[2])
         x = x
@@ -405,7 +418,7 @@ def generate_internal_nodes(node_network: Node_network, hand_elements_along: lis
         for i_along in range(n_elements_along):
             node_network.set_node_parameters(
                 [x, d1, d2, d3], node_identifier, internal_node=True)
-            x = add(x, d1_spacing)
+            x = add(x, d1)
             node_identifier += 1
     return node_network, node_identifier
 
@@ -494,6 +507,7 @@ def generate_internal_node_matrix(hand_elements_along, node_identifier,
                                 node, indices, False
                             )
                         elif bone == 2: # Proximal Phalanx
+                            a2 = a2 if j not in [1, 17] else a2 / 2
                             finger_name = finger_names[finger_index]
                             finger_part = bone_name + ' of ' + finger_name
                             annotation = [bone_name, finger_name, finger_part]
@@ -618,6 +632,7 @@ def generate_external_node_matrix(hand_elements_along,
     parent_node_id = 1
     index_y = 1
     d3 = None
+    d1_offset = 0.35
     k_val = [1, 2]
     # Palm and first four fingers
     for finger_index in range(4):
@@ -637,6 +652,8 @@ def generate_external_node_matrix(hand_elements_along,
                         a3 = -1 if k == 1 else 1
                         x = ellipse_x[a1]
                         d1 = node_network.get_node_parameters(parent_node_id)[1]
+                        # if bone > 0:
+                        d1 = add(d1, set_magnitude(d1, d1_offset/(c+mc+pp)))
                         d2 = ellipse_d2[a1]
                         indices = [[i, j, k + a3]]
                         if bone == 0:
@@ -707,6 +724,7 @@ def generate_external_node_matrix(hand_elements_along,
             i_val = [index_x + i for i in range(n_elements_along)]
             # Estimate ellipse
             center, d1, d2, d3 = node_network.get_node_parameters(parent_node_id)
+            center = add(center, set_magnitude(d1, d1_offset/n_elements_along))
             major_axis = mult(d2, -a_finger)
             minor_axis = mult(d3, b_finger)
             ellipse_x = []
@@ -837,14 +855,17 @@ def generate_external_node_matrix(hand_elements_along,
     index_y += 5
     index_x = c
     finger_index = 4
-    hand_elements_along[1] -= 1
+    # hand_elements_along[1] -= 1
     # Metacarpal, proximal and distal phalanx
     for bone in [1, 2, 4]:
         n_elements_along = hand_elements_along[bone]
+        if bone == 1:
+            n_elements_along -= 1
         j_val = [index_y, index_y + 1]
         i_val = [index_x + i for i in range(n_elements_along)]
         # Estimate ellipse
         center, d1, d2, d3 = node_network.get_node_parameters(parent_node_id)
+        center = add(center, set_magnitude(d1, d1_offset/n_elements_along))
         major_axis = mult(d2, -a_finger)
         minor_axis = mult(d3, b_finger)
         ellipse_x = []
