@@ -73,11 +73,11 @@ def remapEftLocalNodes(eft, new_node_count, local_node_indexes):
     Assumes node parameters are in use.
 
     :param new_node_count: New number of nodes to set.
-    :param local_node_indexes: New local node indexes starting at 1 for each current 
+    :param local_node_indexes: New local node indexes starting at 1 for each current
         local node id.
     '''
     old_node_count = eft.getNumberOfLocalNodes()
-    assert len(local_node_indexes) == old_node_count  # run all the test to sanity check!
+    assert len(local_node_indexes) == old_node_count
     if new_node_count > old_node_count:
         eft.setNumberOfLocalNodes(new_node_count)
     function_count = eft.getNumberOfFunctions()

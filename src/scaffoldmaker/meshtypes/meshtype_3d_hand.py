@@ -85,7 +85,7 @@ class MeshType_3d_hand1(Scaffold_base):
         hand_elements_along = [1, 2, 1, 1, 2] # carpal, metacarpal, prox, middle, dist phalanx
         node_network = Node_network(region, fieldcache)
         ix = 2 * sum(hand_elements_along)
-        iy = 6 * 5
+        iy = 6 * 5 # 5 columns per finger, + 1 column for palm-thumb connection
         iz = 4
         virtual_node_matrix = Virtual_node_matrix([ix, iy, iz])
 
@@ -132,9 +132,9 @@ class MeshType_3d_hand1(Scaffold_base):
                 annotation_groups.append(finger_bone_group)
 
         element_identifier = 1
-        elements_along_per_finger = sum(hand_elements_along)
-        for i in range(4):
-            node_network.remove_node(1 + i * elements_along_per_finger)
+        # elements_along_per_finger = sum(hand_elements_along)
+        # for i in range(4):
+        #     node_network.remove_node(1 + i * elements_along_per_finger)
         node_network.set_zinc_nodes()
         matrix = virtual_node_matrix.get_matrix()
         for k in range(iz - 1):
@@ -144,6 +144,8 @@ class MeshType_3d_hand1(Scaffold_base):
                         fieldmodule, element_identifier, matrix, [i, j, k],
                     )
                     if result == RESULT_OK:
+                        # print('element: ' + str(element_identifier))
+                        # virtual_node_matrix.print_cube_from_index([i, j, k])
                         element_annotations = [hand_group]
                         # find annotation groups
                         try:
@@ -291,10 +293,15 @@ class Virtual_node_matrix():
         i, j, k = index
         node_matrix = self.node_matrix
         if replace:
-            node_matrix[i][j][k] = node
+            node_matrix[i][j][k] = node.copy()
         else:
             if node_matrix[i][j][k] is None:
-                node_matrix[i][j][k] = node
+                node_matrix[i][j][k] = node.copy()
+            else:
+                if node.get('Type') == 'internal':
+                    new_node = node.get(Node.VALUE_LABEL_VALUE)
+                    new_node = new_node[0]
+                    self.blend_virtual_node(index, new_node)
 
     def set_virtual_node_to_indices(self, node:dict, indices: list, replace=True):
         for index in indices:
@@ -302,6 +309,31 @@ class Virtual_node_matrix():
 
     def get_matrix(self) -> list:
         return self.node_matrix
+
+    def blend_virtual_node(self, existing_node_index: list, new_node):
+        """
+        Only works for blending internal linear nodes for now
+
+        :param self: Description
+        :param existing_node_index: Description
+        :type existing_node_index: list
+        :param new_node: Description
+        """
+        vertex = self.get_virtual_node(existing_node_index)
+        original_vertex = vertex[Node.VALUE_LABEL_VALUE]
+        N = len(original_vertex)
+        updated_vertex = []
+        for n in range(N):
+            # Node has the form node_id, a0, a1, a2, a3
+            node = [original_vertex[n][0]]
+            for i in range(1,5):
+                node.append(original_vertex[n][i] * (N/(N + 1)))
+            updated_vertex.append(node)
+        node_id, a0, a1, a2, a3 = new_node
+        a0, a1, a2, a3 = a0 / (N + 1), a1 / (N + 1), a2 / (N + 1), a3 / (N + 1)
+        updated_vertex.append([node_id, a0, a1, a2, a3])
+        vertex[Node.VALUE_LABEL_VALUE] = updated_vertex
+        self.set_virtual_node_to_index(vertex, existing_node_index)
 
     def get_virtual_node(self, index: list) -> dict:
         i, j, k = index
@@ -350,21 +382,49 @@ def generate_internal_nodes(node_network: Node_network, hand_elements_along: lis
     :rtype: int
     """
 
-    # c, mc, pp, mp, dp = hand_elements_along
-    finger_dimensions = [  # d1, d2, d3
-        [1.0, 0.4, 0.2],  # carpal
-        [2.5, 0.4, 0.2],  # metacarpal
-        [1.5, 0.3, 0.2],  # proximal phalanx
-        [1.5, 0.2, 0.2],  # middle phalanx
-        [1.0, 0.2, 0.2],  # distal phalanx
+    hand_dimensions_by_finger = [ # d1, d2, d3
+        [ # Finger 1 (little finger)
+            [1.0, 0.4, 0.2],  # carpal
+            [2.0, 0.4, 0.2],  # metacarpal
+            [1.1, 0.3, 0.2],  # proximal phalanx
+            [0.7, 0.2, 0.2],  # middle phalanx
+            [0.6, 0.2, 0.2],  # distal phalanx
+        ],
+        [ # Finger 2 (ring finger)
+            [1.0, 0.4, 0.2],  # carpal
+            [2.0, 0.4, 0.2],  # metacarpal
+            [1.5, 0.3, 0.2],  # proximal phalanx
+            [1.0, 0.2, 0.2],  # middle phalanx
+            [0.7, 0.2, 0.2],  # distal phalanx
+        ],
+        [ # Finger 3 (middle finger)
+            [1.0, 0.4, 0.2],  # carpal
+            [2.0, 0.4, 0.2],  # metacarpal
+            [1.9, 0.3, 0.2],  # proximal phalanx
+            [1.0, 0.2, 0.2],  # middle phalanx
+            [0.6, 0.2, 0.2],  # distal phalanx
+        ],
+        [ # Finger 4 (index finger)
+            [1.0, 0.4, 0.2],  # carpal
+            [2.0, 0.4, 0.2],  # metacarpal
+            [1.9, 0.3, 0.2],  # proximal phalanx
+            [0.8, 0.2, 0.2],  # middle phalanx
+            [0.6, 0.2, 0.2],  # distal phalanx
+        ],
+        [ # Finger 5 (thumb finger)
+            [1.0, 0.25, 0.2, 0.2],  # metacarpal
+            [1.1, 0.25, 0.2, 0.2],  # proximal phalanx
+            [0.8, 0.20, 0.2, 0.2],  # distal phalanx
+        ],
     ]
-    carpal_spacing = finger_dimensions[0][1] * 2.0
+    carpal_spacing = hand_dimensions_by_finger[0][0][1] * 2.0
     index_carpal_node_id = None
     # create nodes up each finger fastest
     x1 = [1.0, 0.0, 0.0]
     x2 = [0.0, 1.0, 0.0]
     x3 = [0.0, 0.0, 1.0]
     for j in range(4):
+        finger_dimensions = hand_dimensions_by_finger[j]
         x = [0.0, j * carpal_spacing, 0.0]
         for i, bone_dimensions in enumerate(finger_dimensions):
             n_elements_along = hand_elements_along[i]
@@ -385,11 +445,7 @@ def generate_internal_nodes(node_network: Node_network, hand_elements_along: lis
                                              internal_node=True)
                 x = add(x, d1)
                 node_identifier += 1
-    thumb_dimensions = [  # d1, d2, d3, d12
-            [1.0, 0.25, 0.2, 0.2],  # metacarpal
-            [1.0, 0.25, 0.2, 0.2],  # proximal phalanx
-            [1.0, 0.20, 0.2, 0.2],  # distal phalanx
-        ]
+    thumb_dimensions = hand_dimensions_by_finger[-1]
     thumb_angle_degrees = options["Thumb angle"]
     # Thumb flexion angle
     angle_radians = math.radians(thumb_angle_degrees)
@@ -398,10 +454,8 @@ def generate_internal_nodes(node_network: Node_network, hand_elements_along: lis
     # Obtain the starting node position from the metacarpal node
     thumb_elements_along = [1, 1, 2]
     x, d1, d2, d3 = node_network.get_node_parameters(index_carpal_node_id)
-    x = add(x, d2)
-    x = add(x, d2)
-    x = add(x, d2)
-    x = add(x, mult(d1, 0.25))
+    x = add(x, mult(d2, 2.5))
+    x = add(x, mult(d1, 0.15))
     for i in range(3):
         bone_dimensions = thumb_dimensions[i]
         n_elements_along = thumb_elements_along[i]
@@ -437,7 +491,7 @@ def generate_internal_node_matrix(hand_elements_along, node_identifier,
     :return: Description
     :rtype: Any
     """
-    c, mc, pp, mp, dp = hand_elements_along
+    # c, mc, pp, mp, dp = hand_elements_along
     bone_w = 1
     bone_h = 1
     a0 = 1
@@ -457,7 +511,8 @@ def generate_internal_node_matrix(hand_elements_along, node_identifier,
         # Carpal, metacarpal and proximal phalanx
         for bone in range(3):
             n_elements_along = hand_elements_along[bone]
-            j_val = [index_y, index_y + 1] if finger_index == 0 else [index_y + 1]
+            j_val = [index_y, index_y + 1]
+            # j_val = [index_y, index_y + 1] if finger_index == 0 else [index_y + 1]
             i_val = [index_x + i for i in range(n_elements_along)]
             for i in i_val:
                 for j in j_val:
@@ -466,9 +521,10 @@ def generate_internal_node_matrix(hand_elements_along, node_identifier,
                         a3 = -bone_h if k == 1 else bone_h
                         bone_name = bone_names[bone]
                         indices = [[i, j, k]]
-                        if j == index_y + 1:
-                            indices.append([i, j + 4, k])
+                        # if j == index_y + 1:
+                        #     indices.append([i, j + 4, k])
                         if bone == 0: # Carpal
+                            """"
                             annotation = [bone_name] if k == 1 else ""
                             if j == index_y + 1:
                                 if finger_index == 3: # Webbing connection
@@ -490,9 +546,29 @@ def generate_internal_node_matrix(hand_elements_along, node_identifier,
                             virtual_node_matrix.set_virtual_node_to_indices(
                                 node, indices, False
                             )
+                            """
+                            annotation = [bone_name] if k == 1 else ""
+                            if j == index_y and finger_index > 0:
+                                indices.append([i, j - 4, k])
+                            if j == index_y + 1 and finger_index < 3:
+                                indices.append([i, j + 4, k])
+                            if j == index_y + 1 and finger_index == 3:
+                                indices.append([i + 1, j + 4, k])
+                            node = {
+                                Node.VALUE_LABEL_VALUE: [[parent_node_id, a0, a1, a2, a3]],
+                                "Type": "internal",
+                                "Annotation": annotation,
+                            }
+                            virtual_node_matrix.set_virtual_node_to_indices(
+                                node, indices, False
+                            )
                         elif bone == 1: # Metacarpal
                             annotation = [bone_name] if k == 1 else ""
-                            if finger_index == 3 and j == index_y + 1: # Webbing connection
+                            if j == index_y and finger_index > 0:
+                                indices.append([i, j - 4, k])
+                            if j == index_y + 1 and finger_index < 3:
+                                indices.append([i, j + 4, k])
+                            if j == index_y + 1 and finger_index == 3: # Webbing connection
                                 if i == index_x:
                                     indices.append([i + 1, j + 4, k])
                                     indices.append([i + 3, j + 4, k])
@@ -512,6 +588,11 @@ def generate_internal_node_matrix(hand_elements_along, node_identifier,
                             finger_part = bone_name + ' of ' + finger_name
                             annotation = [bone_name, finger_name, finger_part]
                             indices.append([i + 2, j, k])
+                            if j == index_y and finger_index > 0:
+                                indices.append([i, j - 4, k])
+                                indices.append([i + 2, j - 4, k])
+                            # if j == index_y + 1 and finger_index < 3:
+                            #     indices.append([i, j + 4, k])
                             node = {
                                 Node.VALUE_LABEL_VALUE: [[parent_node_id, a0, a1, a2, a3]],
                                 "Type": "internal",
@@ -520,11 +601,11 @@ def generate_internal_node_matrix(hand_elements_along, node_identifier,
                             virtual_node_matrix.set_virtual_node_to_indices(
                                 node, indices, False
                             )
-                            if j == index_y + 1:
-                                indices = [i, j + 4, k], [i + 2, j + 4, k]
+                            if j == index_y + 1 and finger_index < 3:
                                 finger_name = finger_names[finger_index + 1]
                                 finger_part = bone_name + ' of ' + finger_name
                                 annotation = [bone_name, finger_name, finger_part]
+                                indices = [[i, j + 4, k], [i + 2, j + 4, k]]
                                 node = {
                                     Node.VALUE_LABEL_VALUE: [[parent_node_id, a0, a1, a2, a3]],
                                     "Type": "internal",
@@ -562,7 +643,7 @@ def generate_internal_node_matrix(hand_elements_along, node_identifier,
         index_y += columns_per_finger
     # Thumb
     index_y += columns_per_finger
-    index_x = c
+    index_x = hand_elements_along[0]
     finger_index = 4
     # hand_elements_along[1] -= 1
     finger_name = finger_names[-1]
@@ -724,7 +805,10 @@ def generate_external_node_matrix(hand_elements_along,
             i_val = [index_x + i for i in range(n_elements_along)]
             # Estimate ellipse
             center, d1, d2, d3 = node_network.get_node_parameters(parent_node_id)
-            center = add(center, set_magnitude(d1, d1_offset/n_elements_along))
+            if bone == 3:
+                center = add(center, set_magnitude(d1, d1_offset/n_elements_along))
+            else:
+                center = add(center, set_magnitude(d1, d1_offset/(n_elements_along - 1)))
             major_axis = mult(d2, -a_finger)
             minor_axis = mult(d3, b_finger)
             ellipse_x = []
@@ -1367,6 +1451,14 @@ def create_cube_element(fieldmodule: Fieldmodule, element_identifier: int,
         bicubic_linear_basis.setFunctionType(3, Elementbasis.FUNCTION_TYPE_LINEAR_LAGRANGE)
         eft = mesh3d.createElementfieldtemplate(bicubic_linear_basis)
         setEftScaleFactorIds(eft, [], [], n_scale_factors)
+        if n_local_nodes > 8:
+            local_node_indexes = [1, 2, 3, 4] + [n_local_nodes - 3 + i for i in range(4)]
+            remapEftLocalNodes(eft, n_local_nodes, local_node_indexes)
+            # Re-numbering the ets dictionaries the new local node indexes
+            for ets in [value_expression_terms, d1_expression_terms, d2_expression_terms]:
+                temp_dict = {i: ets.pop(i) for i in range(5, 9)}
+                for i in range(4):
+                    ets[n_local_nodes - 3 + i] = temp_dict.get(5 + i)
         for local_node in value_expression_terms:
             remapEftNodeValueLabelWithNodes(
                 eft,
@@ -1386,7 +1478,8 @@ def create_cube_element(fieldmodule: Fieldmodule, element_identifier: int,
                 Node.VALUE_LABEL_D_DS2,
                 d2_expression_terms[local_node]
             )
-        remapEftLocalNodes(eft, n_local_nodes, [1, 2, 3, 4, 5, 6, 7, 8])
+        if n_local_nodes <= 8:
+            remapEftLocalNodes(eft, n_local_nodes, [1, 2, 3, 4, 5, 6, 7, 8])
         # Create element template
         etemplate = mesh3d.createElementtemplate()
         etemplate.setElementShapeType(Element.SHAPE_TYPE_CUBE)
