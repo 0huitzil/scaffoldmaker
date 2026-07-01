@@ -1,14 +1,29 @@
 '''
 Utility functions for element field templates shared by mesh generators.
 '''
-from cmlibs.maths.vectorops import add, cross, dot, magnitude, matrix_inv, mult, normalize, sub, transpose
+import copy
+import math
+
+from cmlibs.maths.vectorops import (
+    add,
+    cross,
+    dot,
+    magnitude,
+    matrix_inv,
+    mult,
+    normalize,
+    sub,
+    transpose,
+)
 from cmlibs.zinc.element import Elementbasis, Elementfieldtemplate
 from cmlibs.zinc.node import Node
 from cmlibs.zinc.result import RESULT_OK
+
 from scaffoldmaker.utils.interpolation import (
-    computeCubicHermiteEndDerivative, interpolateHermiteLagrangeDerivative, interpolateLagrangeHermiteDerivative)
-import copy
-import math
+    computeCubicHermiteEndDerivative,
+    interpolateHermiteLagrangeDerivative,
+    interpolateLagrangeHermiteDerivative,
+)
 
 
 def getEftTermScaling(eft, functionIndex, termIndex):
@@ -52,18 +67,28 @@ def mapEftFunction1Node2Terms(eft, function, localNode, valueLabel1, version1, s
     eft.setTermScaling(function, 2, scaleFactors2)
 
 
-def remapEftLocalNodes(eft, newNodeCount, localNodeIndexes):
+def remapEftLocalNodes(eft, new_node_count, local_node_indexes):
     '''
-    Remaps current local nodes to the new local ids, changing number of local nodes.
+    Remaps current local nodes to the new local indexes, changing number of local nodes.
     Assumes node parameters are in use.
-    :param localNodeIds: new local node identifiers starting at 1 for each current local node id - 1 referenced.
+
+    :param new_node_count: New number of nodes to set.
+    :param local_node_indexes: New local node indexes starting at 1 for each current 
+        local node id.
     '''
-    functionCount = eft.getNumberOfFunctions()
-    for f in range(1, functionCount + 1):
-        termCount = eft.getFunctionNumberOfTerms(f)
-        for t in range(1, termCount + 1):
-            eft.setTermNodeParameter(f, t, localNodeIndexes[eft.getTermLocalNodeIndex(f, t) - 1], eft.getTermNodeValueLabel(f, t), eft.getTermNodeVersion(f, t))
-    eft.setNumberOfLocalNodes(newNodeCount)
+    old_node_count = eft.getNumberOfLocalNodes()
+    assert len(local_node_indexes) == old_node_count  # run all the test to sanity check!
+    if new_node_count > old_node_count:
+        eft.setNumberOfLocalNodes(new_node_count)
+    function_count = eft.getNumberOfFunctions()
+    for f in range(1, function_count + 1):
+        term_count = eft.getFunctionNumberOfTerms(f)
+        for t in range(1, term_count + 1):
+            eft.setTermNodeParameter(
+                f, t, local_node_indexes[eft.getTermLocalNodeIndex(f, t) - 1],
+                eft.getTermNodeValueLabel(f, t), eft.getTermNodeVersion(f, t))
+    if new_node_count < old_node_count:
+        eft.setNumberOfLocalNodes(new_node_count)
 
 
 def remapEftNodeValueLabel(eft, localNodeIndexes, fromValueLabel, expressionTerms):
@@ -137,6 +162,7 @@ def remapEftNodeValueLabelWithNodes(eft, localNodeIndex, fromValueLabel, express
     '''
     Remap all uses of the given valueLabel to the expressionTerms.
     Note: Assumes valueLabel is currently single term and unscaled!
+
     :param localNodeIndex:  Local node index >= 1 to remap at.
     :param fromValueLabel:  Node value label to be remapped.
     :param expressionTerms: List of (localNodeIndex, valueLabel, scaleFactorIndexesList ) to remap to.
