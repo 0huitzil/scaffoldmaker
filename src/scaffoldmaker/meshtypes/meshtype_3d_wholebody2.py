@@ -1,22 +1,38 @@
 """
 Generates a 3D body coordinates using tube network mesh.
 """
+import math
+
 from cmlibs.maths.vectorops import add, cross, mult, set_magnitude, sub
 from cmlibs.utils.zinc.field import Field, find_or_create_field_coordinates
 from cmlibs.zinc.element import Element
 from cmlibs.zinc.node import Node
+
 from scaffoldmaker.annotation.annotationgroup import (
-    AnnotationGroup, findOrCreateAnnotationGroupForTerm, getAnnotationGroupForTerm)
+    AnnotationGroup,
+    findOrCreateAnnotationGroupForTerm,
+    getAnnotationGroupForTerm,
+)
 from scaffoldmaker.annotation.body_terms import get_body_term
 from scaffoldmaker.meshtypes.meshtype_1d_network_layout1 import MeshType_1d_network_layout1
 from scaffoldmaker.meshtypes.scaffold_base import Scaffold_base
 from scaffoldmaker.scaffoldpackage import ScaffoldPackage
+from scaffoldmaker.utils.human_network_layout import (
+    generate_network_layout_structure,
+    human_network_element_counts,
+)
 from scaffoldmaker.utils.interpolation import (
-    computeCubicHermiteEndDerivative, getCubicHermiteArcLength, interpolateLagrangeHermiteDerivative,
-    sampleCubicHermiteCurvesSmooth, smoothCubicHermiteDerivativesLine)
+    computeCubicHermiteEndDerivative,
+    getCubicHermiteArcLength,
+    interpolateLagrangeHermiteDerivative,
+    sampleCubicHermiteCurvesSmooth,
+    smoothCubicHermiteDerivativesLine,
+)
 from scaffoldmaker.utils.networkmesh import NetworkMesh
-from scaffoldmaker.utils.tubenetworkmesh import BodyTubeNetworkMeshBuilder, TubeNetworkMeshGenerateData
-import math
+from scaffoldmaker.utils.tubenetworkmesh import (
+    BodyTubeNetworkMeshBuilder,
+    TubeNetworkMeshGenerateData,
+)
 
 
 class MeshType_1d_human_body_network_layout1(MeshType_1d_network_layout1):
@@ -36,15 +52,7 @@ class MeshType_1d_human_body_network_layout1(MeshType_1d_network_layout1):
     def getDefaultOptions(cls, parameterSetName="Default"):
         options = {}
         options["Base parameter set"] = parameterSetName
-        options["Structure"] = (
-            "1-2-3-4,"
-            "4-5-6.1," 
-            "6.2-14-15-16-17-18-19,19-20,"
-            "6.3-21-22-23-24-25-26,26-27,"
-            "6.1-7-8-9,"
-            "9-10-11-12-13.1,"
-            "13.2-28-29-30-31-32,32-33-34,"
-            "13.3-35-36-37-38-39,39-40-41")
+        options["Structure"] = generate_network_layout_structure(human_network_element_counts)
         options["Define inner coordinates"] = True
         options["Head depth"] = 2.0
         options["Head length"] = 2.2
