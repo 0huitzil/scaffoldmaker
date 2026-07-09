@@ -219,40 +219,57 @@ class MeshType_1d_human_body_network_layout1(MeshType_1d_network_layout1):
 
         networkMesh = NetworkMesh(structure)
         networkMesh.create1DLayoutMesh(region)
-
         fieldmodule = region.getFieldmodule()
         mesh = fieldmodule.findMeshByDimension(1)
-
         # set up element annotations
         bodyGroup = AnnotationGroup(region, get_body_term("body"))
         headGroup = AnnotationGroup(region, get_body_term("head"))
         neckGroup = AnnotationGroup(region, get_body_term("neck"))
         armGroup = AnnotationGroup(region, get_body_term("upper limb"))
-        armToHandGroup = AnnotationGroup(region, ("arm to hand", ""))
+        # armToHandGroup = AnnotationGroup(region, ("arm to hand", ""))
         leftArmGroup = AnnotationGroup(region, get_body_term("left upper limb"))
+        leftShoulderGroup = AnnotationGroup(region, get_body_term("left shoulder"))
+        leftBrachiumGroup = AnnotationGroup(region, get_body_term("left brachium"))
+        leftAntebrachiumGroup = AnnotationGroup(region, get_body_term("left antebrachium"))
+        leftHandGroup = AnnotationGroup(region, get_body_term("left hand"))
         rightArmGroup = AnnotationGroup(region, get_body_term("right upper limb"))
+        rightShoulderGroup = AnnotationGroup(region, get_body_term("right shoulder"))
+        rightBrachiumGroup = AnnotationGroup(region, get_body_term("right brachium"))
+        rightAntebrachiumGroup = AnnotationGroup(region, get_body_term("right antebrachium"))
+        rightHandGroup = AnnotationGroup(region, get_body_term("right hand"))
         handGroup = AnnotationGroup(region, get_body_term("hand"))
         thoraxGroup = AnnotationGroup(region, get_body_term("thorax"))
         abdomenGroup = AnnotationGroup(region, get_body_term("abdomen"))
+        hipGroup = AnnotationGroup(region, get_body_term("hip"))
         legGroup = AnnotationGroup(region, get_body_term("lower limb"))
-        legToFootGroup = AnnotationGroup(region, ("leg to foot", ""))
+        # legToFootGroup = AnnotationGroup(region, ("leg to foot", ""))
         leftLegGroup = AnnotationGroup(region, get_body_term("left lower limb"))
-        rightLegGroup = AnnotationGroup(region, get_body_term("right lower limb "))
+        leftUpperLegGroup = AnnotationGroup(region, get_body_term("left upper leg"))
+        leftLowerLegGroup = AnnotationGroup(region, get_body_term("left lower leg"))
+        leftFootGroup = AnnotationGroup(region, get_body_term("left foot"))
+        rightLegGroup = AnnotationGroup(region, get_body_term("right lower limb"))
+        rightUpperLegGroup = AnnotationGroup(region, get_body_term("right upper leg"))
+        rightLowerLegGroup = AnnotationGroup(region, get_body_term("right lower leg"))
+        rightFootGroup = AnnotationGroup(region, get_body_term("right foot"))
         footGroup = AnnotationGroup(region, get_body_term("foot"))
-        annotationGroups = [bodyGroup, headGroup, neckGroup,
-                            armGroup, armToHandGroup, leftArmGroup, rightArmGroup, handGroup,
-                            thoraxGroup, abdomenGroup,
-                            legGroup, legToFootGroup, leftLegGroup, rightLegGroup, footGroup]
+        annotationGroups = [
+            bodyGroup, headGroup, neckGroup, thoraxGroup, abdomenGroup, hipGroup,
+            leftShoulderGroup, leftBrachiumGroup, leftAntebrachiumGroup, leftHandGroup,
+            rightShoulderGroup, rightBrachiumGroup, rightAntebrachiumGroup, rightHandGroup,
+            leftLegGroup, leftUpperLegGroup, leftLowerLegGroup, leftFootGroup,
+            rightLegGroup, rightUpperLegGroup, rightLowerLegGroup, rightFootGroup,
+            armGroup, leftArmGroup, rightArmGroup, handGroup,legGroup, footGroup
+            ]
         bodyMeshGroup = bodyGroup.getMeshGroup(mesh)
         elementIdentifier = 1
-        headElementsCount = 3
+        headElementsCount = human_network_element_counts['headElementsCount']
         meshGroups = [bodyMeshGroup, headGroup.getMeshGroup(mesh)]
         for e in range(headElementsCount):
             element = mesh.findElementByIdentifier(elementIdentifier)
             for meshGroup in meshGroups:
                 meshGroup.addElement(element)
             elementIdentifier += 1
-        neckElementsCount = 2
+        neckElementsCount = human_network_element_counts['neckElementsCount']
         meshGroups = [bodyMeshGroup, neckGroup.getMeshGroup(mesh)]
         for e in range(neckElementsCount):
             element = mesh.findElementByIdentifier(elementIdentifier)
@@ -261,53 +278,127 @@ class MeshType_1d_human_body_network_layout1(MeshType_1d_network_layout1):
             elementIdentifier += 1
         left = 0
         right = 1
-        armToHandElementsCount = 6
-        handElementsCount = 1
+        shoulderElementsCount = human_network_element_counts['shoulderElementsCount']
+        brachiumElementsCount = human_network_element_counts['brachiumElementsCount']
+        antebrachiumElementsCount = human_network_element_counts['antebrachiumElementsCount']
+        handElementsCount = human_network_element_counts['handElementsCount']
+        armToHandElementsCount = shoulderElementsCount + brachiumElementsCount \
+            + antebrachiumElementsCount
         armMeshGroup = armGroup.getMeshGroup(mesh)
-        armToHandMeshGroup = armToHandGroup.getMeshGroup(mesh)
+        # armToHandMeshGroup = armToHandGroup.getMeshGroup(mesh)
         handMeshGroup = handGroup.getMeshGroup(mesh)
         for side in (left, right):
             sideArmGroup = leftArmGroup if (side == left) else rightArmGroup
-            meshGroups = [bodyMeshGroup, armMeshGroup, armToHandMeshGroup, sideArmGroup.getMeshGroup(mesh)]
-            for e in range(armToHandElementsCount):
+            sideShoulderGroup = leftShoulderGroup if (side == left) else rightShoulderGroup
+            sideBrachiumGroup = leftBrachiumGroup if (side == left) else rightBrachiumGroup
+            sideAntebrachiumGroup = leftAntebrachiumGroup if (side == left) \
+                else rightAntebrachiumGroup
+            sideHandGroup = leftHandGroup if (side == left) else rightHandGroup
+            # Setup shoulder elements
+            meshGroups = [
+                bodyMeshGroup, armMeshGroup, sideArmGroup.getMeshGroup(mesh),
+                sideShoulderGroup.getMeshGroup(mesh)
+                ]
+            for e in range(shoulderElementsCount):
                 element = mesh.findElementByIdentifier(elementIdentifier)
                 for meshGroup in meshGroups:
                     meshGroup.addElement(element)
                 elementIdentifier += 1
-            meshGroups = [bodyMeshGroup, armMeshGroup, handMeshGroup, sideArmGroup.getMeshGroup(mesh)]
+            # Setup brachium elements
+            meshGroups = [
+                bodyMeshGroup, armMeshGroup, sideArmGroup.getMeshGroup(mesh),
+                sideBrachiumGroup.getMeshGroup(mesh)
+                ]
+            for e in range(brachiumElementsCount):
+                element = mesh.findElementByIdentifier(elementIdentifier)
+                for meshGroup in meshGroups:
+                    meshGroup.addElement(element)
+                elementIdentifier += 1
+            # Setup antebrachium elements
+            meshGroups = [
+                bodyMeshGroup, armMeshGroup, sideArmGroup.getMeshGroup(mesh),
+                sideAntebrachiumGroup.getMeshGroup(mesh)
+                ]
+            for e in range(antebrachiumElementsCount):
+                element = mesh.findElementByIdentifier(elementIdentifier)
+                for meshGroup in meshGroups:
+                    meshGroup.addElement(element)
+                elementIdentifier += 1
+            # Setup hand elements
+            meshGroups = [bodyMeshGroup,
+                          armMeshGroup, sideArmGroup.getMeshGroup(mesh),
+                          handMeshGroup, sideHandGroup.getMeshGroup(mesh)]
             for e in range(handElementsCount):
                 element = mesh.findElementByIdentifier(elementIdentifier)
                 for meshGroup in meshGroups:
                     meshGroup.addElement(element)
                 elementIdentifier += 1
-        thoraxElementsCount = 3
-        abdomenElementsCount = 4
+        # Setup thorax elements
+        thoraxElementsCount = human_network_element_counts['thoraxElementsCount']
+        abdomenElementsCount = human_network_element_counts['abdomenElementsCount']
         meshGroups = [bodyMeshGroup, thoraxGroup.getMeshGroup(mesh)]
         for e in range(thoraxElementsCount):
             element = mesh.findElementByIdentifier(elementIdentifier)
             for meshGroup in meshGroups:
                 meshGroup.addElement(element)
             elementIdentifier += 1
+        # Setup abdomen elements
         meshGroups = [bodyMeshGroup, abdomenGroup.getMeshGroup(mesh)]
         for e in range(abdomenElementsCount):
             element = mesh.findElementByIdentifier(elementIdentifier)
             for meshGroup in meshGroups:
                 meshGroup.addElement(element)
             elementIdentifier += 1
-        legToFootElementsCount = 5
-        footElementsCount = 2
+        hipElementsCount = human_network_element_counts['hipElementsCount']
+        upperLegElementsCount = human_network_element_counts['upperLegElementsCount']
+        lowerLegElementsCount = human_network_element_counts['lowerLegElementsCount']
+        footElementsCount = human_network_element_counts['footElementsCount']
+        legToFootElementsCount = hipElementsCount + upperLegElementsCount \
+            + lowerLegElementsCount
         legMeshGroup = legGroup.getMeshGroup(mesh)
-        legToFootMeshGroup = legToFootGroup.getMeshGroup(mesh)
+        hipMeshGroup = hipGroup.getMeshGroup(mesh)
+        # legToFootMeshGroup = legToFootGroup.getMeshGroup(mesh)
         footMeshGroup = footGroup.getMeshGroup(mesh)
         for side in (left, right):
             sideLegGroup = leftLegGroup if (side == left) else rightLegGroup
-            meshGroups = [bodyMeshGroup, legMeshGroup, legToFootMeshGroup, sideLegGroup.getMeshGroup(mesh)]
-            for e in range(legToFootElementsCount):
+            sideUpperLegGroup = leftUpperLegGroup if (side == left) else rightUpperLegGroup
+            sideLowerLegGroup = leftLowerLegGroup if (side == left) else rightLowerLegGroup
+            sideFootGroup = leftFootGroup if (side == left) else rightFootGroup
+            # Hip
+            meshGroups = [
+                bodyMeshGroup, legMeshGroup, hipMeshGroup, sideLegGroup.getMeshGroup(mesh),
+                 sideUpperLegGroup.getMeshGroup(mesh)
+                ]
+            for e in range(hipElementsCount):
                 element = mesh.findElementByIdentifier(elementIdentifier)
                 for meshGroup in meshGroups:
                     meshGroup.addElement(element)
                 elementIdentifier += 1
-            meshGroups = [bodyMeshGroup, legMeshGroup, footMeshGroup, sideLegGroup.getMeshGroup(mesh)]
+            # Upper leg
+            meshGroups = [
+                bodyMeshGroup, legMeshGroup, sideLegGroup.getMeshGroup(mesh),
+                sideUpperLegGroup.getMeshGroup(mesh)
+                ]
+            for e in range(upperLegElementsCount):
+                element = mesh.findElementByIdentifier(elementIdentifier)
+                for meshGroup in meshGroups:
+                    meshGroup.addElement(element)
+                elementIdentifier += 1
+            # Lower leg
+            meshGroups = [
+                bodyMeshGroup, legMeshGroup, sideLegGroup.getMeshGroup(mesh),
+                sideLowerLegGroup.getMeshGroup(mesh)
+                ]
+            for e in range(lowerLegElementsCount):
+                element = mesh.findElementByIdentifier(elementIdentifier)
+                for meshGroup in meshGroups:
+                    meshGroup.addElement(element)
+                elementIdentifier += 1
+            # Foot
+            meshGroups = [
+                bodyMeshGroup, legMeshGroup, sideLegGroup.getMeshGroup(mesh),
+                footMeshGroup, sideFootGroup.getMeshGroup(mesh)
+                ]
             for e in range(footElementsCount):
                 element = mesh.findElementByIdentifier(elementIdentifier)
                 for meshGroup in meshGroups:
@@ -318,7 +409,8 @@ class MeshType_1d_human_body_network_layout1(MeshType_1d_network_layout1):
         fieldcache = fieldmodule.createFieldcache()
         coordinates = find_or_create_field_coordinates(fieldmodule)
         # need to ensure inner coordinates are at least defined:
-        cls.defineInnerCoordinates(region, coordinates, options, networkMesh, innerProportion=0.75)
+        cls.defineInnerCoordinates(region, coordinates,
+                                   options, networkMesh, innerProportion=0.75)
         innerCoordinates = find_or_create_field_coordinates(fieldmodule, "inner coordinates")
         nodes = fieldmodule.findNodesetByFieldDomainType(Field.DOMAIN_TYPE_NODES)
 
@@ -364,8 +456,11 @@ class MeshType_1d_human_body_network_layout1(MeshType_1d_network_layout1):
                 d2 = [0.0, 0.5 * (halfTorsoWidth + halfHeadWidth), 0.0]
                 d12 = [0.0, halfTorsoWidth - halfHeadWidth, 0.0]
                 d3 = [0.0, 0.0, 0.5 * (halfHeadWidth + halfTorsoDepth)]
-                id2 = [0.0, 0.5 * (innerProportionHead * halfHeadWidth + innerProportionDefault * halfTorsoWidth), 0.0]
-                id12 = [0.0, innerProportionDefault * halfTorsoWidth - innerProportionHead * halfHeadWidth, 0.0]
+                id2 = [0.0, 0.5 * (
+                    innerProportionHead * halfHeadWidth \
+                        + innerProportionDefault * halfTorsoWidth), 0.0]
+                id12 = [0.0, innerProportionDefault * halfTorsoWidth - innerProportionHead \
+                        * halfHeadWidth, 0.0]
                 id3 = mult(d3, 0.5 * (innerProportionHead + innerProportionDefault))
             else:
                 d1 = [thoraxScale, 0.0, 0.0]
@@ -397,37 +492,49 @@ class MeshType_1d_human_body_network_layout1(MeshType_1d_network_layout1):
         px = [abdomenStartX + abdomenLength, 0.0, 0.0]
 
         # arms
-        # rotate shoulder with arm, pivoting about shoulder drop below arm junction on network
-        # this has the realistic effect of shoulders becoming narrower with higher angles
-        # initial shoulder rotation with arm is negligible, hence:
-        shoulderRotationFactor = 1.0 - math.cos(0.5 * armAngleRadians)
-        # assume shoulder drop is half shrug distance to get limiting shoulder angle for 180 degree arm rotation
-        shoulderLimitAngleRadians = math.asin(1.5 * shoulderDrop / halfShoulderWidth)
-        shoulderAngleRadians = shoulderRotationFactor * shoulderLimitAngleRadians
-        armStartX = thoraxStartX + shoulderDrop - halfShoulderWidth * math.sin(shoulderAngleRadians)
-        nonHandArmLength = armLength - handLength
-        armScale = nonHandArmLength / (armToHandElementsCount - 2)  # 2 == shoulder elements count
-        d12_mag = (halfWristThickness - armTopRadius) / (armToHandElementsCount - 2)
-        d13_mag = (halfWristWidth - armTopRadius) / (armToHandElementsCount - 2)
         for side in (left, right):
+            # Shoulder rotation
+            # rotate shoulder with arm, pivoting about shoulder drop below arm junction
+            # this has the realistic effect of shoulders becoming narrower with higher angles
+            # initial shoulder rotation with arm is negligible, hence:
+            shoulderRotationFactor = 1.0 - math.cos(0.5 * armAngleRadians)
+            # assume shoulder drop is half shrug distance
+            # to get limiting shoulder angle for 180 degree arm rotation
+            shoulderLimitAngleRadians = math.asin(1.5 * shoulderDrop / halfShoulderWidth)
+            shoulderAngleRadians = shoulderRotationFactor * shoulderLimitAngleRadians
+            nonHandArmLength = armLength - handLength
+            armScale = nonHandArmLength / (armToHandElementsCount - shoulderElementsCount)
+            d12_mag = (halfWristThickness - armTopRadius) \
+                / (armToHandElementsCount - shoulderElementsCount)
+            d13_mag = (halfWristWidth - armTopRadius) \
+                / (armToHandElementsCount - shoulderElementsCount)
             armAngle = armAngleRadians if (side == left) else -armAngleRadians
             cosArmAngle = math.cos(armAngle)
             sinArmAngle = math.sin(armAngle)
-            armStartY = (halfShoulderWidth if (side == left) else -halfShoulderWidth) * math.cos(shoulderAngleRadians)
-            x = [armStartX, armStartY, 0.0]
+            armStartX = thoraxStartX + shoulderDrop - halfShoulderWidth \
+                * math.sin(shoulderAngleRadians)
+            armStartY = (halfShoulderWidth if (side == left) else -halfShoulderWidth) \
+                * math.cos(shoulderAngleRadians)
+            armStart = [armStartX, armStartY, 0.0]
+            x = armStart
             armDirn = [cosArmAngle, sinArmAngle, 0.0]
             armSide = [-sinArmAngle, cosArmAngle, 0.0]
             armFront = cross(armDirn, armSide)
             d1 = mult(armDirn, armScale)
-            # set leg versions 2 (left) and 3 (right) on leg junction node, and intermediate shoulder node
+            # set arm versions 2 (left) and 3 (right) on arm junction node
+            # and intermediate shoulder node
             sd1 = interpolateLagrangeHermiteDerivative(sx, x, d1, 0.0)
-            nx, nd1 = sampleCubicHermiteCurvesSmooth([sx, x], [sd1, d1], 2, derivativeMagnitudeEnd=armScale)[0:2]
-            arcLengths = [getCubicHermiteArcLength(nx[i], nd1[i], nx[i + 1], nd1[i + 1]) for i in range(2)]
+            nx, nd1 = sampleCubicHermiteCurvesSmooth(
+                [sx, x], [sd1, d1], 2, derivativeMagnitudeEnd=armScale)[0:2]
+            arcLengths = [getCubicHermiteArcLength(nx[i], nd1[i], nx[i + 1], nd1[i + 1]) \
+                          for i in range(2)]
             sd2_list = []
             sd3_list = []
             sNodeIdentifiers = []
             for i in range(2):
-                sNodeIdentifiers.append(nodeIdentifier if (i > 0) else armJunctionNodeIdentifier)
+                sNodeIdentifiers.append(
+                    nodeIdentifier if (i > 0) else armJunctionNodeIdentifier
+                    )
                 node = nodes.findNodeByIdentifier(sNodeIdentifiers[-1])
                 fieldcache.setNode(node)
                 version = 1 if (i > 0) else 2 if (side == left) else 3
@@ -443,10 +550,13 @@ class MeshType_1d_human_body_network_layout1(MeshType_1d_network_layout1):
                 sd3_list.append(sd3)
                 if i > 0:
                     for field in (coordinates, innerCoordinates):
-                        field.setNodeParameters(fieldcache, -1, Node.VALUE_LABEL_VALUE, 1, nx[i])
+                        field.setNodeParameters(
+                            fieldcache, -1, Node.VALUE_LABEL_VALUE, 1, nx[i])
                     nodeIdentifier += 1
-                setNodeFieldVersionDerivatives(coordinates, fieldcache, version, sd1, sd2, sd3)
-                setNodeFieldVersionDerivatives(innerCoordinates, fieldcache, version, sd1, sid2, sid3)
+                setNodeFieldVersionDerivatives(
+                    coordinates, fieldcache, version, sd1, sd2, sd3)
+                setNodeFieldVersionDerivatives(
+                    innerCoordinates, fieldcache, version, sd1, sid2, sid3)
             sd2_list.append([-armTopRadius * sinArmAngle, armTopRadius * cosArmAngle, 0.0])
             sd3_list.append([0.0, 0.0, armTopRadius])
             for i in range(2):
@@ -455,14 +565,19 @@ class MeshType_1d_human_body_network_layout1(MeshType_1d_network_layout1):
                 version = 1 if (i > 0) else 2 if (side == left) else 3
                 sd12 = sub(sd2_list[i + 1], sd2_list[i])
                 sd13 = sub(sd3_list[i + 1], sd3_list[i])
-                coordinates.setNodeParameters(fieldcache, -1, Node.VALUE_LABEL_D2_DS1DS2, version, sd12)
-                coordinates.setNodeParameters(fieldcache, -1, Node.VALUE_LABEL_D2_DS1DS3, version, sd13)
+                coordinates.setNodeParameters(
+                    fieldcache, -1, Node.VALUE_LABEL_D2_DS1DS2, version, sd12)
+                coordinates.setNodeParameters(
+                    fieldcache, -1, Node.VALUE_LABEL_D2_DS1DS3, version, sd13)
                 sid12 = mult(sd12, innerProportionDefault)
                 sid13 = mult(sd13, innerProportionDefault)
-                innerCoordinates.setNodeParameters(fieldcache, -1, Node.VALUE_LABEL_D2_DS1DS2, version, sid12)
-                innerCoordinates.setNodeParameters(fieldcache, -1, Node.VALUE_LABEL_D2_DS1DS3, version, sid13)
+                innerCoordinates.setNodeParameters(
+                    fieldcache, -1, Node.VALUE_LABEL_D2_DS1DS2, version, sid12)
+                innerCoordinates.setNodeParameters(
+                    fieldcache, -1, Node.VALUE_LABEL_D2_DS1DS3, version, sid13)
             # main part of arm to wrist
-            elementTwistAngle = ((armTwistAngleRadians if (side == left) else -armTwistAngleRadians) /
+            elementTwistAngle = (
+                (armTwistAngleRadians if (side == left) else -armTwistAngleRadians) /
                                  (armToHandElementsCount - 3))
             for i in range(armToHandElementsCount - 1):
                 xi = i / (armToHandElementsCount - 2)
@@ -528,9 +643,8 @@ class MeshType_1d_human_body_network_layout1(MeshType_1d_network_layout1):
         legStartX = abdomenStartX + abdomenLength + pelvisDrop
         nonFootLegLength = legLength - footHeight
         legScale = nonFootLegLength / (legToFootElementsCount - 1)
-        d12_mag = (legBottomRadius - legTopRadius) / (armToHandElementsCount - 2)
-        d13_mag = (legBottomRadius - legTopRadius) / (armToHandElementsCount - 2)
-
+        d12_mag = (legBottomRadius - legTopRadius) / (legToFootElementsCount)
+        d13_mag = (legBottomRadius - legTopRadius) / (legToFootElementsCount)
         pd3 = [0.0, 0.0, 0.5 * legTopRadius + 0.5 * halfTorsoDepth]
         pid3 = mult(pd3, innerProportionDefault)
         for side in (left, right):
@@ -554,8 +668,10 @@ class MeshType_1d_human_body_network_layout1(MeshType_1d_network_layout1):
             pid12 = mult(pd12, innerProportionDefault)
             pid13 = mult(pd13, innerProportionDefault)
             version = 2 if (side == left) else 3
-            setNodeFieldVersionDerivatives(coordinates, fieldcache, version, pd1, pd2, pd3, pd12, pd13)
-            setNodeFieldVersionDerivatives(innerCoordinates, fieldcache, version, pd1, pid2, pid3, pid12, pid13)
+            setNodeFieldVersionDerivatives(
+                coordinates, fieldcache, version, pd1, pd2, pd3, pd12, pd13)
+            setNodeFieldVersionDerivatives(
+                innerCoordinates, fieldcache, version, pd1, pid2, pid3, pid12, pid13)
             d12 = [-d12_mag * sinLegAngle, d12_mag * cosLegAngle, 0.0]
             id12 = mult(d12, innerProportionDefault)
             d13 = [0.0, 0.0, d13_mag]
@@ -571,8 +687,10 @@ class MeshType_1d_human_body_network_layout1(MeshType_1d_network_layout1):
                 d3 = [0.0, 0.0, radius]
                 id2 = mult(d2, innerProportionDefault)
                 id3 = mult(d3, innerProportionDefault)
-                setNodeFieldParameters(coordinates, fieldcache, x, d1, d2, d3, d12, d13)
-                setNodeFieldParameters(innerCoordinates, fieldcache, x, d1, id2, id3, id12, id13)
+                setNodeFieldParameters(
+                    coordinates, fieldcache, x, d1, d2, d3, d12, d13)
+                setNodeFieldParameters(
+                    innerCoordinates, fieldcache, x, d1, id2, id3, id12, id13)
                 nodeIdentifier += 1
             # foot
             fx = [x,
@@ -583,11 +701,19 @@ class MeshType_1d_human_body_network_layout1(MeshType_1d_network_layout1):
             fd1 = smoothCubicHermiteDerivativesLine(
                 fx, [d1, [0.0, 0.0, 0.5 * footLength], [0.0, 0.0, 0.5 * footLength]],
                 fixAllDirections=True, fixStartDerivative=True)
-            fd2 = [d2, mult(legSide, halfFootWidth), mult(legSide, halfFootWidth)]
-            fd3 = [d3,
-                   set_magnitude(sub(legFront, legDirn),
-                                 math.sqrt(2.0 * halfFootThickness * halfFootThickness) + legBottomRadius),
-                   set_magnitude(cross(fd1[2], fd2[2]), halfFootThickness)]
+            fd2 = [
+                d2,
+                mult(legSide, halfFootWidth),
+                mult(legSide, halfFootWidth)
+                ]
+            fd3 = [
+                d3,
+                set_magnitude(
+                    sub(legFront, legDirn),
+                    math.sqrt(2.0 * halfFootThickness * halfFootThickness) + legBottomRadius
+                    ),
+                set_magnitude(cross(fd1[2], fd2[2]), halfFootThickness)
+                ]
             fd12 = sub(fd2[2], fd2[1])
             fd13 = sub(fd3[2], fd3[1])
             fid12 = mult(fd12, innerProportionDefault)
@@ -595,10 +721,12 @@ class MeshType_1d_human_body_network_layout1(MeshType_1d_network_layout1):
             for i in range(1, 3):
                 node = nodes.findNodeByIdentifier(nodeIdentifier)
                 fieldcache.setNode(node)
-                setNodeFieldParameters(coordinates, fieldcache, fx[i], fd1[i], fd2[i], fd3[i], fd12, fd13)
+                setNodeFieldParameters(
+                    coordinates, fieldcache, fx[i], fd1[i], fd2[i], fd3[i], fd12, fd13)
                 fid2 = mult(fd2[i], innerProportionDefault)
                 fid3 = mult(fd3[i], innerProportionDefault)
-                setNodeFieldParameters(innerCoordinates, fieldcache, fx[i], fd1[i], fid2, fid3, fid12, fid13)
+                setNodeFieldParameters(
+                    innerCoordinates, fieldcache, fx[i], fd1[i], fid2, fid3, fid12, fid13)
                 nodeIdentifier += 1
 
         return annotationGroups, networkMesh

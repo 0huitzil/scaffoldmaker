@@ -12,7 +12,7 @@ human_network_element_counts = {
     'hipElementsCount': 2,
     'upperLegElementsCount': 4,
     'lowerLegElementsCount': 3,
-    'footElementsCount': 1
+    'footElementsCount': 2
 }
 
 def create_segment_layout(nodeCount:int, nodeIdentifier:int,
