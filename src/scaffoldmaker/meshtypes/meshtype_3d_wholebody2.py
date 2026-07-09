@@ -772,9 +772,13 @@ class MeshType_3d_wholebody2(Scaffold_base):
         options["Number of elements along neck"] = 1
         options["Number of elements along thorax"] = 2
         options["Number of elements along abdomen"] = 2
-        options["Number of elements along arm to hand"] = 5
+        options["Number of elements along shoulder"] = 2
+        options["Number of elements along brachium"] = 2
+        options["Number of elements along antebrachium"] = 2
         options["Number of elements along hand"] = 1
-        options["Number of elements along leg to foot"] = 4
+        options["Number of elements along hip"] = 2
+        options["Number of elements along upper leg"] = 3
+        options["Number of elements along lower leg"] = 3
         options["Number of elements along foot"] = 2
         options["Number of elements around head"] = 12
         options["Number of elements around torso"] = 12
@@ -790,9 +794,12 @@ class MeshType_3d_wholebody2(Scaffold_base):
             options["Number of elements along neck"] = 2
             options["Number of elements along thorax"] = 3
             options["Number of elements along abdomen"] = 3
-            options["Number of elements along arm to hand"] = 6
+            options["Number of elements along shoulder"] = 2
+            options["Number of elements along brachium"] = 3
+            options["Number of elements along antebrachium"] = 3
             options["Number of elements along hand"] = 1
-            options["Number of elements along leg to foot"] = 6
+            options["Number of elements along upper leg"] = 2
+            options["Number of elements along lower leg"] = 2
             options["Number of elements along foot"] = 2
             options["Number of elements around head"] = 16
             options["Number of elements around torso"] = 16
@@ -802,9 +809,12 @@ class MeshType_3d_wholebody2(Scaffold_base):
             options["Number of elements along neck"] = 2
             options["Number of elements along thorax"] = 4
             options["Number of elements along abdomen"] = 4
-            options["Number of elements along arm to hand"] = 8
+            options["Number of elements along shoulder"] = 2
+            options["Number of elements along brachium"] = 3
+            options["Number of elements along antebrachium"] = 4
             options["Number of elements along hand"] = 2
-            options["Number of elements along leg to foot"] = 8
+            options["Number of elements along upper leg"] = 3
+            options["Number of elements along lower leg"] = 2
             options["Number of elements along foot"] = 3
             options["Number of elements around head"] = 20
             options["Number of elements around torso"] = 20
@@ -823,9 +833,13 @@ class MeshType_3d_wholebody2(Scaffold_base):
             "Number of elements along neck",
             "Number of elements along thorax",
             "Number of elements along abdomen",
-            "Number of elements along arm to hand",
+            "Number of elements along shoulder",
+            "Number of elements along brachium",
+            "Number of elements along antebrachium",
             "Number of elements along hand",
-            "Number of elements along leg to foot",
+            "Number of elements along hip",
+            "Number of elements along upper leg",
+            "Number of elements along lower leg",
             "Number of elements along foot",
             "Number of elements around head",
             "Number of elements around torso",
@@ -871,9 +885,11 @@ class MeshType_3d_wholebody2(Scaffold_base):
             "Number of elements along neck",
             "Number of elements along thorax",
             "Number of elements along abdomen",
-            "Number of elements along arm to hand",
+            "Number of elements along brachium",
+            "Number of elements along antebrachium",
             "Number of elements along hand",
-            "Number of elements along leg to foot",
+            "Number of elements along upper leg",
+            "Number of elements along lower leg",
             "Number of elements along foot"
         ]:
             if options[key] < 1:
@@ -926,9 +942,13 @@ class MeshType_3d_wholebody2(Scaffold_base):
         elementsCountAlongNeck = options["Number of elements along neck"]
         elementsCountAlongThorax = options["Number of elements along thorax"]
         elementsCountAlongAbdomen = options["Number of elements along abdomen"]
-        elementsCountAlongArmToHand = options["Number of elements along arm to hand"]
+        elementsCountAlongShoulder = options["Number of elements along shoulder"]
+        elementsCountAlongBrachium = options["Number of elements along brachium"]
+        elementsCountAlongAntebrachium = options["Number of elements along antebrachium"]
         elementsCountAlongHand = options["Number of elements along hand"]
-        elementsCountAlongLegToFoot = options["Number of elements along leg to foot"]
+        elementsCountAlongHip = options["Number of elements along hip"]
+        elementsCountAlongUpperLeg = options["Number of elements along upper leg"]
+        elementsCountAlongLowerLeg = options["Number of elements along lower leg"]
         elementsCountAlongFoot = options["Number of elements along foot"]
         elementsCountAroundHead = options["Number of elements around head"]
         elementsCountAroundTorso = options["Number of elements around torso"]
@@ -937,7 +957,8 @@ class MeshType_3d_wholebody2(Scaffold_base):
         isCore = options["Use Core"]
 
         layoutRegion = region.createRegion()
-        networkLayout.generate(layoutRegion)  # ask scaffold to generate to get user-edited parameters
+        # ask scaffold to generate to get user-edited parameters
+        networkLayout.generate(layoutRegion)
         layoutAnnotationGroups = networkLayout.getAnnotationGroups()
         networkMesh = networkLayout.getConstructionObject()
 
@@ -964,14 +985,26 @@ class MeshType_3d_wholebody2(Scaffold_base):
                 alongCount = elementsCountAlongAbdomen
                 aroundCount = elementsCountAroundTorso
                 coreBoundaryScalingMode = 2
-            elif "arm to hand" in name:
-                alongCount = elementsCountAlongArmToHand
+            elif "shoulder" in name:
+                alongCount = elementsCountAlongShoulder
+                aroundCount = elementsCountAroundArm
+            elif " brachium" in name:
+                alongCount = elementsCountAlongBrachium
+                aroundCount = elementsCountAroundArm
+            elif " antebrachium" in name:
+                alongCount = elementsCountAlongAntebrachium
                 aroundCount = elementsCountAroundArm
             elif "hand" in name:
                 alongCount = elementsCountAlongHand
                 aroundCount = elementsCountAroundArm
-            elif "leg to foot" in name:
-                alongCount = elementsCountAlongLegToFoot
+            elif "hip" in name:
+                alongCount = elementsCountAlongHip
+                aroundCount = elementsCountAroundLeg
+            elif "upper leg" in name:
+                alongCount = elementsCountAlongUpperLeg
+                aroundCount = elementsCountAroundLeg
+            elif "lower leg" in name:
+                alongCount = elementsCountAlongLowerLeg
                 aroundCount = elementsCountAroundLeg
             elif "foot" in name:
                 alongCount = elementsCountAlongFoot
@@ -1059,12 +1092,14 @@ class MeshType_3d_wholebody2(Scaffold_base):
 
             thoracicCavityGroup = findOrCreateAnnotationGroupForTerm(
                 annotationGroups, region, get_body_term("thoracic cavity"))
-            is_thoracic_cavity = fieldmodule.createFieldAnd(thoraxGroup.getGroup(), coreGroup.getGroup())
+            is_thoracic_cavity = fieldmodule.createFieldAnd(
+                thoraxGroup.getGroup(), coreGroup.getGroup())
             thoracicCavityGroup.getMeshGroup(mesh).addElementsConditional(is_thoracic_cavity)
 
             abdominalCavityGroup = findOrCreateAnnotationGroupForTerm(
                 annotationGroups, region, get_body_term("abdominal cavity"))
-            is_abdominal_cavity = fieldmodule.createFieldAnd(abdomenGroup.getGroup(), coreGroup.getGroup())
+            is_abdominal_cavity = fieldmodule.createFieldAnd(
+                abdomenGroup.getGroup(), coreGroup.getGroup())
             abdominalCavityGroup.getMeshGroup(mesh).addElementsConditional(is_abdominal_cavity)
 
         return annotationGroups, None
@@ -1095,24 +1130,33 @@ class MeshType_3d_wholebody2(Scaffold_base):
             is_exterior, fieldmodule.createFieldNot(is_face_xi3_0))
         skinGroup.getMeshGroup(mesh2d).addElementsConditional(is_skin)
 
-        leftArmGroup = getAnnotationGroupForTerm(annotationGroups, get_body_term("left upper limb"))
+        leftArmGroup = getAnnotationGroupForTerm(
+            annotationGroups, get_body_term("left upper limb"))
         leftArmSkinGroup = findOrCreateAnnotationGroupForTerm(
-            annotationGroups, region, get_body_term("left upper limb skin epidermis outer surface"))
+            annotationGroups, region,
+            get_body_term("left upper limb skin epidermis outer surface"))
         leftArmSkinGroup.getMeshGroup(mesh2d).addElementsConditional(
             fieldmodule.createFieldAnd(leftArmGroup.getGroup(), is_exterior))
-        rightArmGroup = getAnnotationGroupForTerm(annotationGroups, get_body_term("right upper limb"))
+        rightArmGroup = getAnnotationGroupForTerm(
+            annotationGroups, get_body_term("right upper limb"))
         rightArmSkinGroup = findOrCreateAnnotationGroupForTerm(
-            annotationGroups, region, get_body_term("right upper limb skin epidermis outer surface"))
+            annotationGroups, region,
+            get_body_term("right upper limb skin epidermis outer surface"))
         rightArmSkinGroup.getMeshGroup(mesh2d).addElementsConditional(
             fieldmodule.createFieldAnd(rightArmGroup.getGroup(), is_exterior))
-        leftLegGroup = getAnnotationGroupForTerm(annotationGroups, get_body_term("left lower limb"))
+
+        leftLegGroup = getAnnotationGroupForTerm(
+            annotationGroups, get_body_term("left lower limb"))
         leftLegSkinGroup = findOrCreateAnnotationGroupForTerm(
-            annotationGroups, region, get_body_term("left lower limb skin epidermis outer surface"))
+            annotationGroups, region,
+            get_body_term("left lower limb skin epidermis outer surface"))
         leftLegSkinGroup.getMeshGroup(mesh2d).addElementsConditional(
             fieldmodule.createFieldAnd(leftLegGroup.getGroup(), is_exterior))
-        rightLegGroup = getAnnotationGroupForTerm(annotationGroups, get_body_term("right lower limb "))
+        rightLegGroup = getAnnotationGroupForTerm(
+            annotationGroups, get_body_term("right lower limb"))
         rightLegSkinGroup = findOrCreateAnnotationGroupForTerm(
-            annotationGroups, region, get_body_term("right lower limb skin epidermis outer surface"))
+            annotationGroups, region,
+            get_body_term("right lower limb skin epidermis outer surface"))
         rightLegSkinGroup.getMeshGroup(mesh2d).addElementsConditional(
             fieldmodule.createFieldAnd(rightLegGroup.getGroup(), is_exterior))
 
@@ -1123,13 +1167,18 @@ class MeshType_3d_wholebody2(Scaffold_base):
             rightGroup = getAnnotationGroupForTerm(annotationGroups, get_body_term("right"))
             dorsalGroup = getAnnotationGroupForTerm(annotationGroups, get_body_term("dorsal"))
 
-            is_core_shell = fieldmodule.createFieldAnd(coreGroup.getGroup(), shellGroup.getGroup())
-            is_left_right = fieldmodule.createFieldAnd(leftGroup.getGroup(), rightGroup.getGroup())
-            is_left_right_dorsal = fieldmodule.createFieldAnd(is_left_right, dorsalGroup.getGroup())
+            is_core_shell = fieldmodule.createFieldAnd(
+                coreGroup.getGroup(), shellGroup.getGroup())
+            is_left_right = fieldmodule.createFieldAnd(
+                leftGroup.getGroup(), rightGroup.getGroup())
+            is_left_right_dorsal = fieldmodule.createFieldAnd(
+                is_left_right, dorsalGroup.getGroup())
 
             neckGroup = getAnnotationGroupForTerm(annotationGroups, get_body_term("neck"))
-            thoracicCavityGroup = getAnnotationGroupForTerm(annotationGroups, get_body_term("thoracic cavity"))
-            abdominalCavityGroup = getAnnotationGroupForTerm(annotationGroups, get_body_term("abdominal cavity"))
+            thoracicCavityGroup = getAnnotationGroupForTerm(
+                annotationGroups, get_body_term("thoracic cavity"))
+            abdominalCavityGroup = getAnnotationGroupForTerm(
+                annotationGroups, get_body_term("abdominal cavity"))
             armGroup = getAnnotationGroupForTerm(annotationGroups, get_body_term("upper limb"))
             legGroup = getAnnotationGroupForTerm(annotationGroups, get_body_term("lower limb"))
 
@@ -1138,8 +1187,10 @@ class MeshType_3d_wholebody2(Scaffold_base):
             is_thoracic_cavity_boundary = fieldmodule.createFieldAnd(
                 thoracicCavityGroup.getGroup(),
                 fieldmodule.createFieldOr(
-                    fieldmodule.createFieldOr(neckGroup.getGroup(), armGroup.getGroup()),
-                    fieldmodule.createFieldOr(shellGroup.getGroup(), abdominalCavityGroup.getGroup())))
+                    fieldmodule.createFieldOr(
+                        neckGroup.getGroup(), armGroup.getGroup()),
+                    fieldmodule.createFieldOr(
+                        shellGroup.getGroup(), abdominalCavityGroup.getGroup())))
             thoracicCavityBoundaryGroup.getMeshGroup(mesh2d).addElementsConditional(is_thoracic_cavity_boundary)
 
             abdominalCavityBoundaryGroup = findOrCreateAnnotationGroupForTerm(
@@ -1151,18 +1202,23 @@ class MeshType_3d_wholebody2(Scaffold_base):
                     fieldmodule.createFieldOr(shellGroup.getGroup(), legGroup.getGroup())))
             abdominalCavityBoundaryGroup.getMeshGroup(mesh2d).addElementsConditional(is_abdominal_cavity_boundary)
 
-            diaphragmGroup = findOrCreateAnnotationGroupForTerm(annotationGroups, region, get_body_term("diaphragm"))
-            is_diaphragm = fieldmodule.createFieldAnd(thoracicCavityGroup.getGroup(), abdominalCavityGroup.getGroup())
+            diaphragmGroup = findOrCreateAnnotationGroupForTerm(
+                annotationGroups, region, get_body_term("diaphragm"))
+            is_diaphragm = fieldmodule.createFieldAnd(
+                thoracicCavityGroup.getGroup(), abdominalCavityGroup.getGroup())
             diaphragmGroup.getMeshGroup(mesh2d).addElementsConditional(is_diaphragm)
 
-            spinalCordGroup = findOrCreateAnnotationGroupForTerm(annotationGroups, region, get_body_term("spinal cord"))
-            is_spinal_cord = fieldmodule.createFieldAnd(is_core_shell, is_left_right_dorsal)
+            spinalCordGroup = findOrCreateAnnotationGroupForTerm(
+                annotationGroups, region, get_body_term("spinal cord"))
+            is_spinal_cord = fieldmodule.createFieldAnd(
+                is_core_shell, is_left_right_dorsal)
             spinalCordGroup.getMeshGroup(mesh1d).addElementsConditional(is_spinal_cord)
 
 
 def setNodeFieldParameters(field, fieldcache, x, d1, d2, d3, d12=None, d13=None):
     """
     Assign node field parameters x, d1, d2, d3 of field.
+
     :param field: Field parameters to assign.
     :param fieldcache: Fieldcache with node set.
     :param x: Parameters to set for Node.VALUE_LABEL_VALUE.
@@ -1186,6 +1242,7 @@ def setNodeFieldParameters(field, fieldcache, x, d1, d2, d3, d12=None, d13=None)
 def setNodeFieldVersionDerivatives(field, fieldcache, version, d1, d2, d3, d12=None, d13=None):
     """
     Assign node field parameters d1, d2, d3 of field.
+
     :param field: Field to assign parameters of.
     :param fieldcache: Fieldcache with node set.
     :param version: Version of d1, d2, d3 >= 1.
