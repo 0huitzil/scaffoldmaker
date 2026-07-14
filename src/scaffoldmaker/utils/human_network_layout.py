@@ -5,13 +5,13 @@ human_network_element_counts = {
     'neckElementsCount': 2,
     'shoulderElementsCount': 2,
     'brachiumElementsCount': 3,
-    'antebrachiumElementsCount': 3,
+    'antebrachiumElementsCount': 2,
     'handElementsCount': 1,
     'thoraxElementsCount': 3,
     'abdomenElementsCount': 4,
     'hipElementsCount': 2,
-    'upperLegElementsCount': 4,
-    'lowerLegElementsCount': 3,
+    'upperLegElementsCount': 2,
+    'lowerLegElementsCount': 2,
     'footElementsCount': 2
 }
 
@@ -107,20 +107,22 @@ def generate_network_layout_structure(humanElementCounts:dict):
     for i in range(2):
         version = 2 if (i == 0) else 3 #Left is 2, right is 3
         # Hip
-        hipNetworkLayout, nodeIdentifier = create_segment_layout(
-            humanElementCounts['hipElementsCount'], nodeIdentifier,
-            initialJointNode=pelvisJointNode, versionStart=version)
+        # hipNetworkLayout, nodeIdentifier = create_segment_layout(
+        #     humanElementCounts['hipElementsCount'], nodeIdentifier,
+        #     initialJointNode=pelvisJointNode, versionStart=version)
         # Upper leg
         upperLegNetworkLayout, nodeIdentifier = create_segment_layout(
-            humanElementCounts['upperLegElementsCount'], nodeIdentifier)
-        # Lower leg 
+            humanElementCounts['upperLegElementsCount'] \
+            + humanElementCounts['hipElementsCount'],
+            nodeIdentifier, initialJointNode=pelvisJointNode, versionStart=version)
+        # Lower leg
         lowerLegNetworkLayout, nodeIdentifier = create_segment_layout(
             humanElementCounts['lowerLegElementsCount'], nodeIdentifier)
         # Foot 
         footNetworkLayout, nodeIdentifier = create_segment_layout(
             humanElementCounts['footElementsCount'], nodeIdentifier)
         # Join leg
-        legNetworkLayout = hipNetworkLayout + upperLegNetworkLayout \
+        legNetworkLayout = upperLegNetworkLayout \
             + lowerLegNetworkLayout + footNetworkLayout
         legs.append(legNetworkLayout)
     # Joint network
