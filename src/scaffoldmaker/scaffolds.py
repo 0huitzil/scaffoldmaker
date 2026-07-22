@@ -5,6 +5,7 @@ Class for listing and accessing all mesh type scripts supported by scaffoldmaker
 import json
 
 from scaffoldmaker.meshtypes.meshtype_1d_bifurcationtree1 import MeshType_1d_bifurcationtree1
+from scaffoldmaker.meshtypes.meshtype_1d_nervepath1 import MeshType_1d_nervepath1
 from scaffoldmaker.meshtypes.meshtype_1d_network_layout1 import MeshType_1d_network_layout1
 from scaffoldmaker.meshtypes.meshtype_1d_path1 import MeshType_1d_path1
 from scaffoldmaker.meshtypes.meshtype_2d_plate1 import MeshType_2d_plate1
@@ -24,18 +25,28 @@ from scaffoldmaker.meshtypes.meshtype_3d_colon1 import MeshType_3d_colon1
 from scaffoldmaker.meshtypes.meshtype_3d_colonsegment1 import MeshType_3d_colonsegment1
 from scaffoldmaker.meshtypes.meshtype_3d_ellipsoid1 import MeshType_3d_ellipsoid1
 from scaffoldmaker.meshtypes.meshtype_3d_esophagus1 import MeshType_3d_esophagus1
-from scaffoldmaker.meshtypes.meshtype_3d_gastrointestinaltract1 import MeshType_3d_gastrointestinaltract1
+from scaffoldmaker.meshtypes.meshtype_3d_gastrointestinaltract1 import (
+    MeshType_3d_gastrointestinaltract1,
+)
 from scaffoldmaker.meshtypes.meshtype_3d_heart1 import MeshType_3d_heart1
 from scaffoldmaker.meshtypes.meshtype_3d_heart2 import MeshType_3d_heart2
-from scaffoldmaker.meshtypes.meshtype_3d_heartarterialroot1 import MeshType_3d_heartarterialroot1
-from scaffoldmaker.meshtypes.meshtype_3d_heartarterialvalve1 import MeshType_3d_heartarterialvalve1
+from scaffoldmaker.meshtypes.meshtype_3d_heartarterialroot1 import (
+    MeshType_3d_heartarterialroot1,
+)
+from scaffoldmaker.meshtypes.meshtype_3d_heartarterialvalve1 import (
+    MeshType_3d_heartarterialvalve1,
+)
 from scaffoldmaker.meshtypes.meshtype_3d_heartatria1 import MeshType_3d_heartatria1
 from scaffoldmaker.meshtypes.meshtype_3d_heartatria2 import MeshType_3d_heartatria2
 from scaffoldmaker.meshtypes.meshtype_3d_heartventricles1 import MeshType_3d_heartventricles1
 from scaffoldmaker.meshtypes.meshtype_3d_heartventricles2 import MeshType_3d_heartventricles2
 from scaffoldmaker.meshtypes.meshtype_3d_heartventricles3 import MeshType_3d_heartventricles3
-from scaffoldmaker.meshtypes.meshtype_3d_heartventriclesbase1 import MeshType_3d_heartventriclesbase1
-from scaffoldmaker.meshtypes.meshtype_3d_heartventriclesbase2 import MeshType_3d_heartventriclesbase2
+from scaffoldmaker.meshtypes.meshtype_3d_heartventriclesbase1 import (
+    MeshType_3d_heartventriclesbase1,
+)
+from scaffoldmaker.meshtypes.meshtype_3d_heartventriclesbase2 import (
+    MeshType_3d_heartventriclesbase2,
+)
 from scaffoldmaker.meshtypes.meshtype_3d_lens1 import MeshType_3d_lens1
 from scaffoldmaker.meshtypes.meshtype_3d_lung1 import MeshType_3d_lung1
 from scaffoldmaker.meshtypes.meshtype_3d_lung2 import MeshType_3d_lung2
@@ -50,21 +61,32 @@ from scaffoldmaker.meshtypes.meshtype_3d_solidcylinder1 import MeshType_3d_solid
 from scaffoldmaker.meshtypes.meshtype_3d_solidsphere1 import MeshType_3d_solidsphere1
 from scaffoldmaker.meshtypes.meshtype_3d_solidsphere2 import MeshType_3d_solidsphere2
 from scaffoldmaker.meshtypes.meshtype_3d_sphereshell1 import MeshType_3d_sphereshell1
-from scaffoldmaker.meshtypes.meshtype_3d_sphereshellseptum1 import MeshType_3d_sphereshellseptum1
-from scaffoldmaker.meshtypes.meshtype_3d_spinalnerve1 import \
-    (MeshType_3d_spinalnerve1, MeshType_1d_human_spinal_nerve_network_layout1)
+from scaffoldmaker.meshtypes.meshtype_3d_sphereshellseptum1 import (
+    MeshType_3d_sphereshellseptum1,
+)
+from scaffoldmaker.meshtypes.meshtype_3d_spinalnerve1 import (
+    MeshType_1d_human_spinal_nerve_network_layout1,
+    MeshType_3d_spinalnerve1,
+)
 from scaffoldmaker.meshtypes.meshtype_3d_stellate1 import MeshType_3d_stellate1
 from scaffoldmaker.meshtypes.meshtype_3d_stomach1 import MeshType_3d_stomach1
 from scaffoldmaker.meshtypes.meshtype_3d_stomachhuman1 import MeshType_3d_stomachhuman1
 from scaffoldmaker.meshtypes.meshtype_3d_trigeminalnerve1 import (
-    MeshType_3d_trigeminalnerve1, MeshType_1d_human_trigeminal_nerve_network_layout1)
+    MeshType_1d_human_trigeminal_nerve_network_layout1,
+    MeshType_3d_trigeminalnerve1,
+)
 from scaffoldmaker.meshtypes.meshtype_3d_tube1 import MeshType_3d_tube1
 from scaffoldmaker.meshtypes.meshtype_3d_tubenetwork1 import MeshType_3d_tubenetwork1
 from scaffoldmaker.meshtypes.meshtype_3d_tubeseptum1 import MeshType_3d_tubeseptum1
-from scaffoldmaker.meshtypes.meshtype_3d_uterus1 import (MeshType_3d_uterus1, MeshType_1d_uterus_network_layout1)
+from scaffoldmaker.meshtypes.meshtype_3d_uterus1 import (
+    MeshType_1d_uterus_network_layout1,
+    MeshType_3d_uterus1,
+)
 from scaffoldmaker.meshtypes.meshtype_3d_wholebody1 import MeshType_3d_wholebody1
 from scaffoldmaker.meshtypes.meshtype_3d_wholebody2 import (
-    MeshType_3d_wholebody2, MeshType_1d_human_body_network_layout1)
+    MeshType_1d_human_body_network_layout1,
+    MeshType_3d_wholebody2,
+)
 from scaffoldmaker.scaffoldpackage import ScaffoldPackage
 
 
@@ -72,6 +94,7 @@ class Scaffolds(object):
 
     _allScaffoldTypes = [
         MeshType_1d_bifurcationtree1,
+        MeshType_1d_nervepath1,
         MeshType_1d_uterus_network_layout1,
         MeshType_1d_network_layout1,
         MeshType_1d_path1,
