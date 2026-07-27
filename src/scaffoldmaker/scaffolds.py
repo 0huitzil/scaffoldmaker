@@ -8,6 +8,7 @@ from scaffoldmaker.meshtypes.meshtype_1d_bifurcationtree1 import MeshType_1d_bif
 from scaffoldmaker.meshtypes.meshtype_1d_nervepath1 import MeshType_1d_nervepath1
 from scaffoldmaker.meshtypes.meshtype_1d_network_layout1 import MeshType_1d_network_layout1
 from scaffoldmaker.meshtypes.meshtype_1d_path1 import MeshType_1d_path1
+from scaffoldmaker.meshtypes.meshtype_1d_vesselpath1 import MeshType_1d_vesselpath1
 from scaffoldmaker.meshtypes.meshtype_2d_plate1 import MeshType_2d_plate1
 from scaffoldmaker.meshtypes.meshtype_2d_platehole1 import MeshType_2d_platehole1
 from scaffoldmaker.meshtypes.meshtype_2d_sphere1 import MeshType_2d_sphere1
@@ -94,6 +95,7 @@ class Scaffolds(object):
 
     _allScaffoldTypes = [
         MeshType_1d_bifurcationtree1,
+        MeshType_1d_vesselpath1,
         MeshType_1d_nervepath1,
         MeshType_1d_uterus_network_layout1,
         MeshType_1d_network_layout1,
