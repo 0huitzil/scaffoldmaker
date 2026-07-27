@@ -146,7 +146,7 @@ class Scaffold_base:
             constructionObject = None
             if options.get('Refine'):
                 baseRegion = region.createRegion()
-                annotationGroups = cls.generateBaseMesh(baseRegion, options)[0]
+                annotationGroups, constructionObject = cls.generateBaseMesh(baseRegion, options)
                 # need faces to determine shared or boundary nodes during mesh refinement
                 baseRegion.getFieldmodule().defineAllFaces()
                 meshrefinement = MeshRefinement(baseRegion, region, annotationGroups)

@@ -6,13 +6,14 @@ from cmlibs.zinc.element import Element, Elementbasis
 from cmlibs.zinc.node import Node
 from scaffoldmaker.utils.eft_utils import remapEftLocalNodes, remapEftNodeValueLabelVersion, setEftScaleFactorIds
 from scaffoldmaker.utils.interpolation import interpolateSampleCubicHermite, sampleCubicHermiteCurvesSmooth
-from scaffoldmaker.utils.networkmesh import NetworkMesh, NetworkMeshBuilder, NetworkMeshGenerateData, \
-    NetworkMeshJunction, NetworkMeshSegment, pathValueLabels
+from scaffoldmaker.utils.meshgeneratedata import MeshGenerateData
+from scaffoldmaker.utils.networkmesh import (
+    NetworkMesh, NetworkMeshBuilder, NetworkMeshJunction, NetworkMeshSegment, pathValueLabels)
 from scaffoldmaker.utils.zinc_utils import get_nodeset_path_ordered_field_parameters
 import math
 
 
-class BoxNetworkMeshGenerateData(NetworkMeshGenerateData):
+class BoxNetworkMeshGenerateData(MeshGenerateData):
     """
     Data for passing to BoxNetworkMesh generateMesh functions.
     """

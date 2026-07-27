@@ -700,6 +700,13 @@ class HermiteNodeLayoutManager:
             HermiteNodeLayout([[-1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [1.0, -1.0, 0.0], [0.0, 0.0, -1.0], [0.0, 0.0, 1.0]]),
             HermiteNodeLayout([[1.0, 0.0, 0.0], [0.0, -1.0, 0.0], [-1.0, 1.0, 0.0], [0.0, 0.0, -1.0], [0.0, 0.0, 1.0]]),
             HermiteNodeLayout([[-1.0, 0.0, 0.0], [0.0, -1.0, 0.0], [1.0, 1.0, 0.0], [0.0, 0.0, -1.0], [0.0, 0.0, 1.0]])]
+        # 2d / no d3 version of the above
+        # note these need to be organised to be clockwise about +d3 to work as only permutations around it are included
+        self._nodeLayout3WayPoints12_no_d3 = [
+            HermiteNodeLayout([[1.0, 0.0], [0.0, 1.0], [-1.0, -1.0]]),
+            HermiteNodeLayout([[0.0, 1.0], [-1.0, 0.0], [1.0, -1.0]]),
+            HermiteNodeLayout([[0.0, -1.0], [1.0, 0.0], [-1.0, 1.0]]),
+            HermiteNodeLayout([[-1.0, 0.0], [0.0, -1.0], [1.0, 1.0]])]
         self._nodeLayout3WayPoints13 = [
             HermiteNodeLayout([[1.0, 0.0, 0.0], [0.0, 0.0, 1.0], [-1.0, 0.0, -1.0], [0.0, -1.0, 0.0], [0.0, 1.0, 0.0]]),
             HermiteNodeLayout([[-1.0, 0.0, 0.0], [0.0, 0.0, 1.0], [1.0, 0.0, -1.0], [0.0, -1.0, 0.0], [0.0, 1.0, 0.0]]),
@@ -813,28 +820,69 @@ class HermiteNodeLayoutManager:
                        self._nodeLayoutTriplePoint2DQ3, self._nodeLayoutTriplePoint2DQ4]
         return nodeLayouts
 
-    def getNodeLayout3WayPoints12(self):
+    def getNodeLayout3WayPoints12(self, i):
+        """
+        Get 3-way node layout for quadrants 12 = NN, NP, PN, PP.
+        :param i: Index of variant from 0 to 3.
+        :return: HermiteNodeLayout.
+        """
+        return self._nodeLayout3WayPoints12[i]
+
+    def getNodeLayout3WayPoints12_no_d3(self, i):
+        """
+        Get 3-way node layout for quadrants 12 = NN, NP, PN, PP.
+        Version for 2-D or no d3.
+        :param i: Index of variant from 0 to 3.
+        :return: HermiteNodeLayout.
+        """
+        return self._nodeLayout3WayPoints12_no_d3[i]
+
+    def getNodeLayout3WayPoints13(self, i):
+        """
+        Get 3-way node layout for quadrants 13 = NN, NP, PN, PP.
+        :param i: Index of variant from 0 to 3.
+        :return: HermiteNodeLayout.
+        """
+        return self._nodeLayout3WayPoints13[i]
+
+    def getNodeLayout3WayPoints23(self, i):
+        """
+        Get 3-way node layout for quadrants 23 = NN, NP, PN, PP.
+        :param i: Index of variant from 0 to 3.
+        :return: HermiteNodeLayout.
+        """
+        return self._nodeLayout3WayPoints23[i]
+
+    def getNodeLayout4WayPoints(self, i):
+        """
+        Get node layout from a regular core for octants 123: NNN, NNP, NPN, NPP, PNN, PNP, PPN, PPP.
+        :param i: Index of variant from 0 to 7.
+        :return: HermiteNodeLayout.
+        """
+        return self._nodeLayout4WayPoints[i]
+
+    def getNodeLayout3WayPoints12List(self):
         """
         Get 3-way node layouts for quadrants 12 = NN, NP, PN, PP.
         :return: List of 4 HermiteNodeLayout.
         """
         return self._nodeLayout3WayPoints12
 
-    def getNodeLayout3WayPoints13(self):
+    def getNodeLayout3WayPoints13List(self):
         """
         Get 3-way node layouts for quadrants 13 = NN, NP, PN, PP.
         :return: List of 4 HermiteNodeLayout.
         """
         return self._nodeLayout3WayPoints13
 
-    def getNodeLayout3WayPoints23(self):
+    def getNodeLayout3WayPoints23List(self):
         """
         Get 3-way node layouts for quadrants 23 = NN, NP, PN, PP.
         :return: List of 4 HermiteNodeLayout.
         """
         return self._nodeLayout3WayPoints23
 
-    def getNodeLayout4WayPoints(self):
+    def getNodeLayout4WayPointsList(self):
         """
         Get node layouts from a regular core for octants 123: NNN, NNP, NPN, NPP, PNN, PNP, PPN, PPP.
         :return: List of 8 HermiteNodeLayout.
@@ -1065,8 +1113,12 @@ def determineCubicHermiteSerendipityEft(mesh, nodeParameters, nodeLayouts):
             on = n ^ (1 << ed)
             if nodeOrder.index(on) > nodeOrder.index(n):
                 derivativeMagnitude = magnitude(elementDerivative)
-                newMagnitude = 2.0 / ((1.0 / oldDeltaMagnitude) + (1.0 / derivativeMagnitude))
-                elementDerivative = mult(elementDerivative, newMagnitude / derivativeMagnitude)
+                if (oldDeltaMagnitude > 0.0) and (derivativeMagnitude > 0.0):
+                    newMagnitude = 2.0 / ((1.0 / oldDeltaMagnitude) + (1.0 / derivativeMagnitude))
+                else:
+                    newMagnitude = (oldDeltaMagnitude + derivativeMagnitude) / 2.0
+                if derivativeMagnitude > 0.0:
+                    elementDerivative = mult(elementDerivative, newMagnitude / derivativeMagnitude)
                 # update other node delta to work in with this derivative
                 otherElementDerivative = (
                     interpolateHermiteLagrangeDerivative(nodeParameters[n][0], elementDerivative, nodeParameters[on][0], 1.0)
@@ -1128,7 +1180,8 @@ def addTricubicHermiteSerendipityEftParameterScaling(eft, scalefactors, nodePara
     :param localNodeIndexes: Local node indexes to scale value label at. Currently must be in [5, 6, 7, 8].
     :param valueLabel: Single value label to scale. Currently only implemened for D_DS3.
     :param version: Set to a number > 1 to use that derivative version instead of scale factors, and client is
-    responsible for assigning that derivative version in proportion to the returned scale factors.
+    responsible for assigning that derivative version in proportion to the returned scale factors. Set to 0 to
+    merely return the additional scale factors for client to scale and assign to original derivative.
     :return: Modified eft, final scalefactors, add scalefactors (multiplying the affected derivatives; these are
     included in final scalefactors if version == 1, otherwise client must use these to scale versioned derivatives).
     """
@@ -1144,11 +1197,66 @@ def addTricubicHermiteSerendipityEftParameterScaling(eft, scalefactors, nodePara
         xb = nodeParameters[nb][0]
         db = nodeParameters[nb][3]
         dbScaled = computeCubicHermiteEndDerivative(xa, da, xb, db)
-        scalefactor = magnitude(dbScaled) / magnitude(db)
+        mag_db = magnitude(db)
+        mag_dbScaled = magnitude(dbScaled)
+        scalefactor = mag_dbScaled / mag_db if ((mag_db > 0.0) and (mag_dbScaled > 0.0)) else 0.0
         addScalefactors.append(scalefactor)
     if version == 1:
         newScalefactors = scalefactors + addScalefactors if scalefactors else addScalefactors
         addScaleEftNodesValueLabel(eft, localNodeIndexes, Node.VALUE_LABEL_D_DS3, 3)
         return eft, newScalefactors, addScalefactors
-    remapEftNodeValueLabelsVersion(eft, localNodeIndexes, [valueLabel], version)
+    if version == 2:
+        remapEftNodeValueLabelsVersion(eft, localNodeIndexes, [valueLabel], version)
     return eft, scalefactors, addScalefactors
+
+
+def resolveEftCoreBoundaryScaling(eft, scalefactors, nodeParameters, nodeIdentifiers, mode,
+                                  nodes=None, coordinates=None, fieldcache=None):
+    """
+    Resolve differences in d3 scaling across core-shell boundary by one of 2 modes.
+    Works for 8-noded tricubic Hermite serendipity basis only.
+    :param eft: Element field template to modify.
+    :param scalefactors: Existing scalefactors for use with eft.
+    :param nodeParameters: List over 8 (3-D) local nodes in Zinc ordering of 4 parameter vectors
+    x, d1, d2, d3 each with 3 components.
+    :param nodeIdentifiers: List over 8 3-D local nodes giving global node identifiers.
+    :param mode: 0 to replace derivatives (for 0 shell count 0), 1 to set scale factors, 2 to add version 2 to d3
+    for the boundary nodes and assigning values to that version equal to the scale factors x version 1.
+    :param nodes: Nodeset for nodes for mode 2.
+    :param coordinates: Coordinate field for mode 2.
+    :param fieldcache: Fieldcache for mode 2.
+    :return: New eft, new scalefactors.
+    """
+    assert mode in (0, 1, 2)
+    eft, scalefactors, addScalefactors = addTricubicHermiteSerendipityEftParameterScaling(
+        eft, scalefactors, nodeParameters, [5, 6, 7, 8], Node.VALUE_LABEL_D_DS3, version=mode)
+    if mode == 2:
+        nodetemplate = nodes.createNodetemplate()
+        n = 4
+        for nodeIdentifier, scalefactor in zip(nodeIdentifiers[4:], addScalefactors):
+            node = nodes.findNodeByIdentifier(nodeIdentifier)
+            nodetemplate.defineFieldFromNode(coordinates, node)
+            versionsCount = nodetemplate.getValueNumberOfVersions(coordinates, -1, Node.VALUE_LABEL_D_DS3)
+            if versionsCount == 1:
+                # make version 2 of d3 at the node and assign to it
+                nodetemplate.setValueNumberOfVersions(coordinates, -1, Node.VALUE_LABEL_D_DS3, 2)
+                # merge clears the current parameters so need to re-set
+                node.merge(nodetemplate)
+                fieldcache.setNode(node)
+                for valueLabel, value in zip(
+                        (Node.VALUE_LABEL_VALUE, Node.VALUE_LABEL_D_DS1,
+                         Node.VALUE_LABEL_D_DS2, Node.VALUE_LABEL_D_DS3), nodeParameters[n]):
+                    coordinates.setNodeParameters(fieldcache, -1, valueLabel, 1, value)
+                d3_v2 = mult(nodeParameters[n][3], scalefactor)
+                coordinates.setNodeParameters(fieldcache, -1, Node.VALUE_LABEL_D_DS3, 2, d3_v2)
+            n += 1
+    elif mode == 0:
+        n = 4
+        for nodeIdentifier, scalefactor in zip(nodeIdentifiers[4:], addScalefactors):
+            node = nodes.findNodeByIdentifier(nodeIdentifier)
+            fieldcache.setNode(node)
+            result, x = coordinates.getNodeParameters(fieldcache, -1, Node.VALUE_LABEL_D_DS3, 1, 3)
+            d3 = mult(nodeParameters[n][3], scalefactor)
+            coordinates.setNodeParameters(fieldcache, -1, Node.VALUE_LABEL_D_DS3, 1, d3)
+            n += 1
+    return eft, scalefactors

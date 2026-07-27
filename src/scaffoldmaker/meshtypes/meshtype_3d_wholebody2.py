@@ -87,7 +87,7 @@ class MeshType_1d_human_body_network_layout1(MeshType_1d_network_layout1):
         options["Foot thickness"] = 0.3
         options["Foot width"] = 1.0
         options["Inner proportion default"] = 0.7
-        options["Inner proportion head"] = 0.35
+        options["Inner proportion head"] = 0.7
         return options
 
     @classmethod
@@ -433,12 +433,19 @@ class MeshType_1d_human_body_network_layout1(MeshType_1d_network_layout1):
         d3 = [0.0, 0.0, halfHeadDepth]
         id2 = mult(d2, innerProportionHead)
         id3 = mult(d3, innerProportionHead)
+
+        headInnerOffset = (1.0 - innerProportionHead) * halfHeadWidth
+        headLengthInner = headLength - headInnerOffset
+        ix, id1 = sampleCubicHermiteCurvesSmooth(
+            [[headInnerOffset, 0.0, 0.0], [headLength, 0.0, 0.0]],
+            [[headLengthInner, 0.0, 0.0]] * 2,
+            headElementsCount, derivativeMagnitudeEnd=headScale)[:2]
         for i in range(headElementsCount):
             node = nodes.findNodeByIdentifier(nodeIdentifier)
             fieldcache.setNode(node)
             x = [headScale * i, 0.0, 0.0]
             setNodeFieldParameters(coordinates, fieldcache, x, d1, d2, d3)
-            setNodeFieldParameters(innerCoordinates, fieldcache, x, d1, id2, id3)
+            setNodeFieldParameters(innerCoordinates, fieldcache, ix[i], id1[i], id2, id3)
             nodeIdentifier += 1
 
         neckScale = neckLength / neckElementsCount
@@ -872,7 +879,7 @@ class MeshType_3d_wholebody2(Scaffold_base):
         useParameterSetName = "Human 1 Coarse" if (parameterSetName == "Default") else parameterSetName
         options["Base parameter set"] = useParameterSetName
         options["Body network layout"] = ScaffoldPackage(MeshType_1d_human_body_network_layout1)
-        options["Number of elements along head"] = 2
+        options["Number of elements along head"] = 4
         options["Number of elements along neck"] = 1
         options["Number of elements along thorax"] = 2
         options["Number of elements along abdomen"] = 2
@@ -894,7 +901,7 @@ class MeshType_3d_wholebody2(Scaffold_base):
         options["Number of elements across core box minor"] = 2
         options["Number of elements across core transition"] = 1
         if "Medium" in useParameterSetName:
-            options["Number of elements along head"] = 3
+            options["Number of elements along head"] = 6
             options["Number of elements along neck"] = 2
             options["Number of elements along thorax"] = 3
             options["Number of elements along abdomen"] = 3
@@ -909,7 +916,7 @@ class MeshType_3d_wholebody2(Scaffold_base):
             options["Number of elements around torso"] = 16
             options["Number of elements around leg"] = 12
         elif "Fine" in useParameterSetName:
-            options["Number of elements along head"] = 4
+            options["Number of elements along head"] = 8
             options["Number of elements along neck"] = 2
             options["Number of elements along thorax"] = 4
             options["Number of elements along abdomen"] = 4
@@ -1013,7 +1020,7 @@ class MeshType_3d_wholebody2(Scaffold_base):
                 minElementsCountAround = options[key]
 
         if options["Number of elements through shell"] < 0:
-            options["Number of elements through shell"] = 1
+            options["Number of elements through shell"] = 0
 
         if options["Number of elements across core transition"] < 1:
             options["Number of elements across core transition"] = 1
@@ -1058,7 +1065,8 @@ class MeshType_3d_wholebody2(Scaffold_base):
         elementsCountAroundTorso = options["Number of elements around torso"]
         elementsCountAroundArm = options["Number of elements around arm"]
         elementsCountAroundLeg = options["Number of elements around leg"]
-        isCore = options["Use Core"]
+        shell_count = options["Number of elements through shell"]
+        core = options["Use Core"]
 
         layoutRegion = region.createRegion()
         # ask scaffold to generate to get user-edited parameters
@@ -1124,17 +1132,18 @@ class MeshType_3d_wholebody2(Scaffold_base):
             annotationElementsCountsAlong=annotationAlongCounts,
             defaultElementsCountAround=options["Number of elements around head"],
             annotationElementsCountsAround=annotationAroundCounts,
-            elementsCountThroughShell=options["Number of elements through shell"],
-            isCore=isCore,
-            elementsCountTransition=options['Number of elements across core transition'],
+            shell_count=shell_count,
+            core=core,
+            transition_count=options['Number of elements across core transition'],
             defaultElementsCountCoreBoxMinor=options["Number of elements across core box minor"],
             annotationElementsCountsCoreBoxMinor=[],
             defaultCoreBoundaryScalingMode=defaultCoreBoundaryScalingMode,
             annotationCoreBoundaryScalingMode=annotationCoreBoundaryScalingMode,
             useOuterTrimSurfaces=True)
 
-        meshDimension = 3
+        meshDimension = 3 if (shell_count or core) else 2
         tubeNetworkMeshBuilder.build()
+
         generateData = TubeNetworkMeshGenerateData(
             region, meshDimension,
             isLinearThroughShell=False,
@@ -1160,7 +1169,7 @@ class MeshType_3d_wholebody2(Scaffold_base):
             defaultElementsCountAround=options["Number of elements around head"],
             annotationElementsCountsAround=annotationAroundCounts,
             elementsCountThroughShell=options["Number of elements through shell"],
-            isCore=isCore,
+            isCore=core,
             elementsCountTransition=options['Number of elements across core transition'],
             defaultElementsCountCoreBoxMinor=options["Number of elements across core box minor"],
             annotationElementsCountsCoreBoxMinor=[],
@@ -1187,7 +1196,7 @@ class MeshType_3d_wholebody2(Scaffold_base):
         del tmp_region
         del tmp_layoutRegion
 
-        if isCore:
+        if core and shell_count:
             fieldmodule = region.getFieldmodule()
             mesh = fieldmodule.findMeshByDimension(meshDimension)
             thoraxGroup = getAnnotationGroupForTerm(annotationGroups, get_body_term("thorax"))
@@ -1218,7 +1227,9 @@ class MeshType_3d_wholebody2(Scaffold_base):
         :param annotationGroups: List of annotation groups for top-level elements.
         New face annotation groups are appended to this list.
         """
-        isCore = options["Use Core"]
+        is_core = options["Use Core"]
+        shell_count = options["Number of elements through shell"]
+        BodyTubeNetworkMeshBuilder.defineFaceAnnotations(region, annotationGroups, is_core, shell_count)
 
         # create 2-D surface mesh groups, 1-D spinal cord
         fieldmodule = region.getFieldmodule()
@@ -1230,8 +1241,12 @@ class MeshType_3d_wholebody2(Scaffold_base):
 
         skinGroup = findOrCreateAnnotationGroupForTerm(
             annotationGroups, region, get_body_term("skin epidermis outer surface"))
-        is_skin = is_exterior if isCore else fieldmodule.createFieldAnd(
+        is_skin = is_exterior if is_core else fieldmodule.createFieldAnd(
             is_exterior, fieldmodule.createFieldNot(is_face_xi3_0))
+        skinGroup = findOrCreateAnnotationGroupForTerm(annotationGroups, region, get_body_term("skin epidermis outer surface"))
+        one = fieldmodule.createFieldConstant(1.0)
+        is_skin = (is_exterior if is_core else fieldmodule.createFieldAnd(
+            is_exterior, fieldmodule.createFieldNot(is_face_xi3_0))) if (is_core or shell_count) else one
         skinGroup.getMeshGroup(mesh2d).addElementsConditional(is_skin)
 
         leftArmGroup = getAnnotationGroupForTerm(
@@ -1247,7 +1262,7 @@ class MeshType_3d_wholebody2(Scaffold_base):
             annotationGroups, region,
             get_body_term("right upper limb skin epidermis outer surface"))
         rightArmSkinGroup.getMeshGroup(mesh2d).addElementsConditional(
-            fieldmodule.createFieldAnd(rightArmGroup.getGroup(), is_exterior))
+            fieldmodule.createFieldAnd(rightArmGroup.getGroup(), is_skin))
 
         leftLegGroup = getAnnotationGroupForTerm(
             annotationGroups, get_body_term("left lower limb"))
@@ -1255,16 +1270,18 @@ class MeshType_3d_wholebody2(Scaffold_base):
             annotationGroups, region,
             get_body_term("left lower limb skin epidermis outer surface"))
         leftLegSkinGroup.getMeshGroup(mesh2d).addElementsConditional(
-            fieldmodule.createFieldAnd(leftLegGroup.getGroup(), is_exterior))
+            fieldmodule.createFieldAnd(leftLegGroup.getGroup(), is_skin))
         rightLegGroup = getAnnotationGroupForTerm(
             annotationGroups, get_body_term("right lower limb"))
         rightLegSkinGroup = findOrCreateAnnotationGroupForTerm(
             annotationGroups, region,
             get_body_term("right lower limb skin epidermis outer surface"))
         rightLegSkinGroup.getMeshGroup(mesh2d).addElementsConditional(
-            fieldmodule.createFieldAnd(rightLegGroup.getGroup(), is_exterior))
+            fieldmodule.createFieldAnd(rightLegGroup.getGroup(), is_skin))
 
-        if isCore:
+        if is_core and shell_count:
+            # define cavity surfaces, diaphragm and spinal cord
+            headGroup = getAnnotationGroupForTerm(annotationGroups, get_body_term("head"))
             coreGroup = getAnnotationGroupForTerm(annotationGroups, get_body_term("core"))
             shellGroup = getAnnotationGroupForTerm(annotationGroups, get_body_term("shell"))
             leftGroup = getAnnotationGroupForTerm(annotationGroups, get_body_term("left"))
@@ -1312,10 +1329,11 @@ class MeshType_3d_wholebody2(Scaffold_base):
                 thoracicCavityGroup.getGroup(), abdominalCavityGroup.getGroup())
             diaphragmGroup.getMeshGroup(mesh2d).addElementsConditional(is_diaphragm)
 
-            spinalCordGroup = findOrCreateAnnotationGroupForTerm(
-                annotationGroups, region, get_body_term("spinal cord"))
+            # now excluding head from spinal cord
+            spinalCordGroup = findOrCreateAnnotationGroupForTerm(annotationGroups, region, get_body_term("spinal cord"))
             is_spinal_cord = fieldmodule.createFieldAnd(
-                is_core_shell, is_left_right_dorsal)
+                fieldmodule.createFieldAnd(is_core_shell, is_left_right_dorsal),
+                fieldmodule.createFieldNot(headGroup.getGroup()))
             spinalCordGroup.getMeshGroup(mesh1d).addElementsConditional(is_spinal_cord)
 
 

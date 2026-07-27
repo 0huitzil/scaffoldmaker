@@ -24,10 +24,9 @@ class UterusScaffoldTestCase(unittest.TestCase):
         for term_ids in uterus_terms:
             self.assertTrue(check_annotation_term_ids(term_ids), "Invalid primary term id or order not UBERON < ILX < FMA for uterus annotation term ids " + str(term_ids)) 
 
-
-    def test_uterus1(self):
+    def test_uterus1_human_1shell(self):
         """
-        Test creation of uterus scaffold.
+        Test creation of human uterus scaffold with 1 shell count.
         """
         scaffold = MeshType_3d_uterus1
         parameterSetNames = scaffold.getParameterSetNames()
@@ -36,11 +35,11 @@ class UterusScaffoldTestCase(unittest.TestCase):
 
         networkLayout = options.get("Network layout")
         networkLayoutSettings = networkLayout.getScaffoldSettings()
-        self.assertEqual("1-2-3-4-5-6-7-8-23.1,9-10-11-12-13-14-15-16-23.2,#-17-18-19-20-21-22-23.3,"
+        self.assertEqual("1-2-3-4-5-6-7-8-23.1,9-10-11-12-13-14-15-16-23.2,#17-18-19-20-21-22-23.3,"
                          "23.4-24-25-26-27-28-29,29-30-31,31-32-33-34-35-36-37-38",
                          networkLayoutSettings["Structure"])
 
-        self.assertEqual(15, len(options))
+        self.assertEqual(14, len(options))
         self.assertEqual(20, options.get("Number of elements around"))
         self.assertEqual(8, options.get("Number of elements around oviduct/uterine horn"))
         self.assertEqual(1, options.get("Number of elements through wall"))
@@ -69,7 +68,7 @@ class UterusScaffoldTestCase(unittest.TestCase):
         self.assertTrue(coordinates.isValid())
         minimums, maximums = evaluateFieldNodesetRange(coordinates, nodes)
         assertAlmostEqualList(self, minimums, [-2.999999999999999, -14.0, -8.268270767743472], 1.0E-6)
-        assertAlmostEqualList(self, maximums, [12.947480545068354, 14.0, 2.991966625368734], 1.0E-6)
+        assertAlmostEqualList(self, maximums, [12.947480545068354, 14.0, 2.9919276762970517], 1.0E-6)
 
         with ChangeManager(fieldmodule):
             one = fieldmodule.createFieldConstant(1.0)
@@ -83,8 +82,8 @@ class UterusScaffoldTestCase(unittest.TestCase):
         self.assertEqual(result, RESULT_OK)
         result, volume = volumeField.evaluateReal(fieldcache, 1)
         self.assertEqual(result, RESULT_OK)
-        self.assertAlmostEqual(surfaceArea, 326.53374476529103, delta=5.0E-2)
-        self.assertAlmostEqual(volume, 250.8430658356537, delta=5.0E-2)
+        self.assertAlmostEqual(surfaceArea, 326.7274574173959, delta=5.0E-2)
+        self.assertAlmostEqual(volume, 251.02652308118212, delta=5.0E-2)
 
         fieldmodule.defineAllFaces()
         for annotationGroup in annotationGroups:
@@ -125,8 +124,7 @@ class UterusScaffoldTestCase(unittest.TestCase):
 
         refineRegion = region.createRegion()
         refineFieldmodule = refineRegion.getFieldmodule()
-        options['Refine number of elements along'] = 2
-        options['Refine number of elements around'] = 2
+        options['Refine number of elements'] = 2
         options['Refine number of elements through wall'] = 2
         meshrefinement = MeshRefinement(region, refineRegion, annotationGroups)
         scaffold.refineMesh(meshrefinement, options)
@@ -177,6 +175,70 @@ class UterusScaffoldTestCase(unittest.TestCase):
         cache.setNode(node)
         element, xi = markerLocation.evaluateMeshLocation(cache, 3)
         self.assertTrue(element.isValid())
+
+    def test_uterus1_human_0shell(self):
+        """
+        Test creation of human uterus scaffold with 0 shell count.
+        """
+        scaffold = MeshType_3d_uterus1
+        options = scaffold.getDefaultOptions("Human 1")
+        options["Number of elements through wall"] = 0
+
+        context = Context("Test")
+        region = context.getDefaultRegion()
+        self.assertTrue(region.isValid())
+        annotationGroups = scaffold.generateBaseMesh(region, options)[0]
+        self.assertEqual(17, len(annotationGroups))
+
+        fieldmodule = region.getFieldmodule()
+        self.assertEqual(RESULT_OK, fieldmodule.defineAllFaces())
+        mesh3d = fieldmodule.findMeshByDimension(3)
+        self.assertEqual(0, mesh3d.getSize())
+        mesh2d = fieldmodule.findMeshByDimension(2)
+        self.assertEqual(320, mesh2d.getSize())
+        mesh1d = fieldmodule.findMeshByDimension(1)
+        self.assertEqual(658, mesh1d.getSize())
+        nodes = fieldmodule.findNodesetByFieldDomainType(Field.DOMAIN_TYPE_NODES)
+        self.assertEqual(341, nodes.getSize())
+
+        coordinates = fieldmodule.findFieldByName("coordinates").castFiniteElement()
+        self.assertTrue(coordinates.isValid())
+        minimums, maximums = evaluateFieldNodesetRange(coordinates, nodes)
+        assertAlmostEqualList(self, minimums, [-2.999999999999999, -14.0, -8.268270767743472], 1.0E-6)
+        assertAlmostEqualList(self, maximums, [12.947480545068354, 14.0, 2.9919276762970517], 1.0E-6)
+
+        with ChangeManager(fieldmodule):
+            one = fieldmodule.createFieldConstant(1.0)
+            surfaceAreaField = fieldmodule.createFieldMeshIntegral(one, coordinates, mesh2d)
+            surfaceAreaField.setNumbersOfPoints(4)
+        fieldcache = fieldmodule.createFieldcache()
+        result, surfaceArea = surfaceAreaField.evaluateReal(fieldcache, 1)
+        self.assertEqual(result, RESULT_OK)
+        self.assertAlmostEqual(surfaceArea, 325.59151043631533, delta=5.0E-2)
+
+        fieldmodule.defineAllFaces()
+        for annotationGroup in annotationGroups:
+            annotationGroup.addSubelements()
+        scaffold.defineFaceAnnotations(region, options, annotationGroups)
+        self.assertEqual(44, len(annotationGroups))
+
+        # check some annotation groups
+        expectedSizes3d = {
+            "fundus of uterus": 32,
+            "body of uterus": 128,
+            "left oviduct": 40,
+            "vagina": 80,
+            'left broad ligament of uterus': 12,
+            'right broad ligament of uterus': 12,
+            "uterus": 240
+            }
+
+        meshes = [mesh1d, mesh2d, mesh3d]
+        for name in expectedSizes3d:
+            term = get_uterus_term(name)
+            annotationGroup = getAnnotationGroupForTerm(annotationGroups, term)
+            size = annotationGroup.getMeshGroup(meshes[annotationGroup.getDimension() - 1]).getSize()
+            self.assertEqual(expectedSizes3d[name], size, name)
 
 
 if __name__ == "__main__":

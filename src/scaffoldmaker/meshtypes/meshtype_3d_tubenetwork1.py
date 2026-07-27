@@ -47,10 +47,19 @@ class MeshType_3d_tubenetwork1(Scaffold_base):
             "Core": False,
             "Number of elements across core box minor": 2,
             "Number of elements across core transition": 1,
-            "Annotation numbers of elements across core box minor": [0]
+            "Annotation numbers of elements across core box minor": [0],
+            "Refine": False,
+            "Refine number of elements": 4,
+            "Refine number of elements through shell": 2
         }
         if parameterSetName in ["Loop", "Snake", "Vase"]:
             options["Target element density along longest segment"] = 12.0
+        elif "Bone" == parameterSetName:
+            options["Target element density along longest segment"] = 8.0
+        elif "Sphere" == parameterSetName:
+            options["Number of elements around"] = 16
+            options["Number of elements across core box minor"] = 4
+            options["Target element density along longest segment"] = 5.0
         return options
 
     @classmethod
@@ -68,7 +77,10 @@ class MeshType_3d_tubenetwork1(Scaffold_base):
             "Core",
             "Number of elements across core box minor",
             "Number of elements across core transition",
-            "Annotation numbers of elements across core box minor"
+            "Annotation numbers of elements across core box minor",
+            "Refine",
+            "Refine number of elements",
+            "Refine number of elements through shell"
         ]
 
     @classmethod
@@ -108,11 +120,19 @@ class MeshType_3d_tubenetwork1(Scaffold_base):
             options["Network layout"] = cls.getOptionScaffoldPackage("Network layout", MeshType_1d_network_layout1)
         dependentChanges = False
 
-        if options["Core"] == True:
+        # element counts across core box major/minor are used for domes even without a core so must be checked here
+        networkLayoutOptions = options["Network layout"].getScaffoldSettings()
+        structure_string = networkLayoutOptions["Structure"]
+        has_domes = any(end_style in structure_string for end_style in ('(', ')'))
+        core = options["Core"]
+
+        if core or has_domes:
             if options["Number of elements around"] < 8:
                 options["Number of elements around"] = 8
+                dependentChanges = True
             elif options["Number of elements around"] % 4:
                 options["Number of elements around"] += 4 - (options["Number of elements around"] % 4)
+                dependentChanges = True
 
             annotationAroundCounts = options["Annotation numbers of elements around"]
             minAroundCount = options["Number of elements around"]
@@ -120,31 +140,34 @@ class MeshType_3d_tubenetwork1(Scaffold_base):
                 annotationAroundCounts = options["Annotation numbers of elements around"] = [0]
             else:
                 for i in range(len(annotationAroundCounts)):
-                    if annotationAroundCounts[i] <= 0:
+                    if annotationAroundCounts[i] < 0:
                         annotationAroundCounts[i] = 0
+                        dependentChanges = True
                     else:
                         if annotationAroundCounts[i] < 8:
                             annotationAroundCounts[i] = 8
+                            dependentChanges = True
                         elif annotationAroundCounts[i] % 4:
                             annotationAroundCounts[i] += 4 - (annotationAroundCounts[i] % 4)
+                            dependentChanges = True
                         if annotationAroundCounts[i] < minAroundCount:
                             minAroundCount = annotationAroundCounts[i]
-
-            if options["Number of elements across core transition"] < 1:
-                options["Number of elements across core transition"] = 1
 
             maxCoreBoxMinorCount = options["Number of elements around"] // 2 - 2
             if options["Number of elements across core box minor"] < 2:
                 options["Number of elements across core box minor"] = 2
+                dependentChanges = True
             elif options["Number of elements across core box minor"] > maxCoreBoxMinorCount:
                 options["Number of elements across core box minor"] = maxCoreBoxMinorCount
                 dependentChanges = True
             elif options["Number of elements across core box minor"] % 2:
                 options["Number of elements across core box minor"] += 1
+                dependentChanges = True
 
             annotationCoreBoxMinorCounts = options["Annotation numbers of elements across core box minor"]
             if len(annotationCoreBoxMinorCounts) == 0:
                 annotationCoreBoxMinorCounts = options["Annotation numbers of elements across core box minor"] = [0]
+                dependentChanges = True
             if len(annotationCoreBoxMinorCounts) > len(annotationAroundCounts):
                 annotationCoreBoxMinorCounts = options["Annotation numbers of elements across core box minor"] = \
                     annotationCoreBoxMinorCounts[:len(annotationAroundCounts)]
@@ -161,16 +184,13 @@ class MeshType_3d_tubenetwork1(Scaffold_base):
                         dependentChanges = True
                 elif annotationCoreBoxMinorCounts[i] < 2:
                     annotationCoreBoxMinorCounts[i] = 2
+                    dependentChanges = True
                 elif annotationCoreBoxMinorCounts[i] > maxCoreBoxMinorCount:
                     annotationCoreBoxMinorCounts[i] = maxCoreBoxMinorCount
                     dependentChanges = True
                 elif annotationCoreBoxMinorCounts[i] % 2:
                     annotationCoreBoxMinorCounts[i] += 1
-
-            if options["Use linear through shell"]:
-                options["Use linear through shell"] = False
-                dependentChanges = True
-
+                    dependentChanges = True
         else:
             if options["Number of elements around"] < 4:
                 options["Number of elements around"] = 4
@@ -184,8 +204,15 @@ class MeshType_3d_tubenetwork1(Scaffold_base):
                     elif annotationAroundCounts[i] < 4:
                         annotationAroundCounts[i] = 4
 
-        if options["Number of elements through shell"] < 1:
-            options["Number of elements through shell"] = 1
+        if core and options["Use linear through shell"]:
+            options["Use linear through shell"] = False
+            dependentChanges = True
+
+        if options["Number of elements through shell"] < 0:
+            options["Number of elements through shell"] = 0
+
+        if options["Number of elements across core transition"] < 1:
+            options["Number of elements across core transition"] = 1
 
         if options["Target element density along longest segment"] < 1.0:
             options["Target element density along longest segment"] = 1.0
@@ -198,6 +225,13 @@ class MeshType_3d_tubenetwork1(Scaffold_base):
                     annotationAlongCounts[i] = 0
                 elif annotationAlongCounts[i] < 1:
                     annotationAlongCounts[i] = 1
+
+        for key in [
+            "Refine number of elements",
+            "Refine number of elements through shell"
+        ]:
+            if options[key] < 1:
+                options[key] = 1
 
         return dependentChanges
 
@@ -214,6 +248,11 @@ class MeshType_3d_tubenetwork1(Scaffold_base):
         networkLayout.generate(layoutRegion)  # ask scaffold to generate to get user-edited parameters
         networkMesh = networkLayout.getConstructionObject()
 
+        shell_count = options["Number of elements through shell"]
+        core = options["Core"]
+        mesh_dimension = 3 if (shell_count or core) else 2
+        isLinearThroughShell = options["Use linear through shell"] or (mesh_dimension == 2)
+
         tubeNetworkMeshBuilder = TubeNetworkMeshBuilder(
             networkMesh,
             targetElementDensityAlongLongestSegment=options["Target element density along longest segment"],
@@ -221,18 +260,52 @@ class MeshType_3d_tubenetwork1(Scaffold_base):
             annotationElementsCountsAlong=options["Annotation numbers of elements along"],
             defaultElementsCountAround=options["Number of elements around"],
             annotationElementsCountsAround=options["Annotation numbers of elements around"],
-            elementsCountThroughShell=options["Number of elements through shell"],
-            isCore=options["Core"],
-            elementsCountTransition=options["Number of elements across core transition"],
+            shell_count=shell_count,
+            core=core,
+            transition_count=options["Number of elements across core transition"],
             defaultElementsCountCoreBoxMinor=options["Number of elements across core box minor"],
             annotationElementsCountsCoreBoxMinor=options["Annotation numbers of elements across core box minor"],
             useOuterTrimSurfaces=options["Use outer trim surfaces"])
         tubeNetworkMeshBuilder.build()
         generateData = TubeNetworkMeshGenerateData(
-            region, 3,
-            isLinearThroughShell=options["Use linear through shell"],
+            region, mesh_dimension,
+            isLinearThroughShell=isLinearThroughShell,
             isShowTrimSurfaces=options["Show trim surfaces"])
         tubeNetworkMeshBuilder.generateMesh(generateData)
         annotationGroups = generateData.getAnnotationGroups()
 
-        return annotationGroups, None
+        return annotationGroups, tubeNetworkMeshBuilder
+
+    @classmethod
+    def refineMesh(cls, meshRefinement, options):
+        """
+        Refine source mesh into separate region, with change of basis.
+        :param meshRefinement: MeshRefinement, which knows source and target region.
+        :param options: Dict containing options. See getDefaultOptions().
+        """
+        refine_count = options["Refine number of elements"]
+        refine_shell_count = options["Refine number of elements through shell"]
+        shell_count = options["Number of elements through shell"]
+        core = options["Core"]
+        mesh_dimension = 3 if (shell_count or core) else 2
+        if mesh_dimension == 3:
+            refine_count3 = refine_count if core else refine_shell_count
+            annotation_refinements = {
+                "shell": (refine_count, refine_count, refine_shell_count)} if (shell_count and core) else None
+            meshRefinement.refineAllElementsCubeStandard3d(
+                refine_count, refine_count, refine_count3, annotation_refinements)
+        else:
+            meshRefinement.refineAllElementsSquareStandard2d(refine_count, refine_count)
+
+    @classmethod
+    def defineFaceAnnotations(cls, region, options, annotationGroups):
+        """
+        Add face annotation groups from the highest dimension mesh.
+        Must have defined faces and added subelements for highest dimension groups.
+        :param region: Zinc region containing model.
+        :param options: Dict containing options. See getDefaultOptions().
+        :param annotationGroups: List of annotation groups for top-level elements.
+        New face annotation groups are appended to this list.
+        """
+        TubeNetworkMeshBuilder.defineFaceAnnotations(
+            region, annotationGroups, options["Core"], options["Number of elements through shell"])

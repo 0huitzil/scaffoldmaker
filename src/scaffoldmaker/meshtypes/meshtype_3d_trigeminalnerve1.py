@@ -386,8 +386,8 @@ class MeshType_3d_trigeminalnerve1(Scaffold_base):
         options["Number of elements along mandibular nerve"] = 3
         options["Number of elements along maxillary nerve"] = 3
         options["Number of elements along ophthalmic nerve"] = 3
-        options["Number of elements around trigeminal nerve"] = 8
-        options["Number of elements through shell"] = 1
+        options["Number of elements around trigeminal nerve"] = 12
+        options["Number of elements through shell"] = 0
         options["Show trim surfaces"] = False
         options["Use Core"] = True
         options["Number of elements across core box minor"] = 2
@@ -461,7 +461,7 @@ class MeshType_3d_trigeminalnerve1(Scaffold_base):
                 minElementsCountAround = options[key]
 
         if options["Number of elements through shell"] < 0:
-            options["Number of elements through shell"] = 1
+            options["Number of elements through shell"] = 0
 
         if options["Number of elements across core transition"] < 1:
             options["Number of elements across core transition"] = 1
@@ -495,7 +495,8 @@ class MeshType_3d_trigeminalnerve1(Scaffold_base):
         elementsCountAlongMandibularNerve = options["Number of elements along mandibular nerve"]
         elementsCountAlongOphthalmicNerve = options["Number of elements along ophthalmic nerve"]
         elementsCountAroundTrigeminalNerve = options["Number of elements around trigeminal nerve"]
-        isCore = options["Use Core"]
+        shell_count = options["Number of elements through shell"]
+        core = options["Use Core"]
 
         layoutRegion = region.createRegion()
         networkLayout.generate(layoutRegion)  # ask scaffold to generate to get user-edited parameters
@@ -528,14 +529,14 @@ class MeshType_3d_trigeminalnerve1(Scaffold_base):
             annotationElementsCountsAlong=annotationAlongCounts,
             defaultElementsCountAround=options["Number of elements around trigeminal nerve"],
             annotationElementsCountsAround=annotationAroundCounts,
-            elementsCountThroughShell=options["Number of elements through shell"],
-            isCore=isCore,
-            elementsCountTransition=options['Number of elements across core transition'],
+            shell_count=shell_count,
+            core=core,
+            transition_count=options['Number of elements across core transition'],
             defaultElementsCountCoreBoxMinor=options["Number of elements across core box minor"],
             annotationElementsCountsCoreBoxMinor=[],
             useOuterTrimSurfaces=True)
 
-        meshDimension = 3
+        meshDimension = 3 if (core or shell_count) else 2
         tubeNetworkMeshBuilder.build()
         generateData = TubeNetworkMeshGenerateData(
             region, meshDimension,
@@ -545,6 +546,21 @@ class MeshType_3d_trigeminalnerve1(Scaffold_base):
         annotationGroups = generateData.getAnnotationGroups()
 
         return annotationGroups, None
+
+    @classmethod
+    def defineFaceAnnotations(cls, region, options, annotationGroups):
+        """
+        Add face annotation groups from the highest dimension mesh.
+        Must have defined faces and added subelements for highest dimension groups.
+        :param region: Zinc region containing model.
+        :param options: Dict containing options. See getDefaultOptions().
+        :param annotationGroups: List of annotation groups for top-level elements.
+        New face annotation groups are appended to this list.
+        """
+        is_core = options["Use Core"]
+        shell_count = options["Number of elements through shell"]
+        TubeNetworkMeshBuilder.defineFaceAnnotations(region, annotationGroups, is_core, shell_count)
+
 
 def setNodeFieldParameters(field, fieldcache, x, d1, d2, d3, d12=None, d13=None):
     """

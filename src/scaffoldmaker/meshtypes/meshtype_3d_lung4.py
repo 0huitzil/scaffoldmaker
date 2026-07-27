@@ -14,6 +14,7 @@ from scaffoldmaker.utils.geometry import getEllipsePointAtTrueAngle
 from scaffoldmaker.utils.interpolation import getNearestLocationOnCurve
 from scaffoldmaker.utils.meshrefinement import MeshRefinement
 from scaffoldmaker.utils.ellipsoidmesh import EllipsoidMesh, EllipsoidSurfaceD3Mode
+from scaffoldmaker.utils.meshgeneratedata import MeshGenerateData
 from scaffoldmaker.utils.zinc_utils import get_mesh_first_element_with_node, translate_nodeset_coordinates
 
 import copy
@@ -190,11 +191,12 @@ class MeshType_3d_lung4(Scaffold_base):
         ellipsoid_dv_size = options["Ellipsoid dorsal-ventral size"]
         ellipsoid_height = options["Ellipsoid height"]
 
-        fieldmodule = region.getFieldmodule()
-        fieldcache = fieldmodule.createFieldcache()
-        coordinates = find_or_create_field_coordinates(fieldmodule)
-        nodes = fieldmodule.findNodesetByFieldDomainType(Field.DOMAIN_TYPE_NODES)
-        mesh = fieldmodule.findMeshByDimension(3)
+        generate_data = MeshGenerateData(region, meshDimension=3)
+        fieldmodule = generate_data.getFieldmodule()
+        fieldcache = generate_data.getFieldcache()
+        coordinates = generate_data.getCoordinates()
+        nodes = generate_data.getNodes()
+        mesh = generate_data.getMesh()
 
         # annotation groups & nodeset groups
         lung_group = AnnotationGroup(region, get_lung_term("lung"))
@@ -238,13 +240,13 @@ class MeshType_3d_lung4(Scaffold_base):
         half_ml_size = ellipsoid_ml_size * 0.5
         half_dv_size = ellipsoid_dv_size * 0.5
         half_height = ellipsoid_height * 0.5
+        axes_lengths = [half_ml_size, half_dv_size, half_height]
 
         pi__3 = math.pi / 3.0
         sin_pi__3 = math.sin(pi__3)
 
         left_lung, right_lung = 0, 1
         lungs = [lung for show, lung in [(has_left_lung, left_lung), (has_right_lung, right_lung)] if show]
-        node_identifier, element_identifier = 1, 1
 
         marker_name_element_xi = []
 
@@ -296,24 +298,20 @@ class MeshType_3d_lung4(Scaffold_base):
                     lower_octant_group_lists = middle_octant_group_lists = upper_octant_group_lists = None
 
             element_counts = [elements_count_lateral, elements_count_oblique, elements_count_oblique]
-            lower_ellipsoid = EllipsoidMesh(
-                half_ml_size, half_dv_size, half_height, element_counts, elements_count_transition)
-            lower_ellipsoid.set_surface_d3_mode(EllipsoidSurfaceD3Mode.SURFACE_NORMAL_PLANE_PROJECTION)
-            lower_ellipsoid.set_box_transition_groups(box_group.getGroup(), transition_group.getGroup())
-            upper_ellipsoid = EllipsoidMesh(
-                half_ml_size, half_dv_size, half_height, element_counts, elements_count_transition)
-            upper_ellipsoid.set_surface_d3_mode(EllipsoidSurfaceD3Mode.SURFACE_NORMAL_PLANE_PROJECTION)
+            lower_ellipsoid_build = EllipsoidMesh(element_counts, transition_element_count=elements_count_transition)
+            lower_ellipsoid_build.set_box_transition_groups(box_group.getGroup(), transition_group.getGroup())
+            upper_ellipsoid = EllipsoidMesh(element_counts, transition_element_count=elements_count_transition)
             upper_ellipsoid.set_box_transition_groups(box_group.getGroup(), transition_group.getGroup())
             if lung == right_lung:
-                middle_ellipsoid = EllipsoidMesh(
-                    half_ml_size, half_dv_size, half_height, element_counts, elements_count_transition)
-                middle_ellipsoid.set_surface_d3_mode(EllipsoidSurfaceD3Mode.SURFACE_NORMAL_PLANE_PROJECTION)
+                middle_ellipsoid = EllipsoidMesh(element_counts, transition_element_count=elements_count_transition)
                 middle_ellipsoid.set_box_transition_groups(box_group.getGroup(), transition_group.getGroup())
             else:
                 middle_ellipsoid = upper_ellipsoid
             half_counts = [count // 2 for count in element_counts]
-            octant1 = middle_ellipsoid.build_octant(half_counts, -pi__3, 0.0)
-            middle_ellipsoid.merge_octant(octant1, quadrant=3)
+            octant1 = middle_ellipsoid.build_octant(
+                axes_lengths, half_counts, -pi__3, 0.0,
+                surface_d3_mode=EllipsoidSurfaceD3Mode.SURFACE_NORMAL_PLANE_PROJECTION)
+            middle_ellipsoid.merge_octant_plus1_quadrant(octant1, quadrant=3)
             if lung == right_lung:
                 middle_ellipsoid.copy_to_negative_axis1()
 
@@ -337,49 +335,50 @@ class MeshType_3d_lung4(Scaffold_base):
                         parameters[i][0] = -parameters[i][0]
                 hilum_x.append(parameters)
 
-            octant2 = upper_ellipsoid.build_octant(half_counts, 0.0, pi__3)
-            upper_ellipsoid.merge_octant(octant2, quadrant=0)
-            octant3 = upper_ellipsoid.build_octant(half_counts, pi__3, 2.0 * pi__3)
-            upper_ellipsoid.merge_octant(octant3, quadrant=1)
+            octant2 = upper_ellipsoid.build_octant(
+                axes_lengths, half_counts, 0.0, pi__3,
+                surface_d3_mode=EllipsoidSurfaceD3Mode.SURFACE_NORMAL_PLANE_PROJECTION)
+            upper_ellipsoid.merge_octant_plus1_quadrant(octant2, quadrant=0)
+            octant3 = upper_ellipsoid.build_octant(
+                axes_lengths, half_counts, pi__3, 2.0 * pi__3,
+                surface_d3_mode=EllipsoidSurfaceD3Mode.SURFACE_NORMAL_PLANE_PROJECTION)
+            upper_ellipsoid.merge_octant_plus1_quadrant(octant3, quadrant=1)
             upper_ellipsoid.copy_to_negative_axis1()
 
-            octant4 = lower_ellipsoid.build_octant(half_counts, 2.0 * pi__3, math.pi,
-                                                   lower_lobe_extension, elements_count_lower_extension)
+            octant4 = lower_ellipsoid_build.build_octant(
+                axes_lengths, half_counts, 2.0 * pi__3, math.pi,
+                axis2_extension=lower_lobe_extension, axis2_extension_elements_count=elements_count_lower_extension,
+                surface_d3_mode=EllipsoidSurfaceD3Mode.SURFACE_NORMAL_PLANE_PROJECTION)
             # merge into separate lower ellipsoid to have space for extension elements
             lower_ellipsoid_mesh = EllipsoidMesh(
-                half_ml_size, half_dv_size, half_height,
                 [element_counts[0], element_counts[1], element_counts[2] + 2 * elements_count_lower_extension],
-                elements_count_transition)
-            lower_ellipsoid_mesh.set_surface_d3_mode(EllipsoidSurfaceD3Mode.SURFACE_NORMAL_PLANE_PROJECTION)
+                transition_element_count=elements_count_transition)
             lower_ellipsoid_mesh.set_box_transition_groups(box_group.getGroup(), transition_group.getGroup())
-            lower_ellipsoid_mesh.merge_octant(octant4, quadrant=1)
+            lower_ellipsoid_mesh.merge_octant_plus1_quadrant(octant4, quadrant=1)
             lower_ellipsoid_mesh.copy_to_negative_axis1()
 
-            node_layout_manager = lower_ellipsoid.get_node_layout_manager()
+            node_layout_manager = generate_data.getHermiteNodeLayoutManager()
             node_layout_permuted = node_layout_manager.getNodeLayoutRegularPermuted(d3Defined=True)
             for n1 in range(element_counts[0] + 1):
                 lower_ellipsoid_mesh.set_node_parameters(
                     n1, half_counts[1], element_counts[2] + 2 * elements_count_lower_extension - half_counts[2],
                     hilum_x[n1], node_layout=node_layout_permuted)
             lower_ellipsoid_mesh.set_octant_group_lists(lower_octant_group_lists)
-            node_identifier, element_identifier = lower_ellipsoid_mesh.generate_mesh(
-                fieldmodule, coordinates, node_identifier, element_identifier)
+            lower_ellipsoid_mesh.generate_mesh(generate_data)
 
+            node_layout_6way = node_layout_manager.getNodeLayout6Way12(d3Defined=True)
             for ellipsoid in [middle_ellipsoid, upper_ellipsoid] if (lung == right_lung) else [upper_ellipsoid]:
-                node_layout_manager = ellipsoid.get_node_layout_manager()
-                node_layout_6way = node_layout_manager.getNodeLayout6Way12(d3Defined=True)
                 for n1 in range(element_counts[0] + 1):
                     nid = (lower_ellipsoid_mesh.get_node_identifier(
                         n1, half_counts[1], element_counts[2] + 2 * elements_count_lower_extension - half_counts[2])
                            if (((lung == left_lung) and (n1 >= half_counts[0])) or
                                ((lung == right_lung) and (n1 <= half_counts[0]))) else None)
-                    ellipsoid.set_node_parameters(n1, half_counts[1], half_counts[2], hilum_x[n1],
-                                                        nid, node_layout=node_layout_6way)
+                    ellipsoid.set_node_parameters(n1, half_counts[1], half_counts[2], hilum_x[n1], nid,
+                                                  node_layout=node_layout_6way)
                 ellipsoid.set_octant_group_lists(
                     middle_octant_group_lists if ((ellipsoid == middle_ellipsoid) and
                                                   (ellipsoid != upper_ellipsoid)) else upper_octant_group_lists)
-                node_identifier, element_identifier = ellipsoid.generate_mesh(
-                    fieldmodule, coordinates, node_identifier, element_identifier)
+                ellipsoid.generate_mesh(generate_data)
 
             # find elements for marker points
             if ((lung == left_lung) and has_left_lung) or ((lung == right_lung) and has_right_lung):
@@ -486,7 +485,9 @@ class MeshType_3d_lung4(Scaffold_base):
         # marker points; make after regular nodes so higher node numbers
         lung_nodeset = lung_group.getNodesetGroup(nodes)
         for marker_name, element, xi in marker_name_element_xi:
-            if element:  # skip dummy markers for missing left/right, but increment node_identifier always
+            # increment node_identifier always but don't create markers for absent left/right lung
+            node_identifier = generate_data.nextNodeIdentifier()
+            if element:
                 annotation_group = findOrCreateAnnotationGroupForTerm(
                     annotation_groups, region, get_lung_term(marker_name), isMarker=True)
                 marker_node = annotation_group.createMarkerNode(node_identifier, element=element, xi=xi)
@@ -495,7 +496,6 @@ class MeshType_3d_lung4(Scaffold_base):
                 else:
                     right_lung_group.getNodesetGroup(nodes).addNode(marker_node)
                 lung_nodeset.addNode(marker_node)
-            node_identifier += 1
 
         return annotation_groups, None
 

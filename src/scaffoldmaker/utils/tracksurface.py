@@ -5,19 +5,20 @@ Utility class for representing surfaces on which features can be located.
 import copy
 from enum import Enum
 import math
-from cmlibs.maths.vectorops import add, cross, dot, magnitude, mult, normalize, sub, set_magnitude
+from cmlibs.maths.vectorops import add, cross, distance, dot, magnitude, mult, normalize, rejection, sub, set_magnitude
 from cmlibs.utils.zinc.general import ChangeManager
 from cmlibs.utils.zinc.field import find_or_create_field_coordinates, find_or_create_field_group
 from cmlibs.utils.zinc.finiteelement import get_maximum_element_identifier, get_maximum_node_identifier
 from cmlibs.zinc.element import Element, Elementbasis
 from cmlibs.zinc.field import Field, FieldGroup
 from cmlibs.zinc.node import Node
-from scaffoldmaker.utils.interpolation import computeCubicHermiteArcLength, evaluateCoordinatesOnCurve, \
-    getCubicHermiteArcLength, getCubicHermiteBasis, getCubicHermiteBasisDerivatives, getCubicHermiteCurvatureSimple, \
-    incrementXiOnLine, interpolateCubicHermite, \
-    interpolateHermiteLagrangeDerivative, interpolateLagrangeHermiteDerivative, sampleCubicHermiteCurves, \
-    sampleCubicHermiteCurvesSmooth, smoothCubicHermiteDerivativesLine, smoothCubicHermiteDerivativesLoop, \
-    updateCurveLocationToFaceNumber
+from scaffoldmaker.utils.interpolation import (
+    computeCubicHermiteArcLength, computeCubicHermiteDerivativeScaling, computeHermiteLagrangeDerivativeScaling,
+    evaluateCoordinatesOnCurve, getCubicHermiteArcLength, getCubicHermiteBasis, getCubicHermiteBasisDerivatives,
+    getCubicHermiteCurvatureSimple, incrementXiOnLine, interpolateCubicHermite, interpolateHermiteLagrangeDerivative,
+    interpolateLagrangeHermiteDerivative, linearlyInterpolateVectors, sampleCubicHermiteCurves,
+    sampleCubicHermiteCurvesSmooth, smoothCubicHermiteDerivativesLine, smoothCubicHermiteDerivativesLoop,
+    updateCurveLocationToFaceNumber)
 
 
 class TrackSurfacePosition:
@@ -352,6 +353,117 @@ class TrackSurface:
         if mag2 > 0.0:
             nd2[-1] = set_magnitude(nd2[-1], magnitude(nd1[-1]))
         return nx, nd1, nd2, nd3, nProportions
+
+    def getSurfaceNormal(self, start_x):
+        """
+        Get surface normal on the surface at or nearest to start_x.
+        :param start_x: Coordinates on or near surface.
+        :return: Unit surface normal at nearest point on surface to start_x.
+        """
+        position = self.findNearestPosition(start_x)
+        x, d1, d2 = self.evaluateCoordinates(position, derivatives=True)
+        return normalize(cross(d1, d2))
+
+    def makeCoordinatesOnSurface(self, start_x):
+        """
+        Return nearest coordinate to start_x on the surface.
+        :param start_x: Coordinates on or near surface.
+        :return: Nearest coordinates to start_x on surface.
+        """
+        position = self.findNearestPosition(start_x, startPosition=self.findNearestPositionSample(start_x)[0])
+        return self.evaluateCoordinates(position)
+
+    def makeCoordinatesAndDerivativeOnSurface(self, start_x, start_d):
+        """
+        Finds nearest position on TrackSurface to start_x and returns both coordinates there and start_d converted
+        to a surface tangent at that position.
+        :param start_x: Coordinates on or near surface of TrackSurface.
+        :param start_d: Derivative near tangential to TrackSurface at nearest surface point to x.
+        :return: Coordinates at nearest point on surface, derivative made tangential to surface there with same
+        magnitude as start_d.
+        """
+        position = self.findNearestPosition(start_x, startPosition=self.findNearestPositionSample(start_x)[0])
+        x, d1, d2 = self.evaluateCoordinates(position, derivatives=True)
+        normal = normalize(cross(d1, d2))
+        d = rejection(start_d, normal)
+        return x, d
+
+    def sampleCurve(self, start_x, start_d1, start_d2, end_x, end_d1, end_d2, elements_count,
+                    start_weight=None, end_weight=None, overweighting=1.0, end_transition=False):
+        """
+        Samples an even-spaced Hermite curve from start point and direction to end point and direction.
+        Also interpolates side derivatives. Compatible with QuadTriangleMesh.
+        :param start_x: start coordinate on surface of TrackSurface.
+        :param start_d1: start direction on surface of TrackSurface.
+        :param start_d2: optional start side direction on TrackSurface. Must be supplied if end_d2 is
+        supplied.
+        :param end_x: end coordinate on surface of TrackSurface.
+        :param end_d1: end direction on surface of TrackSurface, or None to estimate from start_d1.
+        Must be supplied with end_transition.
+        :param end_d2: optional end side direction on surface of TrackSurface, or None to use surface tangent normal to
+        end direction on same side as start_d2.
+        :param elements_count: Number of elements to sample.
+        :param start_weight, end_weight: Optional relative weights for start/end d1. If not supplied, weighting is
+        by distance from the other end.
+        :param overweighting: Multiplier of arc length to use with initial curve to exaggerate end derivatives.
+        :param end_transition: If supplied with end_d1, modify size of last element to fit end_d1.
+        :return: x[], d1[]{, d2[] if start_d2 supplied}
+        """
+        assert (not end_transition) or end_d1
+        end_d1_mag = magnitude(end_d1) if end_d1 else None
+        length = distance(start_x, end_x)
+        # initial cubic interpolation, weighting derivatives by distance to other end
+        start_d = start_d1
+        end_d = end_d1
+        if not end_d:
+            start_d = normalize(start_d)
+            scaling = computeHermiteLagrangeDerivativeScaling(start_x, start_d, end_x)
+            start_d = [d * scaling for d in start_d]
+            end_d = interpolateHermiteLagrangeDerivative(start_x, start_d, end_x, 1.0)
+            end_d = self.makeCoordinatesAndDerivativeOnSurface(end_x, end_d)[1]
+        use_start_weight = start_weight if start_weight else 1.0
+        use_end_weight = end_weight if end_weight else 1.0
+        start_d = set_magnitude(start_d, 2.0 * length * use_start_weight / (use_start_weight + use_end_weight))
+        end_d = set_magnitude(end_d, 2.0 * length * use_end_weight / (use_start_weight + use_end_weight))
+        scaling = computeCubicHermiteDerivativeScaling(start_x, start_d, end_x, end_d) * overweighting
+        start_d = mult(start_d, scaling)
+        end_d = mult(end_d, scaling)
+        px, pd1 = sampleCubicHermiteCurvesSmooth([start_x, end_x], [start_d, end_d], elements_count)[0:2]
+        iter_count = 2
+        for iter in range(iter_count):
+            for n in range(1, elements_count):
+                px[n], pd1[n] = self.makeCoordinatesAndDerivativeOnSurface(px[n], pd1[n])
+            if end_transition:
+                if elements_count == 1:
+                    # sampleCubicHermiteCurves doesn't work properly with 1 element...
+                    arc_length = getCubicHermiteArcLength(px[0], pd1[0], px[1], pd1[1])
+                    pd1[0] = set_magnitude(pd1[0], 2.0 * arc_length - end_d1_mag)
+                    pd1[1] = set_magnitude(pd1[1], end_d1_mag)
+                else:
+                    px, pd1 = sampleCubicHermiteCurves(
+                        px, pd1, elements_count, addLengthEnd=0.5 * end_d1_mag, lengthFractionEnd=0.5)[0:2]
+            else:
+                px, pd1 = sampleCubicHermiteCurves(px, pd1, elements_count)[0:2]
+        if start_d2:
+            if not end_d2:
+                end_d2 = self.makeCoordinatesAndDerivativeOnSurface(px[-1], start_d2)[1]
+                normal = normalize(cross(pd1[-1], end_d2))
+                end_d2 = cross(normal, pd1[-1])
+            pd2 = [start_d2]
+            if end_transition:
+                # get xi scale giving the appropriate end element size for magnitude of end_d1 vs. regular derivatives
+                reg_d1_mag = magnitude(pd1[-2])
+                end_d1_mag = magnitude(end_d1)
+                xi_scale = reg_d1_mag / ((elements_count - 0.5) * reg_d1_mag + 0.5 * end_d1_mag)
+            else:
+                xi_scale = 1.0 / elements_count
+            for n in range(1, elements_count):
+                xi = n * xi_scale
+                d2 = linearlyInterpolateVectors(start_d2, end_d2, xi)
+                pd2.append(self.makeCoordinatesAndDerivativeOnSurface(px[n], d2)[1])
+            pd2.append(end_d2)
+            return px, pd1, pd2
+        return px, pd1
 
     def positionOnBoundary(self, position: TrackSurfacePosition):
         """
@@ -1146,6 +1258,7 @@ class TrackSurface:
             cross_dr = cross(d, r)
             if magnitude(cross_dr) < (1.0E-6 * magnitude(d)):
                 rNormal = [0.0, 0.0, 0.0]
+                r_dot_n = 0.0
             else:
                 n = normalize(cross(cross_dr, d))
                 r_dot_n = dot(r, n)

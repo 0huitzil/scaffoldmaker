@@ -55,10 +55,12 @@ class HexTetrahedronMesh:
         self._box_counts = [self._axis_counts[i] - self._trans_count for i in range(3)]
         none_parameters = [None] * 4  # x, d1, d2, d3
         self._nx = []  # shield mesh with holes over n3, n2, n1, d
+        self._merge_counts = []  # Number of already merged nodes at location for weighting next nodes, for x only
         for n3 in range(axis_counts[2] + 1):
             # index into transition zone
             trans3 = self._trans_count + n3 - axis_counts[2]
             nx_layer = []
+            merge_counts_layer = []
             for n2 in range(axis_counts[1] + 1):
                 # index into transition zone
                 trans2 = self._trans_count + n2 - axis_counts[1]
@@ -79,14 +81,19 @@ class HexTetrahedronMesh:
                         # s += "  "
                     nx_row.append(parameters)
                 nx_layer.append(nx_row)
+                merge_counts_layer.append([0 for _ in range(axis_counts[0] + 1)])
                 # print(s)
             self._nx.append(nx_layer)
+            self._merge_counts.append(merge_counts_layer)
 
     def get_axis_counts(self):
         return self._axis_counts
 
     def get_box_counts(self):
         return self._box_counts
+
+    def get_trans_count(self):
+        return self._trans_count
 
     def get_parameters(self):
         """
@@ -95,25 +102,27 @@ class HexTetrahedronMesh:
         """
         return self._nx
 
-    def set_triangle_abc(self, trimesh: QuadTriangleMesh):
+    def set_triangle_abc(self, trimesh: QuadTriangleMesh, shell_depth=0):
         """
         Set parameters on the outer abc surface triangle of octant.
         :param trimesh: Coordinates to set on outer surface.
+        :param shell_depth: Layer in from outer surface to set values for. Must be less than transition count.
         """
         assert trimesh.get_element_count12() == self._diag_counts[0]
         assert trimesh.get_element_count13() == self._diag_counts[1]
         assert trimesh.get_element_count23() == self._diag_counts[2]
-        start_indexes = [self._axis_counts[0], 0, 0]
+        assert shell_depth < self._trans_count
+        start_indexes = [self._axis_counts[0] - shell_depth, 0, 0]
         for n3 in range(self._box_counts[2]):
             px, pd1, pd2, pd3 = trimesh.get_parameters12(n3)
             self._set_coordinates_across([px, pd1, pd2, pd3], [[0, 1, 2, 3]], start_indexes, [[0, 1, 0], [-1, 0, 0]])
             start_indexes[2] += 1
-        start_indexes = [0, 0, self._axis_counts[2]]
+        start_indexes = [0, 0, self._axis_counts[2] - shell_depth]
         for n2 in range(self._box_counts[1]):
             px, pd1, pd2, pd3 = trimesh.get_parameters31(n2, self._box_counts[0] + 1)
             self._set_coordinates_across([px, pd1, pd2, pd3], [[0, 1, 2, 3]], start_indexes, [[1, 0, 0]])
             start_indexes[1] += 1
-        start_indexes = [0, self._axis_counts[1], self._axis_counts[2]]
+        start_indexes = [0, self._axis_counts[1] - shell_depth, self._axis_counts[2] - shell_depth]
         px, pd1, pd2, pd3 = trimesh.get_parameters_diagonal()
         self._set_coordinates_across([px, pd1, pd2, pd3], [[0, 1, 2, 3]], start_indexes, [[1, 0, 0]])
 
@@ -234,12 +243,17 @@ class HexTetrahedronMesh:
                 pix = abs(spix)
                 if blend and nx[pix]:
                     if pix == 0:
-                        new_parameter = [0.5 * (nx[pix][c] + new_parameter[c]) for c in range(3)]
+                        xi = 1.0 / (self._merge_counts[indexes[2]][indexes[1]][indexes[0]] + 1)
+                        xir = 1.0 - xi
+                        new_parameter = [(xir * nx[pix][c] + xi * new_parameter[c]) for c in range(3)]
                     else:
                         # harmonic mean to cope with significant element size differences on boundary
                         new_parameter = linearlyInterpolateVectors(
                             nx[pix], new_parameter, 0.5, magnitudeScalingMode=DerivativeScalingMode.HARMONIC_MEAN)
                 nx[pix] = new_parameter
+                if pix == 0:
+                    self._merge_counts[indexes[2]][indexes[1]][indexes[0]] += 1
+
             last_trans = trans
 
     def _smooth_derivative_across(self, start_indexes, end_indexes, index_increments, derivative_indexes,
@@ -324,7 +338,7 @@ class HexTetrahedronMesh:
             sampleHermiteCurve, nway_d_factor=self._nway_d_factor)
 
         # smooth sample from sides to 3-way points using end derivatives
-        min_weight = 1  # GRC revisit, remove?
+        min_weight = 1.0
         ax, ad1 = sampleHermiteCurve(
             point23[0], point23[1], None, x_4way, d_4way[0], None, self._box_counts[0],
             start_weight=self._box_counts[0] + min_weight, end_weight=1.0 + min_weight, end_transition=True)
@@ -488,7 +502,7 @@ class HexTetrahedronMesh:
                 [[0, 0, 1]], skip_end=True, blend=True)
 
         # average point coordinates across 3 directions between side faces and surfaces to 4 3-way lines.
-        min_weight = 1  # GRC revisit, remove?
+        min_weight = 1.0
         # 1-direction
         for n2 in range(1, self._box_counts[1]):
             for n3 in range(1, self._box_counts[2]):
@@ -629,6 +643,29 @@ class HexTetrahedronMesh:
                     [n1, self._box_counts[1] + nt, 0], [n1, 0, self._box_counts[2] + nt],
                     [[0, 0, 1], [0, -1, 0]], [2, -2], fix_start_direction=True, fix_end_direction=True)
 
+    def copy_parameters(self, other):
+        """
+        Copy parameters from other HexTetrahedronMesh into self parameters.
+        :param other: Another compatible HexTetrahedronMesh. Can have fewer outer rim layers.
+        """
+        assert other.get_box_counts() == self._box_counts
+        assert other.get_trans_count() <= self._trans_count
+        node_count1, node_count2, node_count3 = [count + 1 for count in other.get_axis_counts()]
+        other_parameters = other.get_parameters()
+        for n3 in range(node_count3):
+            nx_layer = self._nx[n3]
+            other_nx_layer = other_parameters[n3]
+            for n2 in range(node_count2):
+                nx_row = nx_layer[n2]
+                other_nx_row = other_nx_layer[n2]
+                for n1 in range(node_count1):
+                    nx = nx_row[n1]
+                    other_nx = other_nx_row[n1]
+                    if other_nx:
+                        for d in range(4):
+                            if other_nx[d]:
+                                nx[d] = other_nx[d]
+
     def mirror_yz(self):
         """
         Mirror coordinates and derivatives about both y = 0 and z = 0 planes.
@@ -644,3 +681,27 @@ class HexTetrahedronMesh:
                             if d:
                                 d[1] = -d[1]
                                 d[2] = -d[2]
+
+    def set_linear_shell(self, shell_count, inner_triangle_abc: QuadTriangleMesh, outer_triangle_abc: QuadTriangleMesh):
+        """
+        Assign outer layers of HexTetrahedronMesh by linearly interpolating inner/outer parameters.
+        :param shell_count: Number of shell element layers. Require - < shell count < transition count.
+        :param inner_triangle_abc: Inner triangle parameters.
+        :param outer_triangle_abc: Outer triangle parameters.
+        :return:
+        """
+        assert 0 <= shell_count < self._trans_count
+        for trimesh in (inner_triangle_abc, outer_triangle_abc):
+            assert trimesh.get_element_count12() == self._diag_counts[0]
+            assert trimesh.get_element_count13() == self._diag_counts[1]
+            assert trimesh.get_element_count23() == self._diag_counts[2]
+        temp_trimesh = inner_triangle_abc.create_compatible() if (shell_count > 1) else None
+        for shell_depth in range(shell_count + 1):
+            if shell_depth == 0:
+                trimesh = outer_triangle_abc
+            elif shell_depth == shell_count:
+                trimesh = inner_triangle_abc
+            else:
+                temp_trimesh.assign_linear_blend(outer_triangle_abc, inner_triangle_abc, shell_depth / shell_count)
+                trimesh = temp_trimesh
+            self.set_triangle_abc(trimesh, shell_depth)

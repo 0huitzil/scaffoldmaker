@@ -7,14 +7,19 @@ from cmlibs.zinc.element import Element, Elementbasis
 from cmlibs.zinc.field import Field
 from cmlibs.zinc.node import Node
 from cmlibs.maths.vectorops import cross, magnitude, mult, normalize, rejection, sub
-from scaffoldmaker.annotation.annotationgroup import AnnotationGroup
 from scaffoldmaker.utils.constructionobject import ConstructionObject
 from scaffoldmaker.utils.interpolation import (
     gaussWt4, gaussXi4, getCubicHermiteCurvesLength, interpolateCubicHermiteDerivative)
+from scaffoldmaker.utils.meshgeneratedata import MeshGenerateData
 from scaffoldmaker.utils.tracksurface import TrackSurface
 from abc import ABC, abstractmethod
+from enum import Enum
+import logging
 import math
 import sys
+
+
+logger = logging.getLogger(__name__)
 
 
 pathValueLabels = [
@@ -97,21 +102,54 @@ class NetworkNode:
         self._x = x
 
 
+class NetworkSegmentEndStyle(Enum):
+    PLAIN = 0
+    PATCH = 1
+    DOME = 2
+
+    @classmethod
+    def fromStartChar(cls, startChar):
+        if startChar == '#':
+            return cls.PATCH
+        if startChar == '(':
+            return cls.DOME
+        return cls.PLAIN
+
+    @classmethod
+    def fromEndChar(cls, endChar):
+        if endChar == '#':
+            return cls.PATCH
+        if endChar == ')':
+            return cls.DOME
+        return cls.PLAIN
+
+    def get_lower_name(self):
+        """
+        :return: Lower case style name.
+        """
+        return self.name.lower()
+
+
 class NetworkSegment:
     """
     Describes a segment of a network between junctions as a sequence of nodes with node derivative versions.
     """
 
-    def __init__(self, networkNodes: list, nodeVersions: list, isPatch):
+    def __init__(self, networkNodes: list, nodeVersions: list, endStyles=None):
         """
         :param networkNodes: List of NetworkNodes from start to end. Must be at least 2.
         :param nodeVersions: List of node versions to use for derivatives at network nodes.
-        :param isPatch: True if segment at the other end of the junction requires a patch.
+        :param endStyles: Optional list of two NetworkSegmentEndStyle values.
         """
         assert isinstance(networkNodes, list) and (len(networkNodes) > 1) and (len(nodeVersions) == len(networkNodes))
         self._networkNodes = networkNodes
         self._nodeVersions = nodeVersions
-        self._isPatch = isPatch
+        if endStyles:
+            assert len(endStyles) == 2
+            assert all(isinstance(endStyle, NetworkSegmentEndStyle) for endStyle in endStyles)
+            self._endStyles = endStyles
+        else:
+            self._endStyles = [NetworkSegmentEndStyle.PLAIN] * 2
         self._elementIdentifiers = [None] * (len(networkNodes) - 1)
         for networkNode in networkNodes[1:-1]:
             networkNode.setInteriorSegment(self)
@@ -162,11 +200,28 @@ class NetworkSegment:
         """
         return False  # not implemented, assume not cyclic
 
-    def isPatch(self):
+    def getEndStyle(self, index):
         """
-        :return: True if the segment is a patch, False if not.
+        :param index: 0 for start, 1 or -1 for end.
+        :return: NetworkSegmentEndStyle (PLAIN, PATCH, DOME etc.) at the requested end index.
         """
-        return self._isPatch
+        assert index in (0, 1, -1)
+        return self._endStyles[index]
+
+    def setEndStyle(self, index, endStyle):
+        """
+        :param index: 0 for start, 1 or -1 for end.
+        :param endStyle: NetworkSegmentEndStyle (PLAIN, PATCH, DOME etc.
+        """
+        assert index in (0, 1, -1)
+        assert isinstance(endStyle, NetworkSegmentEndStyle)
+        self._endStyles[index] = endStyle
+
+    def getEndStyles(self):
+        """
+        :return: list of start, end NetworkSegmentEndStyle types (PLAIN, PATCH, DOME etc.)
+        """
+        return self._endStyles
 
     def split(self, splitNetworkNode):
         """
@@ -215,18 +270,27 @@ class NetworkMesh(ConstructionObject):
         self._networkNodes = {}
         self._networkSegments = []
         sequenceStrings = structureString.split(",")
-        for sequenceString in sequenceStrings:
-            # check if segment is a patch
-            if not sequenceString[0].isnumeric():
-                try:
-                    isPatch = True if sequenceString[0] == "#" else False
-                    sequenceString = sequenceString[2:] if isPatch else sequenceString
-                except ValueError:
-                    print("Network mesh: Skipping invalid cap sequence", sequenceString, file=sys.stderr)
-                    continue
-            else:
-                isPatch = False
-
+        for rawSequenceString in sequenceStrings:
+            sequenceString = rawSequenceString.strip()
+            # check for end style strings
+            endStyles = [NetworkSegmentEndStyle.PLAIN] * 2
+            if sequenceString:
+                startChar = sequenceString[0]
+                if not startChar.isnumeric():
+                    endStyles[0] = NetworkSegmentEndStyle.fromStartChar(startChar)
+                    if endStyles[0] == NetworkSegmentEndStyle.PLAIN:
+                        logger.warning('NetworkMesh: invalid start char ' + startChar + ' in sequence string. Skipping.')
+                    sequenceString = sequenceString[1:]
+                    if (startChar == '#') and sequenceString and (sequenceString[0] == '-'):
+                        # allow old patch structure string with #- previously used by uterus scaffold
+                        sequenceString = sequenceString[1:]
+            if sequenceString:
+                endChar = sequenceString[-1]
+                if not endChar.isnumeric():
+                    endStyles[1] = NetworkSegmentEndStyle.fromEndChar(endChar)
+                    if endStyles[1] == NetworkSegmentEndStyle.PLAIN:
+                        logger.warning('NetworkMesh: invalid end char ' + endChar + ' in sequence string. Skipping')
+                    sequenceString = sequenceString[:-1]
             nodeIdentifiers = []
             nodeVersions = []
             nodeVersionStrings = sequenceString.split("-")
@@ -260,7 +324,7 @@ class NetworkMesh(ConstructionObject):
                 sequenceNodes.append(networkNode)
                 sequenceVersions.append(nodeVersion)
                 if (len(sequenceNodes) > 1) and (existingNetworkNode or (nodeIdentifier == nodeIdentifiers[-1])):
-                    networkSegment = NetworkSegment(sequenceNodes, sequenceVersions, isPatch)
+                    networkSegment = NetworkSegment(sequenceNodes, sequenceVersions, endStyles)
                     self._networkSegments.append(networkSegment)
                     sequenceNodes = sequenceNodes[-1:]
                     sequenceVersions = sequenceVersions[-1:]
@@ -274,6 +338,26 @@ class NetworkMesh(ConstructionObject):
             segmentNodes = networkSegment.getNetworkNodes()
             segmentNodes[0].addOutSegment(networkSegment)
             segmentNodes[-1].addInSegment(networkSegment)
+
+        # validate end styles
+        for networkSegment in self._networkSegments:
+            # check only plain end style on junctions
+            networkNodes = networkSegment.getNetworkNodes()
+            for index in [0, -1]:
+                endStyle = networkSegment.getEndStyle(index)
+                if endStyle != NetworkSegmentEndStyle.PLAIN:
+                    networkNode = networkNodes[index]
+                    segmentsCount = len(networkNode.getInSegments()) + len(networkNode.getOutSegments())
+                    if segmentsCount > 1:
+                        logger.warning('NetworkMesh: End style ' + endStyle.name +
+                                       ' at node ' + str(networkNode.getNodeIdentifier()) +
+                                       ' not permitted on a junction. Using PLAIN end style instead.')
+                        networkSegment.setEndStyle(index, NetworkSegmentEndStyle.PLAIN)
+                    elif (index == -1) and (endStyle == NetworkSegmentEndStyle.PATCH) and (segmentsCount == 1):
+                        logger.warning('NetworkMesh: End style ' + endStyle.name +
+                                       ' at node ' + str(networkNode.getNodeIdentifier()) +
+                                       ' only implemented on inlet to junction. Using PLAIN end style instead.')
+                        networkSegment.setEndStyle(index, NetworkSegmentEndStyle.PLAIN)
 
         # assign integer posX coordinates
         for _ in range(len(self._networkSegments)):  # limit total iterations so no endless loop
@@ -431,115 +515,6 @@ class NetworkMesh(ConstructionObject):
                 elementIdentifier += 1
 
 
-class NetworkMeshGenerateData:
-    """
-    Data for passing to NetworkMesh generateMesh functions.
-    Maintains Zinc region, field, node and element information, and output annotation groups.
-    Derive from this class to pass additional data.
-    """
-
-    def __init__(self, region, meshDimension, coordinateFieldName, startNodeIdentifier=1, startElementIdentifier=1):
-        self._region = region
-        self._fieldmodule = region.getFieldmodule()
-        self._fieldcache = self._fieldmodule.createFieldcache()
-        self._meshDimension = meshDimension
-        self._mesh = self._fieldmodule.findMeshByDimension(meshDimension)
-        self._nodes = self._fieldmodule.findNodesetByFieldDomainType(Field.DOMAIN_TYPE_NODES)
-        self._coordinates = find_or_create_field_coordinates(self._fieldmodule, coordinateFieldName)
-        self._nodeIdentifier = startNodeIdentifier
-        self._elementIdentifier = startElementIdentifier
-        self._annotationGroups = []  # list of AnnotationGroup to return for mesh's scaffold
-        self._annotationGroupMap = {}  # map from annotation term (name, ontId) to AnnotationGroup in output region
-
-    def getCoordinates(self):
-        """
-        :return: Zinc Finite Element coordinate field being defined.
-        """
-        return self._coordinates
-
-    def getFieldcache(self):
-        """
-        :return: Zinc Fieldcache for assigning field parameters with.
-        """
-        return self._fieldcache
-
-    def getMesh(self):
-        """
-        :return: Zinc Mesh for elements being built.
-        """
-        return self._mesh
-
-    def getMeshDimension(self):
-        """
-        :return: Dimension of elements being built.
-        """
-        return self._meshDimension
-
-    def getNodes(self):
-        """
-        :return: Zinc Nodeset for nodes being built.
-        """
-        return self._nodes
-
-    def getRegion(self):
-        return self._region
-
-    def getNodeElementIdentifiers(self):
-        """
-        Get next node and element identifiers without incrementing, to call at end of generation.
-        :return: Next node identifier, next element identifier.
-        """
-        return self._nodeIdentifier, self._elementIdentifier
-
-    def setNodeElementIdentifiers(self, nodeIdentifier, elementIdentifier):
-        """
-        Set next node and element identifiers after generating objects with external code.
-        """
-        self._nodeIdentifier = nodeIdentifier
-        self._elementIdentifier = elementIdentifier
-
-    def nextNodeIdentifier(self):
-        nodeIdentifier = self._nodeIdentifier
-        self._nodeIdentifier += 1
-        return nodeIdentifier
-
-    def nextElementIdentifier(self):
-        elementIdentifier = self._elementIdentifier
-        self._elementIdentifier += 1
-        return elementIdentifier
-
-    def getRegion(self):
-        return self._region
-
-    def getAnnotationGroups(self):
-        return self._annotationGroups
-
-    def getOrCreateAnnotationGroup(self, annotationTerm):
-        annotationGroup = self._annotationGroupMap.get(annotationTerm)
-        if not annotationGroup:
-            annotationGroup = AnnotationGroup(self._region, annotationTerm)
-            self._annotationGroups.append(annotationGroup)
-            self._annotationGroupMap[annotationTerm] = annotationGroup
-        return annotationGroup
-
-    def _getAnnotationMeshGroup(self, annotationTerm):
-        """
-        Get mesh group to add elements to for term.
-        :param annotationTerm: Annotation term (name, ontId).
-        :return: Zinc MeshGroup.
-        """
-        annotationGroup = self.getOrCreateAnnotationGroup(annotationTerm)
-        return annotationGroup.getMeshGroup(self._mesh)
-
-    def getAnnotationMeshGroups(self, annotationTerms):
-        """
-        Get mesh groups for all annotation terms to add segment elements to, creating as needed.
-        :param annotationTerms: List of annotation terms (name, ontId).
-        :return: List of Zinc MeshGroup.
-        """
-        return [self._getAnnotationMeshGroup(annotationTerm) for annotationTerm in annotationTerms]
-
-
 class NetworkMeshSegment(ABC):
     """
     Base class for building a mesh from a NetworkSegment.
@@ -554,11 +529,11 @@ class NetworkMeshSegment(ABC):
         self._networkSegment = networkSegment
         self._pathParametersList = pathParametersList
         self._pathsCount = len(pathParametersList)
-        self._dimension = 3 if (self._pathsCount > 1) else 2
         self._annotationTerms = []
         self._junctions = []  # start, end junctions. Set when junctions are created.
         self._isLoop = False
         self._lengthParameters = self._calculateLengthParameters()
+        self._leftRightSwap = False
 
     def addAnnotationTerm(self, annotationTerm):
         """
@@ -664,11 +639,24 @@ class NetworkMeshSegment(ABC):
         """
         pass
 
+    def setLeftRightSwap(self, swap: bool):
+        """
+        :param swap: True to swap sense of left and right for this segment.
+        """
+        self._leftRightSwap = swap
+
+    def isLeftRightSwap(self):
+        """
+        Query whether left-right sense of segment is swapped.
+        :return: True if swapped, False if not.
+        """
+        return self._leftRightSwap
+
     @abstractmethod
-    def generateMesh(self, generateData: NetworkMeshGenerateData):
+    def generateMesh(self, generateData: MeshGenerateData):
         """
         Override to generate mesh for segment.
-        :param generateData: NetworkMeshGenerateData-derived object.
+        :param generateData: MeshGenerateData or derived object.
         :return:
         """
         pass
@@ -718,10 +706,10 @@ class NetworkMeshJunction(ABC):
         pass
 
     @abstractmethod
-    def generateMesh(self, generateData: NetworkMeshGenerateData):
+    def generateMesh(self, generateData: MeshGenerateData):
         """
         Override to generate mesh for junction.
-        :param generateData: NetworkMeshGenerateData-derived object.
+        :param generateData: MeshGenerateData-derived object.
         :return:
         """
         pass
@@ -758,6 +746,13 @@ class NetworkMeshBuilder(ABC):
         self._longestSegmentLength = 0.0
         self._targetElementLength = 1.0
         self._junctions = {}  # map from NetworkNode to NetworkMeshJunction-derived object
+
+    def getMetadata(self):
+        """
+        Override to add any metadata when used as a scaffold construction object.
+        :return: Dictionary of metadata.
+        """
+        return {}
 
     @abstractmethod
     def createSegment(self, networkSegment):
@@ -862,12 +857,37 @@ class NetworkMeshBuilder(ABC):
         self._sampleSegments()
         self._sampleJunctions()
 
-    def generateMesh(self, generateData: NetworkMeshGenerateData):
+    def setAnnotationLeftRightSwap(self, name, swap):
+        """
+        Call after build but before generate mesh to swap left-right sense of segments with annotation name.
+        :param group_name: Name of annotation group.
+        :param swap: True to swap sense of left and right.
+        """
+        for segment in self._segments.values():
+            for annotationTerm in segment.getAnnotationTerms():
+                if annotationTerm[0] == name:
+                    segment.setLeftRightSwap(swap)
+                    break
+
+    def setLeftRightSwap(self, swap):
+        """
+        Call after build but before generate mesh to swap left-right sense of segments with annotation names
+        not containing 'left' or 'right'.
+        :param swap: True to swap sense of left and right.
+        """
+        for segment in self._segments.values():
+            for annotationTerm in segment.getAnnotationTerms():
+                if ('left' in annotationTerm[0]) or ('right' in annotationTerm[0]):
+                    break
+            else:
+                 segment.setLeftRightSwap(swap)
+
+    def generateMesh(self, generateData: MeshGenerateData):
         """
         Generate mesh from segments and junctions, in order of segments.
         Must have called self.build() first.
         Assumes ChangeManager active for region/fieldmodule.
-        :param generateData: NetworkMeshGenerateData-derived object.
+        :param generateData: MeshGenerateData-derived object.
         """
         generatedJunctions = set()
         for networkSegment in self._networkMesh.getNetworkSegments():
@@ -876,7 +896,7 @@ class NetworkMeshBuilder(ABC):
             if junctions[0] not in generatedJunctions:
                 junctions[0].generateMesh(generateData)
                 generatedJunctions.add(junctions[0])
-            if networkSegment.isPatch():
+            if NetworkSegmentEndStyle.PATCH in networkSegment.getEndStyles():
                 continue  # so as not to make patch mesh twice
             segment.generateMesh(generateData)
             if junctions[1] not in generatedJunctions:
