@@ -1,22 +1,34 @@
 """
 Generates a 3D body coordinates using tube network mesh.
 """
+import math
+
 from cmlibs.maths.vectorops import add, cross, mult, set_magnitude, sub
 from cmlibs.utils.zinc.field import Field, find_or_create_field_coordinates
 from cmlibs.zinc.element import Element
 from cmlibs.zinc.node import Node
+
 from scaffoldmaker.annotation.annotationgroup import (
-    AnnotationGroup, findOrCreateAnnotationGroupForTerm, getAnnotationGroupForTerm)
+    AnnotationGroup,
+    findOrCreateAnnotationGroupForTerm,
+    getAnnotationGroupForTerm,
+)
 from scaffoldmaker.annotation.body_terms import get_body_term
 from scaffoldmaker.meshtypes.meshtype_1d_network_layout1 import MeshType_1d_network_layout1
 from scaffoldmaker.meshtypes.scaffold_base import Scaffold_base
 from scaffoldmaker.scaffoldpackage import ScaffoldPackage
 from scaffoldmaker.utils.interpolation import (
-    computeCubicHermiteEndDerivative, getCubicHermiteArcLength, interpolateLagrangeHermiteDerivative,
-    sampleCubicHermiteCurvesSmooth, smoothCubicHermiteDerivativesLine)
+    computeCubicHermiteEndDerivative,
+    getCubicHermiteArcLength,
+    interpolateLagrangeHermiteDerivative,
+    sampleCubicHermiteCurvesSmooth,
+    smoothCubicHermiteDerivativesLine,
+)
 from scaffoldmaker.utils.networkmesh import NetworkMesh
-from scaffoldmaker.utils.tubenetworkmesh import BodyTubeNetworkMeshBuilder, TubeNetworkMeshGenerateData
-import math
+from scaffoldmaker.utils.tubenetworkmesh import (
+    BodyTubeNetworkMeshBuilder,
+    TubeNetworkMeshGenerateData,
+)
 
 
 class MeshType_1d_human_body_network_layout1(MeshType_1d_network_layout1):
@@ -886,6 +898,161 @@ class MeshType_3d_wholebody2(Scaffold_base):
             is_abdominal_cavity = fieldmodule.createFieldAnd(abdomenGroup.getGroup(), coreGroup.getGroup())
             abdominalCavityGroup.getMeshGroup(mesh).addElementsConditional(is_abdominal_cavity)
 
+        nodes = fieldmodule.findNodesetByFieldDomainType(Field.DOMAIN_TYPE_NODES)
+        node_identifier = max(1, nodes.getSize() + 1)
+        coordinates = find_or_create_field_coordinates(fieldmodule)
+        stickman_markers = {
+            'Level with the inferior border of the third left costal cartilage': 
+            [3.335508199875883,
+            0.1419426774928394,
+            1.0058769780409123],
+            'Internal surface of right half of manubrium sternum at level of superior border of right second sternocostal joint': 
+            [2.8940751018966235,
+            -0.18712796617174582,
+            0.9835753858523458],
+            'Level of lower anterior left sided border of T4 vertebra, level with sternal end of left second costal cartilage':
+            [2.969765706123864,
+            0.0652676018770293,
+            -0.168790054929805],
+            'Anterior to lower border of T12 vertebra': [5.174004005660772,
+            -0.10239119476082352,
+            -0.04710701062573053],
+            'Left anterior inferior margin of C3 vertebra': [1.3959716638454522,
+            0.21332281654425764,
+            0.23737024216855437],
+            'Right anterior inferior margin of C3 vertebra': [1.3811879287545805,
+            -0.05694756224152475,
+            0.2052309660320172],
+            'At level of lower aspect of medial lip of intertubercular/bicipital groove of left humerus where teres major muscle inserts': [2.789194792265203,
+            2.266229775333413,
+            0.14732045085104334],
+            'At level of lower aspect of medial lip of intertubercular/bicipital groove of right humerus where teres major muscle inserts': [2.7480963245891887,
+            -2.228763440128004,
+            0.16433015101655338],
+            '1cm distal to right elbow joint': [2.9157106115170324,
+            -4.709059051776541,
+            -0.13051241811798053],
+            '1cm below left elbow joint at level of neck of radius': [2.8571677194756817,
+            4.833965779583744,
+            -0.0330166239493983],
+            '1cm below right elbow joint at level of neck of radius': [2.8676431276484013,
+            -4.831826373195813,
+            -0.07401390799843152],
+            'Level of 4th lumbar vertebra': [6.591200615895968,
+            0.019566106089660255,
+            0.17973744795705707],
+            'Anterior to left sacroiliac joint': [7.2086913943739965,
+            0.6421065650069326,
+            -0.07400065850933421],
+            'Anterior to right sacroiliac joint': [7.211406782389645,
+            -0.4934018811132983,
+            -0.020785158202611825],
+            'Adductor tubercle on left femur': [11.56211458217606,
+            0.8021641995060096,
+            0.5362054659586485],
+            'Adductor tubercle on right femur': [11.541922030388077,
+            -0.9023746287136986,
+            0.5362181766616896],
+            'External opening of left carotid canal': [0.6498051852164451,
+            0.575691120353834,
+            0.10657661599247906],
+            'External opening of right carotid canal': [0.6645325664947056,
+            -0.3601880703751057,
+            0.1695025247374499],
+            'Posterior to left neck of mandible': [0.6824610606516195,
+            0.7922385840500666,
+            0.21448471041672057],
+            'Posterior to right neck of mandible': [0.6886348593614651,
+            -0.6436143121253458,
+            0.2526448439916521],
+            'Left wrist joint radial aspect': [2.878442174487298,
+            6.826011961729395,
+            -0.03283714319600871],
+            'Pisiform bone of left wrist': [2.923256062734168,
+            6.997125164948838,
+            -0.2589401158843421],
+            'Pisiform bone of right wrist': [2.913810080890774,
+            -7.021011800072831,
+            -0.23349857798551685],
+            'Upper margin of left greater sciatic foramen': [7.59985718259373,
+            0.6021018788316292,
+            -0.07057219901411621],
+            'Upper margin of right greater sciatic foramen': [7.53959174624729,
+            -0.4335320248673514,
+            -0.03905019290668944],
+            'Diaphragm aortic hiatus (at the level of the lower border of the twelfth thoracic vertebra and the adjacent disc, slightly to the left of the midline)': [5.192734171108048,
+            0.03592503462421992,
+            -0.024623434792406897],
+            'Just below diaphragm aortic hiatus': [5.22607476781567,
+            0.03415991794404058,
+            -0.020745848295911862],
+            'Posterior to left inguinal ligament': [7.902213450747673,
+            0.7953633684978062,
+            0.6803835610690554],
+            'Posterior to right inguinal ligament': [7.823187869270758,
+            -0.6428349010815655,
+            0.7820474729137357],
+            'Left adductor canal': [10.91387499109519,
+            0.9972616351177913,
+            0.4724471584476272],
+            'Right adductor canal': [10.837033354522978,
+            -1.0733110342732344,
+            0.48444748861323617],
+            'Soleal line on proximal posterior right tibia': [12.219826253434894,
+            -1.2658715415249273,
+            0.1978051156155505],
+            'Soleal line on proximal posterior left tibia': [12.237939993609814,
+            1.208460057086663,
+            0.26319597721397325],
+            'Posterior to right sternoclavicular joint, level of superior border of T3 vertebra': [2.7674017279723695,
+            -0.31432665363909235,
+            0.7061420876644424],
+            '1cm distal to left elbow joint': [3.0340932935962215,
+            4.351433710862189,
+            -0.12402269500325752],
+            'Level of junction of T3 and T4 vertebrae': [2.9912888881422557,
+            -0.06482935570680645,
+            -0.07658792118820353],
+            'Lower border of tendon of left teres major muscle': [3.055021617084833,
+            1.2049667053157183,
+            -0.1593928401563386],
+            'Lower border of tendon of right teres major muscle': [2.9660560889919254,
+            -1.35601521129089,
+            0.04908356321018263],
+            'Midway between left anterior superior iliac spine and the pubic symphysis': [7.421473814900645,
+            0.8323030571731636,
+            0.6314622640464007],
+            'Midway between right anterior superior iliac spine and the pubic symphysis': [7.372773037624518,
+            -0.815951151538602,
+            0.6253752171090131],
+            'Near junction of middle and distal thirds of the left femur': [10.414856588536098,
+            1.3359670965315038,
+            0.40062058275282836],
+            'Near junction of middle and distal thirds of the right femur': [10.44658161534392,
+            -1.3248493629720506,
+            0.46475454826850443],
+            'Outer border of left first rib': [2.648280330685333,
+            0.6530321318772863,
+            0.28949543951993584],
+            'Outer border of right first rib': [2.629185037684495,
+            -0.7872324578177926,
+            0.31934123895055],
+            'Posterior to the centrepoint of the manubrium sternum, level of inferior border of T3 vertebra': [2.900265854263726,
+            -0.06469009045656827,
+            0.6885585697024087],
+            'Posterior to upper border of right sternoclavicular joint': [2.765953673771387,
+            -0.3436428937178644,
+            0.6904196165678982],
+            'Right wrist joint radial aspect': [2.9720832351918314,
+            -6.381849411552032,
+            0.07969069354757924]}
+        for marker_name, marker_position in stickman_markers.items():
+            marker_group = findOrCreateAnnotationGroupForTerm(
+                annotationGroups, region, (marker_name, ""), isMarker=True
+                )
+            marker_group.createMarkerNode(
+                node_identifier, coordinates, marker_position
+                )
         return annotationGroups, None
 
     @classmethod
