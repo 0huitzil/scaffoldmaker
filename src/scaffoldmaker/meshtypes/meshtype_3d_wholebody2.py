@@ -54,33 +54,33 @@ class MeshType_1d_human_body_network_layout1(MeshType_1d_network_layout1):
         options["Base parameter set"] = parameterSetName
         options["Structure"] = generate_network_layout_structure(human_network_element_counts)
         options["Define inner coordinates"] = True
-        options["Head depth"] = 2.0
-        options["Head length"] = 1.5
-        options["Head width"] = 2.0
+        options["Head depth"] = 1.5
+        options["Head length"] = 1.8
+        options["Head width"] = 1.2
         options["Neck length"] = 1.0
         options["Shoulder drop"] = 1.0
-        options["Shoulder width"] = 4.5
-        options["Arm lateral angle degrees"] = 10.0
-        options["Shoulder length"] = 1.5
-        options["Brachium length"] = 2.2
-        options["Antebrachium length"] = 3.7
+        options["Shoulder width"] = 4.0
+        options["Arm lateral angle degrees"] = 90.0
+        options["Shoulder length"] = 2.0
+        options["Brachium length"] = 3.0
+        options["Antebrachium length"] = 1.0
         options["Arm top diameter"] = 1.0
         options["Arm twist angle degrees"] = 0.0
         options["Wrist thickness"] = 0.5
         options["Wrist width"] = 0.7
-        options["Hand length"] = 1.5
+        options["Hand length"] = 1.8
         options["Hand thickness"] = 0.2
-        options["Hand width"] = 1.0
-        options["Thorax length"] = 2.5
+        options["Hand width"] = 1.5
+        options["Thorax length"] = 2.8
         options["Abdomen length"] = 2.0
         options["Torso depth"] = 2.5
-        options["Torso width"] = 3.2
-        options["Pelvis drop"] = 1.8
+        options["Torso width"] = 2.5
+        options["Pelvis drop"] = 1.2
         options["Pelvis width"] = 2.0
-        options["Leg lateral angle degrees"] = 10.0
-        options["Upper leg length"] = 3.7
-        options["Lower leg length"] = 2.7
-        options["Leg top diameter"] = 1.8
+        options["Leg lateral angle degrees"] = 5.0
+        options["Upper leg length"] = 3.0
+        options["Lower leg length"] = 2.5
+        options["Leg top diameter"] = 1.5
         options["Leg bottom diameter"] = 0.7
         options["Foot height"] = 1.25
         options["Foot length"] = 2.5
@@ -840,6 +840,50 @@ class MeshType_1d_human_body_network_layout1(MeshType_1d_network_layout1):
                     innerCoordinates, fieldcache, fx[i], fd1[i], fid2, fid3, fid12, fid13)
                 nodeIdentifier += 1
 
+        # Kinematic tree markers (TODO DELETE)
+
+        markers_table =[
+        ("pelvis",      12),
+        ("femur_r",     38),
+        ("tibia_r",     41),
+        ("talus_r",     43),
+        ("calcn_r",     44),
+        ("toes_r",      45),
+        ("femur_l",     30),
+        ("tibia_l",     33),
+        ("talus_l",     35),
+        ("calcn_l",     36),
+        ("toes_l",      37),
+        ("lumbar_body", 10),
+        ("thorax_top",   6),
+        ("head_marker",  4),
+        # ("scapula_r", ),
+        # ("shoulder_right", ),
+        ("humerus_r",   22),
+        ("ulna_r",      25),
+        # ("radius_r",    ),
+        ("hand_r",      28),
+        # ("scapula_l", ),
+        # ("shoulder_left", ),
+        ("humerus_l",   14),
+        ("ulna_l",      17),
+        # ("radius_l", ),
+        ("hand_l",      20),
+        ]
+        for marker in markers_table:
+            marker_name = marker[0]
+            marker_id = marker[1]
+            node = nodes.findNodeByIdentifier(marker_id)
+            fieldcache.setNode(node)
+            node_coordinates = coordinates.getNodeParameters(
+                fieldcache, -1, Node.VALUE_LABEL_VALUE, 1, 3)[1]
+            marker_group = findOrCreateAnnotationGroupForTerm(
+                annotationGroups, region, (marker_name, ""), isMarker=True
+                )
+            marker_group.createMarkerNode(
+                marker_id, coordinates, node_coordinates
+            )
+
         return annotationGroups, networkMesh
 
     @classmethod
@@ -879,12 +923,12 @@ class MeshType_3d_wholebody2(Scaffold_base):
         useParameterSetName = "Human 1 Coarse" if (parameterSetName == "Default") else parameterSetName
         options["Base parameter set"] = useParameterSetName
         options["Body network layout"] = ScaffoldPackage(MeshType_1d_human_body_network_layout1)
-        options["Number of elements along head"] = 4
+        options["Number of elements along head"] = 3
         options["Number of elements along neck"] = 1
         options["Number of elements along thorax"] = 2
         options["Number of elements along abdomen"] = 2
         options["Number of elements along shoulder"] = 2
-        options["Number of elements along brachium"] = 1
+        options["Number of elements along brachium"] = 3
         options["Number of elements along antebrachium"] = 1
         options["Number of elements along hand"] = 1
         # options["Number of elements along hip"] = 1
@@ -897,7 +941,7 @@ class MeshType_3d_wholebody2(Scaffold_base):
         options["Number of elements around leg"] = 8
         options["Number of elements through shell"] = 1
         options["Show trim surfaces"] = False
-        options["Use Core"] = True
+        options["Use Core"] = False
         options["Number of elements across core box minor"] = 2
         options["Number of elements across core transition"] = 1
         if "Medium" in useParameterSetName:
@@ -906,7 +950,7 @@ class MeshType_3d_wholebody2(Scaffold_base):
             options["Number of elements along thorax"] = 3
             options["Number of elements along abdomen"] = 3
             options["Number of elements along shoulder"] = 2
-            options["Number of elements along brachium"] = 3
+            options["Number of elements along brachium"] = 5
             options["Number of elements along antebrachium"] = 3
             options["Number of elements along hand"] = 1
             options["Number of elements along upper leg"] = 2
@@ -921,7 +965,7 @@ class MeshType_3d_wholebody2(Scaffold_base):
             options["Number of elements along thorax"] = 4
             options["Number of elements along abdomen"] = 4
             options["Number of elements along shoulder"] = 2
-            options["Number of elements along brachium"] = 3
+            options["Number of elements along brachium"] = 7
             options["Number of elements along antebrachium"] = 4
             options["Number of elements along hand"] = 2
             options["Number of elements along upper leg"] = 3
@@ -1153,6 +1197,7 @@ class MeshType_3d_wholebody2(Scaffold_base):
 
         # Body coordinates
         # Generate network layout with default parameters
+        """
         materialNetworkLayout = ScaffoldPackage(MeshType_1d_human_body_network_layout1)
         tmp_region = region.createRegion()
         tmp_layoutRegion = region.createRegion()
@@ -1168,9 +1213,9 @@ class MeshType_3d_wholebody2(Scaffold_base):
             annotationElementsCountsAlong=annotationAlongCounts,
             defaultElementsCountAround=options["Number of elements around head"],
             annotationElementsCountsAround=annotationAroundCounts,
-            elementsCountThroughShell=options["Number of elements through shell"],
-            isCore=core,
-            elementsCountTransition=options['Number of elements across core transition'],
+            shell_count=shell_count,
+            core=core,
+            transition_count=options['Number of elements across core transition'],
             defaultElementsCountCoreBoxMinor=options["Number of elements across core box minor"],
             annotationElementsCountsCoreBoxMinor=[],
             defaultCoreBoundaryScalingMode=defaultCoreBoundaryScalingMode,
@@ -1195,6 +1240,7 @@ class MeshType_3d_wholebody2(Scaffold_base):
 
         del tmp_region
         del tmp_layoutRegion
+        """
 
         if core and shell_count:
             fieldmodule = region.getFieldmodule()
@@ -1249,35 +1295,24 @@ class MeshType_3d_wholebody2(Scaffold_base):
             is_exterior, fieldmodule.createFieldNot(is_face_xi3_0))) if (is_core or shell_count) else one
         skinGroup.getMeshGroup(mesh2d).addElementsConditional(is_skin)
 
-        leftArmGroup = getAnnotationGroupForTerm(
-            annotationGroups, get_body_term("left upper limb"))
-        leftArmSkinGroup = findOrCreateAnnotationGroupForTerm(
+        skin_groups = [
+            'right lower limb',
+            'right upper limb',
+            'right hand',
+            'right foot',
+            'left lower limb',
+            'left upper limb',
+            'left hand',
+            'left foot',
+        ]
+        for annotation_group_name in skin_groups:
+            annotation_group =  getAnnotationGroupForTerm(
+            annotationGroups, get_body_term(annotation_group_name))
+            skin_annotation_group = findOrCreateAnnotationGroupForTerm(
             annotationGroups, region,
-            get_body_term("left upper limb skin epidermis outer surface"))
-        leftArmSkinGroup.getMeshGroup(mesh2d).addElementsConditional(
-            fieldmodule.createFieldAnd(leftArmGroup.getGroup(), is_exterior))
-        rightArmGroup = getAnnotationGroupForTerm(
-            annotationGroups, get_body_term("right upper limb"))
-        rightArmSkinGroup = findOrCreateAnnotationGroupForTerm(
-            annotationGroups, region,
-            get_body_term("right upper limb skin epidermis outer surface"))
-        rightArmSkinGroup.getMeshGroup(mesh2d).addElementsConditional(
-            fieldmodule.createFieldAnd(rightArmGroup.getGroup(), is_skin))
-
-        leftLegGroup = getAnnotationGroupForTerm(
-            annotationGroups, get_body_term("left lower limb"))
-        leftLegSkinGroup = findOrCreateAnnotationGroupForTerm(
-            annotationGroups, region,
-            get_body_term("left lower limb skin epidermis outer surface"))
-        leftLegSkinGroup.getMeshGroup(mesh2d).addElementsConditional(
-            fieldmodule.createFieldAnd(leftLegGroup.getGroup(), is_skin))
-        rightLegGroup = getAnnotationGroupForTerm(
-            annotationGroups, get_body_term("right lower limb"))
-        rightLegSkinGroup = findOrCreateAnnotationGroupForTerm(
-            annotationGroups, region,
-            get_body_term("right lower limb skin epidermis outer surface"))
-        rightLegSkinGroup.getMeshGroup(mesh2d).addElementsConditional(
-            fieldmodule.createFieldAnd(rightLegGroup.getGroup(), is_skin))
+            get_body_term(annotation_group_name +  " skin epidermis outer surface"))
+            skin_annotation_group.getMeshGroup(mesh2d).addElementsConditional(
+            fieldmodule.createFieldAnd(annotation_group.getGroup(), is_exterior))
 
         if is_core and shell_count:
             # define cavity surfaces, diaphragm and spinal cord

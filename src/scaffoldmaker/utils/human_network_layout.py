@@ -86,12 +86,14 @@ def generate_network_layout_structure(humanElementCounts:dict):
     for i in range(2):
         version = 2 if (i == 0) else 3 #Left is 2, right is 3
         # Shoulder
-        shoulderNetworkLayout, nodeIdentifier = create_segment_layout(
-            humanElementCounts['shoulderElementsCount'], nodeIdentifier,
-            initialJointNode=neckJointNode, versionStart=version)
-        # Brachium
+        # shoulderNetworkLayout, nodeIdentifier = create_segment_layout(
+        #     humanElementCounts['shoulderElementsCount'], nodeIdentifier,
+        #     initialJointNode=neckJointNode, versionStart=version)
+        # Shoulder and brachium
         brachiumNetworkLayout, nodeIdentifier = create_segment_layout(
-            humanElementCounts['brachiumElementsCount'], nodeIdentifier)
+            humanElementCounts['brachiumElementsCount'] \
+            + humanElementCounts['shoulderElementsCount'], nodeIdentifier,
+            initialJointNode=neckJointNode, versionStart=version)
         # Antebrachium
         antebrachiumNetworkLayout, nodeIdentifier = create_segment_layout(
             humanElementCounts['antebrachiumElementsCount'], nodeIdentifier)
@@ -99,7 +101,7 @@ def generate_network_layout_structure(humanElementCounts:dict):
         handNetworkLayout, nodeIdentifier = create_segment_layout(
             humanElementCounts['handElementsCount'], nodeIdentifier, versionEnd=1)
         # Join arm
-        armNetworkLayout = shoulderNetworkLayout + brachiumNetworkLayout \
+        armNetworkLayout =  brachiumNetworkLayout \
               + antebrachiumNetworkLayout + handNetworkLayout
         arms.append(armNetworkLayout)
     #Legs
@@ -110,7 +112,7 @@ def generate_network_layout_structure(humanElementCounts:dict):
         # hipNetworkLayout, nodeIdentifier = create_segment_layout(
         #     humanElementCounts['hipElementsCount'], nodeIdentifier,
         #     initialJointNode=pelvisJointNode, versionStart=version)
-        # Upper leg
+        # Upper leg and hip
         upperLegNetworkLayout, nodeIdentifier = create_segment_layout(
             humanElementCounts['upperLegElementsCount'] \
             + humanElementCounts['hipElementsCount'],
@@ -126,7 +128,7 @@ def generate_network_layout_structure(humanElementCounts:dict):
             + lowerLegNetworkLayout + footNetworkLayout
         legs.append(legNetworkLayout)
     # Joint network
-    humanNetworkLayout = headNetworkLayout + neckNetworkLayout + arms[0] + arms[1] \
+    humanNetworkLayout = '(' + headNetworkLayout + neckNetworkLayout + arms[0] + arms[1] \
           + thoraxNetworkLayout + abdomenNetworkLayout  + legs[0] + legs[1]
     #Remove an extra comma at the end
     humanNetworkLayout = humanNetworkLayout[:-1]
