@@ -926,12 +926,12 @@ class MeshType_3d_wholebody2(Scaffold_base):
         options["Number of elements along neck"] = 1
         options["Number of elements along thorax"] = 2
         options["Number of elements along abdomen"] = 2
-        options["Number of elements along shoulder"] = 2
+        # options["Number of elements along shoulder"] = 2
         options["Number of elements along brachium"] = 3
-        options["Number of elements along antebrachium"] = 1
+        options["Number of elements along antebrachium"] = 2
         options["Number of elements along hand"] = 1
         # options["Number of elements along hip"] = 1
-        options["Number of elements along upper leg"] = 2
+        options["Number of elements along upper leg"] = 3
         options["Number of elements along lower leg"] = 2
         options["Number of elements along foot"] = 2
         options["Number of elements around head"] = 12
@@ -940,40 +940,44 @@ class MeshType_3d_wholebody2(Scaffold_base):
         options["Number of elements around leg"] = 8
         options["Number of elements through shell"] = 1
         options["Show trim surfaces"] = False
-        options["Use Core"] = False
+        options["Use Core"] = True
         options["Number of elements across core box minor"] = 2
         options["Number of elements across core transition"] = 1
         if "Medium" in useParameterSetName:
-            options["Number of elements along head"] = 6
+            options["Number of elements along head"] = 4
             options["Number of elements along neck"] = 2
             options["Number of elements along thorax"] = 3
             options["Number of elements along abdomen"] = 3
-            options["Number of elements along shoulder"] = 2
+            # options["Number of elements along shoulder"] = 2
             options["Number of elements along brachium"] = 5
-            options["Number of elements along antebrachium"] = 3
+            options["Number of elements along antebrachium"] = 4
             options["Number of elements along hand"] = 1
-            options["Number of elements along upper leg"] = 2
-            options["Number of elements along lower leg"] = 2
+            # options["Number of elements along hip"] = 1
+            options["Number of elements along upper leg"] = 5
+            options["Number of elements along lower leg"] = 4
             options["Number of elements along foot"] = 2
             options["Number of elements around head"] = 16
             options["Number of elements around torso"] = 16
-            options["Number of elements around leg"] = 12
+            options["Number of elements around arm"] = 16
+            options["Number of elements around leg"] = 16
+            options["Number of elements through shell"] = 1
         elif "Fine" in useParameterSetName:
-            options["Number of elements along head"] = 8
-            options["Number of elements along neck"] = 2
+            options["Number of elements along head"] = 6
+            options["Number of elements along neck"] = 3
             options["Number of elements along thorax"] = 4
             options["Number of elements along abdomen"] = 4
-            options["Number of elements along shoulder"] = 2
+            # options["Number of elements along shoulder"] = 2
             options["Number of elements along brachium"] = 7
-            options["Number of elements along antebrachium"] = 4
-            options["Number of elements along hand"] = 2
-            options["Number of elements along upper leg"] = 3
-            options["Number of elements along lower leg"] = 2
-            options["Number of elements along foot"] = 3
+            options["Number of elements along antebrachium"] = 5
+            options["Number of elements along hand"] = 1
+            # options["Number of elements along hip"] = 1
+            options["Number of elements along upper leg"] = 7
+            options["Number of elements along lower leg"] = 5
+            options["Number of elements along foot"] = 2
             options["Number of elements around head"] = 20
             options["Number of elements around torso"] = 20
-            options["Number of elements around arm"] = 12
-            options["Number of elements around leg"] = 16
+            options["Number of elements around arm"] = 20
+            options["Number of elements around leg"] = 20
             options["Number of elements through shell"] = 2
             options["Number of elements across core box minor"] = 4
 
@@ -987,7 +991,7 @@ class MeshType_3d_wholebody2(Scaffold_base):
             "Number of elements along neck",
             "Number of elements along thorax",
             "Number of elements along abdomen",
-            "Number of elements along shoulder",
+            # "Number of elements along shoulder",
             "Number of elements along brachium",
             "Number of elements along antebrachium",
             "Number of elements along hand",
