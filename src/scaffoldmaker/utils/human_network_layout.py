@@ -4,7 +4,7 @@ human_network_element_counts = {
     'headElementsCount': 3,
     'neckElementsCount': 2,
     'shoulderElementsCount': 2,
-    'brachiumElementsCount': 3,
+    'brachiumElementsCount': 2,
     'antebrachiumElementsCount': 2,
     'handElementsCount': 1,
     'thoraxElementsCount': 3,
