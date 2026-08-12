@@ -878,6 +878,51 @@ class MeshType_3d_wholebody2(Scaffold_base):
         tubeNetworkMeshBuilder.generateMesh(generateData)
         annotationGroups = generateData.getAnnotationGroups()
 
+        # Body coordinates
+        # Generate network layout with default parameters
+        materialNetworkLayout = ScaffoldPackage(MeshType_1d_human_body_network_layout1)
+        tmp_region = region.createRegion()
+        tmp_layoutRegion = region.createRegion()
+
+        materialNetworkLayout.generate(tmp_layoutRegion)
+        materialAnnotationGroups = materialNetworkLayout.getAnnotationGroups()
+        materialNetworkMesh = materialNetworkLayout.getConstructionObject()
+
+        materialTubeNetworkMeshBuilder = BodyTubeNetworkMeshBuilder(
+            materialNetworkMesh,
+            targetElementDensityAlongLongestSegment=2.0,  # not used for body
+            layoutAnnotationGroups=materialAnnotationGroups,
+            annotationElementsCountsAlong=annotationAlongCounts,
+            defaultElementsCountAround=options["Number of elements around head"],
+            annotationElementsCountsAround=annotationAroundCounts,
+            shell_count=shell_count,
+            core=core,
+            transition_count=options['Number of elements across core transition'],
+            defaultElementsCountCoreBoxMinor=options["Number of elements across core box minor"],
+            annotationElementsCountsCoreBoxMinor=[],
+            defaultCoreBoundaryScalingMode=defaultCoreBoundaryScalingMode,
+            annotationCoreBoundaryScalingMode=annotationCoreBoundaryScalingMode,
+            useOuterTrimSurfaces=True
+            )
+        materialTubeNetworkMeshBuilder.build()
+        generateData = TubeNetworkMeshGenerateData(
+            tmp_region, meshDimension,
+            coordinateFieldName= 'body coordinates', \
+            isLinearThroughShell=False,
+            isShowTrimSurfaces=options["Show trim surfaces"]
+        )
+        materialTubeNetworkMeshBuilder.generateMesh(generateData)
+        sir = tmp_region.createStreaminformationRegion()
+        srm = sir.createStreamresourceMemory()
+        tmp_region.write(sir)
+        result, buffer = srm.getBuffer()
+        sir = region.createStreaminformationRegion()
+        srm = sir.createStreamresourceMemoryBuffer(buffer)
+        region.read(sir)
+
+        del tmp_region
+        del tmp_layoutRegion
+
         if core and shell_count:
             fieldmodule = region.getFieldmodule()
             mesh = fieldmodule.findMeshByDimension(meshDimension)
