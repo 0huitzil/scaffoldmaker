@@ -45,8 +45,14 @@ class MeshType_3d_hand1(Scaffold_base):
         options = {
             "Base parameter set": baseParameterSetName,
             "Thumb angle": 25.0,
+            "Splaying angle": 0,
             'Create internal elements': True,
             'Create external elements': False,
+            'Elements along carpal': 1,
+            'Elements along metacarpal': 2,
+            'Elements along proximal phalanx': 2,
+            'Elements along middle phalanx': 1,
+            'Elements along distal phalanx': 2,
             'finger names': [
                 "little finger",
                 "ring finger",
@@ -59,7 +65,7 @@ class MeshType_3d_hand1(Scaffold_base):
                 'proximal phalanx',
                 'middle phalanx',
                 'distal phalanx'
-                ], 
+                ],
         }
         return options
 
@@ -67,8 +73,14 @@ class MeshType_3d_hand1(Scaffold_base):
     def getOrderedOptionNames(cls):
         return [
             "Thumb angle",
+            "Splaying angle",
             'Create internal elements',
-            'Create external elements'
+            'Create external elements',
+            'Elements along carpal',
+            'Elements along metacarpal',
+            'Elements along proximal phalanx',
+            'Elements along middle phalanx',
+            'Elements along distal phalanx',
             ]
 
     @classmethod
@@ -81,6 +93,17 @@ class MeshType_3d_hand1(Scaffold_base):
                 options[key] = angleRange[0]
             elif options[key] > angleRange[1]:
                 options[key] = angleRange[1]
+        for key in [
+            'Elements along carpal',
+            'Elements along metacarpal',
+            'Elements along proximal phalanx',
+            'Elements along middle phalanx',
+            'Elements along distal phalanx',
+        ]:
+            if options[key] < 1:
+                options[key] = 1
+            if options[key] > 3:
+                options[key] = 3
         return dependent_changes
 
     @classmethod
@@ -95,7 +118,13 @@ class MeshType_3d_hand1(Scaffold_base):
         create_internal = options.get('Create internal elements')
         create_external = options.get('Create external elements')
         node_identifier = 1
-        hand_elements_along = [1, 2, 1, 1, 2] # carpal, metacarpal, prox, middle, dist phalanx
+        hand_elements_along = [
+            options['Elements along carpal'],
+            options['Elements along metacarpal'],
+            options['Elements along proximal phalanx'],
+            options['Elements along middle phalanx'],
+            options['Elements along distal phalanx']
+        ]
         node_network = Node_network(region, fieldcache)
         ix = 2 * sum(hand_elements_along)
         iy = 6 * 5 # 5 columns per finger, + 1 column for palm-thumb connection
@@ -412,28 +441,28 @@ def generate_internal_nodes(node_network: Node_network, hand_elements_along: lis
         [ # Finger 1 (little finger)
             [1.0, 0.4, 0.2],  # carpal
             [2.0, 0.4, 0.2],  # metacarpal
-            [1.1, 0.3, 0.2],  # proximal phalanx
+            [1.1, 0.2, 0.2],  # proximal phalanx
             [0.7, 0.2, 0.2],  # middle phalanx
             [0.6, 0.2, 0.2],  # distal phalanx
         ],
         [ # Finger 2 (ring finger)
             [1.0, 0.4, 0.2],  # carpal
             [2.0, 0.4, 0.2],  # metacarpal
-            [1.5, 0.3, 0.2],  # proximal phalanx
+            [1.5, 0.2, 0.2],  # proximal phalanx
             [1.0, 0.2, 0.2],  # middle phalanx
             [0.7, 0.2, 0.2],  # distal phalanx
         ],
         [ # Finger 3 (middle finger)
             [1.0, 0.4, 0.2],  # carpal
             [2.0, 0.4, 0.2],  # metacarpal
-            [1.9, 0.3, 0.2],  # proximal phalanx
+            [1.9, 0.2, 0.2],  # proximal phalanx
             [1.0, 0.2, 0.2],  # middle phalanx
             [0.6, 0.2, 0.2],  # distal phalanx
         ],
         [ # Finger 4 (index finger)
             [1.0, 0.4, 0.2],  # carpal
             [2.0, 0.4, 0.2],  # metacarpal
-            [1.9, 0.3, 0.2],  # proximal phalanx
+            [1.9, 0.2, 0.2],  # proximal phalanx
             [0.8, 0.2, 0.2],  # middle phalanx
             [0.6, 0.2, 0.2],  # distal phalanx
         ],
@@ -449,12 +478,17 @@ def generate_internal_nodes(node_network: Node_network, hand_elements_along: lis
     x1 = [1.0, 0.0, 0.0]
     x2 = [0.0, 1.0, 0.0]
     x3 = [0.0, 0.0, 1.0]
+    splaying_angle_radians = math.radians(options['Splaying angle'])
+    x1 = rotate_vector_around_vector(x1, x3, -2 * splaying_angle_radians)
     for j in range(4):
         finger_dimensions = hand_dimensions_by_finger[j]
         x = [0.0, j * carpal_spacing, 0.0]
+        x1 = [1.0, 0.0, 0.0]
         for i, bone_dimensions in enumerate(finger_dimensions):
             n_elements_along = hand_elements_along[i]
             bone_dimensions = finger_dimensions[i]
+            if i == 2:
+                x1 = rotate_vector_around_vector(x1, x3, (j - 2) * splaying_angle_radians)
             d1 = mult(x1, bone_dimensions[0])
             if i == 4:
                 d1 = mult(d1, 1 / (n_elements_along - 1))
@@ -462,12 +496,13 @@ def generate_internal_nodes(node_network: Node_network, hand_elements_along: lis
                 d1 = mult(d1, 1 / n_elements_along)
             d2 = mult(x2, bone_dimensions[1])
             d3 = mult(x3, bone_dimensions[2])
-            if i == 2:
-                x = add(x, mult(d2, -1.0 + (2.0 / 3.0) * j))
             if (j == 3) and (i == 1):
                 index_carpal_node_id = node_identifier
             is_palm = True if i < 3 else False
             for i_along in range(n_elements_along):
+                if i == 2 and i_along == 1:
+                    is_palm = False
+                    x = add(x, mult(d2, -1.0 + (2.0 / 3.0) * j))
                 node_network.set_node_parameters([x, d1, d2, d3], node_identifier,
                                              internal_node = True, palm_node = is_palm)
                 x = add(x, d1)
@@ -506,7 +541,7 @@ def generate_internal_nodes(node_network: Node_network, hand_elements_along: lis
 
 def generate_internal_node_matrix(hand_elements_along, node_identifier,
                                   virtual_node_matrix: Virtual_node_matrix,
-                                  node_network: Node_network, options=None):
+                                  node_network: Node_network, options: dict =None):
     """
     Docstring for generate_internal_node_matrix
 
@@ -521,19 +556,19 @@ def generate_internal_node_matrix(hand_elements_along, node_identifier,
     bone_c = 0.5
     bone_w = 1.0
     bone_h = 0.5
-    a0 = 1
+    a0 = 1.0
     parent_node_id = 1
     index_y = 1
-    a1 = 0
+    a1 = 0.0
     k_val = [1, 2]
     columns_per_finger = 5
-    finger_names = options['finger names']
-    bone_names = options['bone names']
+    finger_names = options.get('finger names')
+    bone_names = options.get('bone names')
     # Finger
     # Palm and first four fingers
     for finger_index in range(4):
         index_x = 0
-        # Carpal, metacarpal and proximal phalanx
+        # Carpal, metacarpal and first row of proximal phalanx
         for bone in range(3):
             n_elements_along = hand_elements_along[bone]
             if finger_index == 0:
@@ -544,7 +579,10 @@ def generate_internal_node_matrix(hand_elements_along, node_identifier,
                 j_val = [index_y - 4, index_y, index_y + 1, index_y + 5, index_y + 6]
             else:
                 j_val = [index_y - 4, index_y, index_y + 1]
-            i_val = [index_x + i for i in range(n_elements_along)]
+            if bone in [0, 1]:
+                i_val = [index_x + i for i in range(n_elements_along)]
+            else:
+                i_val = [index_x]
             for i in i_val:
                 for j in j_val:
                     for k in k_val:
@@ -556,8 +594,8 @@ def generate_internal_node_matrix(hand_elements_along, node_identifier,
                             a0 = bone_c + 1 if finger_index == 0 else bone_c
                         elif j in [index_y + 1]:
                             a0 = bone_c + 1 if finger_index == 3 else bone_c
-                        a2 = 0
-                        a3 = -bone_h if k == 1 else bone_h
+                        a2 = 0.0
+                        a3 = -a0 if k == 1 else a0
                         bone_name = bone_names[bone]
                         indices = [[i, j, k]]
                         if bone == 0: # Carpal
@@ -576,7 +614,7 @@ def generate_internal_node_matrix(hand_elements_along, node_identifier,
                         elif bone == 1: # Metacarpal
                             annotation = [bone_name] if k == 1 else ""
                             if (j == index_y + 1 and finger_index == 3) \
-                                or (j == index_y + 6 and finger_index == 2): # Webbing 
+                                or (j == index_y + 6 and finger_index == 2): # WebbingE
                                 if i == index_x:
                                     indices.append([i + 1, j + 4, k])
                                     indices.append([i + 3, j + 4, k])
@@ -590,20 +628,19 @@ def generate_internal_node_matrix(hand_elements_along, node_identifier,
                             virtual_node_matrix.set_virtual_node_to_indices(
                                 node, indices, False
                             )
-                        elif bone == 2: # Proximal Phalanx
-                            # a2 = a2 if j not in [1, 17] else a2 / 2
+                        elif bone == 2: # First row of Proximal Phalanx
+                            n_elements_along = 1
                             finger_name = finger_names[finger_index]
                             if j > index_y + 1 and finger_index < 3:
                                 finger_name = finger_names[finger_index + 1]
                             finger_part = bone_name + ' of ' + finger_name
                             annotation = [bone_name, finger_name, finger_part]
-                            indices.append([i + 2, j, k])
-
                             node = {
                                 Node.VALUE_LABEL_VALUE: [[parent_node_id, a0, a1, a2, a3]],
                                 "Type": "internal",
                                 "Annotation": annotation,
                             }
+                            indices.append([i + 2, j, k])
                             virtual_node_matrix.set_virtual_node_to_indices(
                                 node, indices, False
                             )
@@ -612,15 +649,18 @@ def generate_internal_node_matrix(hand_elements_along, node_identifier,
             index_x += n_elements_along
         index_x += 2
         a0 = 1
-        # Middle and distal phalanx
-        for bone in [3, 4]:
+        phalanx_bones = [2, 3, 4] if hand_elements_along[2] > 1 else [3, 4]
+        # Proximal, middle and distal phalanx
+        for bone in phalanx_bones:
             n_elements_along = hand_elements_along[bone]
+            n_elements_along = n_elements_along - 1 if bone == 2 else n_elements_along
             j_val = [index_y, index_y + 1]
             i_val = [index_x + i for i in range(n_elements_along)]
             for i in i_val:
                 for j in j_val:
                     for k in k_val:
                         a2 = -bone_w if j == index_y else bone_w
+                        # a2 = 0 if bone == 2 else a2
                         a3 = -bone_h if k == 1 else bone_h
                         finger_name = finger_names[finger_index]
                         bone_name = bone_names[bone]
@@ -643,7 +683,7 @@ def generate_internal_node_matrix(hand_elements_along, node_identifier,
     finger_name = finger_names[-1]
     for bone in [1, 2, 4]:
         n_elements_along = hand_elements_along[bone]
-        n_elements_along = n_elements_along - 1 if bone == 1 else n_elements_along
+        n_elements_along = n_elements_along - 1 if bone in [1, 2] else n_elements_along
         j_val = [index_y, index_y + 1]
         i_val = [index_x + i for i in range(n_elements_along)]
         for i in i_val:
@@ -706,7 +746,7 @@ def generate_external_node_matrix(hand_elements_along,
     parent_node_id = 1
     index_y = 1
     d3 = None
-    d1_offset = 0.35
+    d1_offset = 0.0
     k_val = [1, 2]
     # Palm and first four fingers
     for finger_index in range(4):
@@ -715,7 +755,10 @@ def generate_external_node_matrix(hand_elements_along,
         for bone in range(3):
             n_elements_along = hand_elements_along[bone]
             j_val = [index_y, index_y + 1] if finger_index == 0 else [index_y + 1]
-            i_val = [index_x + i for i in range(n_elements_along)]
+            if bone in [0, 1]:
+                i_val = [index_x + i for i in range(n_elements_along)]
+            else:
+                i_val = [index_x]
             for i in i_val:
                 for j in j_val:
                     for k in k_val:
@@ -750,7 +793,8 @@ def generate_external_node_matrix(hand_elements_along,
                             else:
                                 indices.append([i, j, k + a3])
                                 indices.append([i, j + 4, k + a3])
-                        elif bone == 2:
+                        elif bone == 2: # First row of Proximal Phalanx
+                            n_elements_along = 1
                             finger_name = finger_names[finger_index] if j == index_y else \
                                 finger_names[finger_index + 1]
                             finger_name = finger_names[3] if finger_index == 3 else finger_name
@@ -785,17 +829,19 @@ def generate_external_node_matrix(hand_elements_along,
                 parent_node_id += 1
             index_x += n_elements_along
         index_x += 2
-        # Middle and distal phalanx
-        for bone in [3, 4]:
+        phalanx_bones = [2, 3, 4] if hand_elements_along[2] > 1 else [3, 4]
+        # Proximal, middle and distal phalanx
+        for bone in phalanx_bones:
             n_elements_along = hand_elements_along[bone]
+            n_elements_along = n_elements_along - 1 if bone == 2 else n_elements_along
             j_val = [index_y, index_y + 1]
             i_val = [index_x + i for i in range(n_elements_along)]
             # Estimate ellipse
             center, d1, d2, d3 = node_network.get_node_parameters(parent_node_id)
-            if bone == 3:
-                center = add(center, set_magnitude(d1, d1_offset/n_elements_along))
-            else:
+            if bone in [4]:
                 center = add(center, set_magnitude(d1, d1_offset/(n_elements_along - 1)))
+            else:
+                center = add(center, set_magnitude(d1, d1_offset/(n_elements_along)))
             major_axis = mult(d2, -a_finger)
             minor_axis = mult(d3, b_finger)
             ellipse_x = []
@@ -872,7 +918,7 @@ def generate_external_node_matrix(hand_elements_along,
         index_y += 5
     # Finger-palm connections
     j_val = [3, 8, 13]
-    i = c + mc + pp + 1  # Last row of PP elements
+    i = c + mc + 2  # First row of PP elements
     bone_name = bone_names[2]
     finger_index = 0
     for j in j_val:
@@ -929,7 +975,7 @@ def generate_external_node_matrix(hand_elements_along,
     # Metacarpal, proximal and distal phalanx
     for bone in [1, 2, 4]:
         n_elements_along = hand_elements_along[bone]
-        if bone == 1:
+        if bone in [1, 2]:
             n_elements_along -= 1
         j_val = [index_y, index_y + 1]
         i_val = [index_x + i for i in range(n_elements_along)]
