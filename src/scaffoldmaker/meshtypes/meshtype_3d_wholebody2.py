@@ -224,17 +224,22 @@ class MeshType_1d_human_body_network_layout1(MeshType_1d_network_layout1):
         leftArmGroup = AnnotationGroup(region, get_body_term("left upper limb"))
         rightArmGroup = AnnotationGroup(region, get_body_term("right upper limb"))
         handGroup = AnnotationGroup(region, get_body_term("hand"))
+        leftHandGroup = AnnotationGroup(region, get_body_term("left hand"))
+        rightHandGroup = AnnotationGroup(region, get_body_term("right hand"))
         thoraxGroup = AnnotationGroup(region, get_body_term("thorax"))
         abdomenGroup = AnnotationGroup(region, get_body_term("abdomen"))
         legGroup = AnnotationGroup(region, get_body_term("lower limb"))
         legToFootGroup = AnnotationGroup(region, ("leg to foot", ""))
         leftLegGroup = AnnotationGroup(region, get_body_term("left lower limb"))
-        rightLegGroup = AnnotationGroup(region, get_body_term("right lower limb "))
+        rightLegGroup = AnnotationGroup(region, get_body_term("right lower limb"))
         footGroup = AnnotationGroup(region, get_body_term("foot"))
+        leftFootGroup = AnnotationGroup(region, get_body_term("left foot"))
+        rightFootGroup = AnnotationGroup(region, get_body_term("right foot"))
         annotationGroups = [bodyGroup, headGroup, neckGroup,
                             armGroup, armToHandGroup, leftArmGroup, rightArmGroup, handGroup,
-                            thoraxGroup, abdomenGroup,
-                            legGroup, legToFootGroup, leftLegGroup, rightLegGroup, footGroup]
+                            leftHandGroup, rightHandGroup, thoraxGroup, abdomenGroup,
+                            legGroup, legToFootGroup, leftLegGroup, rightLegGroup, footGroup,
+                            leftFootGroup, rightFootGroup]
         bodyMeshGroup = bodyGroup.getMeshGroup(mesh)
         elementIdentifier = 1
         headElementsCount = 3
@@ -260,13 +265,15 @@ class MeshType_1d_human_body_network_layout1(MeshType_1d_network_layout1):
         handMeshGroup = handGroup.getMeshGroup(mesh)
         for side in (left, right):
             sideArmGroup = leftArmGroup if (side == left) else rightArmGroup
+            sideHandGroup = leftHandGroup if (side == left) else rightHandGroup
             meshGroups = [bodyMeshGroup, armMeshGroup, armToHandMeshGroup, sideArmGroup.getMeshGroup(mesh)]
             for e in range(armToHandElementsCount):
                 element = mesh.findElementByIdentifier(elementIdentifier)
                 for meshGroup in meshGroups:
                     meshGroup.addElement(element)
                 elementIdentifier += 1
-            meshGroups = [bodyMeshGroup, armMeshGroup, handMeshGroup, sideArmGroup.getMeshGroup(mesh)]
+            meshGroups = [bodyMeshGroup, armMeshGroup, handMeshGroup,
+                          sideArmGroup.getMeshGroup(mesh), sideHandGroup.getMeshGroup(mesh)]
             for e in range(handElementsCount):
                 element = mesh.findElementByIdentifier(elementIdentifier)
                 for meshGroup in meshGroups:
@@ -293,13 +300,15 @@ class MeshType_1d_human_body_network_layout1(MeshType_1d_network_layout1):
         footMeshGroup = footGroup.getMeshGroup(mesh)
         for side in (left, right):
             sideLegGroup = leftLegGroup if (side == left) else rightLegGroup
+            sideFootGroup = leftFootGroup if (side == left) else rightFootGroup
             meshGroups = [bodyMeshGroup, legMeshGroup, legToFootMeshGroup, sideLegGroup.getMeshGroup(mesh)]
             for e in range(legToFootElementsCount):
                 element = mesh.findElementByIdentifier(elementIdentifier)
                 for meshGroup in meshGroups:
                     meshGroup.addElement(element)
                 elementIdentifier += 1
-            meshGroups = [bodyMeshGroup, legMeshGroup, footMeshGroup, sideLegGroup.getMeshGroup(mesh)]
+            meshGroups = [bodyMeshGroup, legMeshGroup, footMeshGroup,
+                          sideLegGroup.getMeshGroup(mesh), sideFootGroup.getMeshGroup(mesh)]
             for e in range(footElementsCount):
                 element = mesh.findElementByIdentifier(elementIdentifier)
                 for meshGroup in meshGroups:
@@ -970,26 +979,25 @@ class MeshType_3d_wholebody2(Scaffold_base):
             is_exterior, fieldmodule.createFieldNot(is_face_xi3_0))) if (is_core or shell_count) else one
         skinGroup.getMeshGroup(mesh2d).addElementsConditional(is_skin)
 
-        leftArmGroup = getAnnotationGroupForTerm(annotationGroups, get_body_term("left upper limb"))
-        leftArmSkinGroup = findOrCreateAnnotationGroupForTerm(
-            annotationGroups, region, get_body_term("left upper limb skin epidermis outer surface"))
-        leftArmSkinGroup.getMeshGroup(mesh2d).addElementsConditional(
-            fieldmodule.createFieldAnd(leftArmGroup.getGroup(), is_skin))
-        rightArmGroup = getAnnotationGroupForTerm(annotationGroups, get_body_term("right upper limb"))
-        rightArmSkinGroup = findOrCreateAnnotationGroupForTerm(
-            annotationGroups, region, get_body_term("right upper limb skin epidermis outer surface"))
-        rightArmSkinGroup.getMeshGroup(mesh2d).addElementsConditional(
-            fieldmodule.createFieldAnd(rightArmGroup.getGroup(), is_skin))
-        leftLegGroup = getAnnotationGroupForTerm(annotationGroups, get_body_term("left lower limb"))
-        leftLegSkinGroup = findOrCreateAnnotationGroupForTerm(
-            annotationGroups, region, get_body_term("left lower limb skin epidermis outer surface"))
-        leftLegSkinGroup.getMeshGroup(mesh2d).addElementsConditional(
-            fieldmodule.createFieldAnd(leftLegGroup.getGroup(), is_skin))
-        rightLegGroup = getAnnotationGroupForTerm(annotationGroups, get_body_term("right lower limb "))
-        rightLegSkinGroup = findOrCreateAnnotationGroupForTerm(
-            annotationGroups, region, get_body_term("right lower limb skin epidermis outer surface"))
-        rightLegSkinGroup.getMeshGroup(mesh2d).addElementsConditional(
-            fieldmodule.createFieldAnd(rightLegGroup.getGroup(), is_skin))
+        skin_groups = [
+            'right lower limb',
+            'right upper limb',
+            'right hand',
+            'right foot',
+            'left lower limb',
+            'left upper limb',
+            'left hand',
+            'left foot',
+        ]
+
+        for annotation_group_name in skin_groups:
+            annotation_group =  getAnnotationGroupForTerm(
+            annotationGroups, get_body_term(annotation_group_name))
+            skin_annotation_group = findOrCreateAnnotationGroupForTerm(
+            annotationGroups, region,
+            get_body_term(annotation_group_name +  " skin epidermis outer surface"))
+            skin_annotation_group.getMeshGroup(mesh2d).addElementsConditional(
+            fieldmodule.createFieldAnd(annotation_group.getGroup(), is_exterior))
 
         if is_core and shell_count:
             # define cavity surfaces, diaphragm and spinal cord
