@@ -1,7 +1,13 @@
 import math
 from itertools import product
 
-from cmlibs.maths.vectorops import add, mult, rotate_vector_around_vector, set_magnitude
+from cmlibs.maths.vectorops import (
+    add, sub,
+    magnitude,
+    mult,
+    rotate_vector_around_vector,
+    set_magnitude,
+)
 from cmlibs.utils.zinc.field import find_or_create_field_coordinates
 from cmlibs.zinc.element import Element, Elementbasis
 from cmlibs.zinc.field import Field
@@ -441,28 +447,28 @@ def generate_internal_nodes(node_network: Node_network, hand_elements_along: lis
         [ # Finger 1 (little finger)
             [1.0, 0.4, 0.2],  # carpal
             [2.0, 0.4, 0.2],  # metacarpal
-            [1.1, 0.2, 0.2],  # proximal phalanx
+            [1.1, 0.4, 0.2],  # proximal phalanx
             [0.7, 0.2, 0.2],  # middle phalanx
             [0.6, 0.2, 0.2],  # distal phalanx
         ],
         [ # Finger 2 (ring finger)
             [1.0, 0.4, 0.2],  # carpal
             [2.0, 0.4, 0.2],  # metacarpal
-            [1.5, 0.2, 0.2],  # proximal phalanx
+            [1.5, 0.4, 0.2],  # proximal phalanx
             [1.0, 0.2, 0.2],  # middle phalanx
             [0.7, 0.2, 0.2],  # distal phalanx
         ],
         [ # Finger 3 (middle finger)
             [1.0, 0.4, 0.2],  # carpal
             [2.0, 0.4, 0.2],  # metacarpal
-            [1.9, 0.2, 0.2],  # proximal phalanx
+            [1.9, 0.4, 0.2],  # proximal phalanx
             [1.0, 0.2, 0.2],  # middle phalanx
             [0.6, 0.2, 0.2],  # distal phalanx
         ],
         [ # Finger 4 (index finger)
             [1.0, 0.4, 0.2],  # carpal
             [2.0, 0.4, 0.2],  # metacarpal
-            [1.9, 0.2, 0.2],  # proximal phalanx
+            [1.9, 0.4, 0.2],  # proximal phalanx
             [0.8, 0.2, 0.2],  # middle phalanx
             [0.6, 0.2, 0.2],  # distal phalanx
         ],
@@ -479,16 +485,17 @@ def generate_internal_nodes(node_network: Node_network, hand_elements_along: lis
     x2 = [0.0, 1.0, 0.0]
     x3 = [0.0, 0.0, 1.0]
     splaying_angle_radians = math.radians(options['Splaying angle'])
-    x1 = rotate_vector_around_vector(x1, x3, -2 * splaying_angle_radians)
     for j in range(4):
         finger_dimensions = hand_dimensions_by_finger[j]
         x = [0.0, j * carpal_spacing, 0.0]
         x1 = [1.0, 0.0, 0.0]
+        x2 = [0.0, 1.0, 0.0]
         for i, bone_dimensions in enumerate(finger_dimensions):
             n_elements_along = hand_elements_along[i]
             bone_dimensions = finger_dimensions[i]
             if i == 2:
                 x1 = rotate_vector_around_vector(x1, x3, (j - 2) * splaying_angle_radians)
+                x2 = rotate_vector_around_vector(x2, x3, (j - 2) * splaying_angle_radians)
             d1 = mult(x1, bone_dimensions[0])
             if i == 4:
                 d1 = mult(d1, 1 / (n_elements_along - 1))
@@ -500,8 +507,9 @@ def generate_internal_nodes(node_network: Node_network, hand_elements_along: lis
                 index_carpal_node_id = node_identifier
             is_palm = True if i < 3 else False
             for i_along in range(n_elements_along):
-                if i == 2 and i_along == 1:
+                if i == 2 and i_along == 1: #First node of finger
                     is_palm = False
+                    d2 = mult(d2, 0.5)
                     x = add(x, mult(d2, -1.0 + (2.0 / 3.0) * j))
                 node_network.set_node_parameters([x, d1, d2, d3], node_identifier,
                                              internal_node = True, palm_node = is_palm)
@@ -726,29 +734,51 @@ def generate_external_node_matrix(hand_elements_along,
                                   node_identifier, virtual_node_matrix: Virtual_node_matrix,
                                   node_network: Node_network, options):
     c, mc, pp, mp, dp = hand_elements_along
+    palm_elements_along = c + mc + 1
     parent_node_id = sum(hand_elements_along) + 1
-    x, d1, d2, d3 = node_network.get_node_parameters(parent_node_id)
     finger_names = options['finger names']
     bone_names = options['bone names']
-    center = add(x, d2)
-    a_palm = 5.5
-    b_palm = 3.5
+    a_palm = [5.5 + i * (5.5 - 5.5) / (palm_elements_along - 1) \
+                for i in range(palm_elements_along)]
+    b_palm = [5.5 + i * (2.5 - 5.5) / (palm_elements_along - 1) \
+                for i in range(palm_elements_along)]
     a_finger = 2
     b_finger = 1.75
-    major_axis = mult(d2, -a_palm)
-    minor_axis = mult(d3, b_palm)
-    ellipse = sampleEllipsePoints(center, major_axis,
-                                  minor_axis, math.pi / 2, 2 * math.pi + math.pi / 2, 10)
-    upper_palm_ellipse_x = [ellipse[0][i] for i in [8, 9, 0, 1, 2]]
-    upper_palm_ellipse_d2 = [ellipse[1][i] for i in [8, 9, 0, 1, 2]]
-    lower_palm_ellipse_x = [ellipse[0][i] for i in [7, 6, 5, 4, 3]]
-    lower_palm_ellipse_d2 = [ellipse[1][i] for i in [7, 6, 5, 4, 3]]
+
+    ellipses = [None for i in range(sum(hand_elements_along[0:2]) + 1)]
+    for n in range(palm_elements_along):
+        x, d1, d2, d3 = node_network.get_node_parameters(parent_node_id)
+        center = add(x, d2)
+        major_axis = mult(d2, -a_palm[n])
+        minor_axis = mult(d3, b_palm[n])
+        major_ax_mag = magnitude(major_axis)
+        minor_ax_mag = magnitude(minor_axis)
+        internal_box_length = 2 * magnitude(d2)
+        sampling_along_x = [internal_box_length / major_ax_mag, 0] # between 0 and b
+        sampling_along_y = [0.6] # between 0 and a
+        angles_along_x = [math.acos(value) for value in sampling_along_x]
+        angles_along_y = [math.asin(value) for value in sampling_along_y]
+        sampling_angles = sorted(angles_along_x + angles_along_y)
+        ellipse_x, ellipse_d2 = sample_ellipse_along_angles(
+            center, major_axis, minor_axis, sampling_angles
+            )
+        ellipse_d1 = [None for i in range(len(ellipse_x)) ]
+        ellipses[n] = [ellipse_x, ellipse_d1, ellipse_d2]
+        parent_node_id += 1
+
+    for n in range(palm_elements_along - 1):
+        ellipse_x, ellipse_d1, _ = ellipses[n]
+        next_ellipse_x, next_ellipse_d1, _ = ellipses[n + 1]
+        for i in range(len(ellipse_x)):
+            d1 = sub(next_ellipse_x[i], ellipse_x[i])
+            ellipse_d1[i] = next_ellipse_d1[i] = d1
+
     parent_node_id = 1
     index_y = 1
     d3 = None
     d1_offset = 0.0
     k_val = [1, 2]
-    # Palm and first four fingers
+    # Virtual node creation goes up each finger fastest
     for finger_index in range(4):
         index_x = 0
         # Carpal, metacarpal and proximal phalanx
@@ -760,17 +790,20 @@ def generate_external_node_matrix(hand_elements_along,
             else:
                 i_val = [index_x]
             for i in i_val:
+                ellipse = ellipses[i]
                 for j in j_val:
                     for k in k_val:
-                        ellipse_x = upper_palm_ellipse_x if k == 2 else lower_palm_ellipse_x
-                        ellipse_d2 = upper_palm_ellipse_d2 if k == 2 else lower_palm_ellipse_d2
+                        index_e = slice(0, 5, 1) if k == 2 else slice(10, 4, -1)
+                        ellipse_x = ellipse[0][index_e]
+                        ellipse_d1 = ellipse[1][index_e]
+                        ellipse_d2 = ellipse[2][index_e]
                         a1 = finger_index if j == index_y else finger_index + 1
                         a2 = -1 if j == index_y else 1
                         a3 = -1 if k == 1 else 1
                         x = ellipse_x[a1]
-                        d1 = node_network.get_node_parameters(parent_node_id)[1]
                         # if bone > 0:
-                        d1 = add(d1, set_magnitude(d1, d1_offset/(c+mc+pp)))
+                        # d1 = add(d1, set_magnitude(d1, d1_offset/(c+mc+pp)))
+                        d1 = ellipse_d1[a1]
                         d2 = ellipse_d2[a1]
                         indices = [[i, j, k + a3]]
                         if bone == 0:
@@ -844,17 +877,14 @@ def generate_external_node_matrix(hand_elements_along,
                 center = add(center, set_magnitude(d1, d1_offset/(n_elements_along)))
             major_axis = mult(d2, -a_finger)
             minor_axis = mult(d3, b_finger)
-            ellipse_x = []
-            ellipse_d2 = []
-            for quadrant in range(4):
-                ellipse = sampleEllipsePoints(
-                    center, major_axis, minor_axis, (-1 + 2 * quadrant) * math.pi / 4,
-                    (1 + 2 * quadrant) * math.pi / 4, 1
+            sampling_angles = [1 * math.pi / 4]
+            ellipse_x, ellipse_d2 = sample_ellipse_along_angles(
+                center, major_axis, minor_axis, sampling_angles
                 )
-                ellipse_x.append(ellipse[0][0])
-                ellipse_d2.append(ellipse[1][0])
-            ellipse_x = [ellipse_x[i] for i in [0, 1, 3, 2]]
-            ellipse_d2 = [ellipse_d2[i] for i in [0, 1, 3, 2]]
+            ellipse_d1 = [d1 for i in range(len(ellipse_x))]
+            ellipse_x = [ellipse_x[i] for i in [3, 0, 2, 1]]
+            ellipse_d2 = [ellipse_d2[i] for i in [3, 0, 2, 1]]
+            ""
             for i in i_val:
                 a1 = 0
                 for j in j_val:
@@ -862,7 +892,7 @@ def generate_external_node_matrix(hand_elements_along,
                         a2 = -1 if j == index_y else 1
                         a3 = -1 if k == 1 else 1
                         x = ellipse_x[a1]
-                        d1 = node_network.get_node_parameters(parent_node_id)[1]
+                        d1 = ellipse_d1[a1]
                         d2 = ellipse_d2[a1]
                         finger_name = finger_names[finger_index]
                         bone_name = bone_names[bone]
@@ -984,17 +1014,13 @@ def generate_external_node_matrix(hand_elements_along,
         center = add(center, set_magnitude(d1, d1_offset/n_elements_along))
         major_axis = mult(d2, -a_finger)
         minor_axis = mult(d3, b_finger)
-        ellipse_x = []
-        ellipse_d2 = []
-        for quadrant in range(4):
-            ellipse = sampleEllipsePoints(
-                center, major_axis, minor_axis, (-1 + 2 * quadrant) * math.pi / 4,
-                (1 + 2 * quadrant) * math.pi / 4, 1
+        sampling_angles = [1 * math.pi / 4]
+        ellipse_x, ellipse_d2 = sample_ellipse_along_angles(
+            center, major_axis, minor_axis, sampling_angles
             )
-            ellipse_x.append(ellipse[0][0])
-            ellipse_d2.append(ellipse[1][0])
-        ellipse_x = [ellipse_x[i] for i in [0, 1, 3, 2]]
-        ellipse_d2 = [ellipse_d2[i] for i in [0, 1, 3, 2]]
+        ellipse_d1 = [d1 for i in range(len(ellipse_x))]
+        ellipse_x = [ellipse_x[i] for i in [3, 0, 2, 1]]
+        ellipse_d2 = [ellipse_d2[i] for i in [3, 0, 2, 1]]
         for i in i_val:
             a1 = 0
             for j in j_val:
@@ -1002,7 +1028,7 @@ def generate_external_node_matrix(hand_elements_along,
                     a2 = -1 if j == index_y else 1
                     a3 = -1 if k == 1 else 1
                     x = ellipse_x[a1]
-                    d1 = node_network.get_node_parameters(parent_node_id)[1]
+                    d1 = ellipse_d1[a1]
                     d2 = ellipse_d2[a1]
                     finger_name = finger_names[finger_index]
                     bone_name = bone_names[bone]
@@ -1546,6 +1572,38 @@ def create_cube_element(fieldmodule: Fieldmodule, element_identifier: int,
     scale_factors = list(global_to_local_scale_factor_ids.keys())
     element.setScaleFactors(eft, scale_factors)
     return result, element
+
+def sample_ellipse_along_angles(center: list, major_axis: list, minor_axis: list,
+                                 sampling_angles: list):
+    """
+    From a list of angles on the first quadrant of an ellipse, calculate their reflection
+    over the other three quadrants. Then alculate both the position and tangent angle at the
+    updated list of angles. 
+    
+    :param center: Description
+    :param major_axis: Description
+    :param minor_axis: Description
+    :param sampling_angles: Description
+    """
+    for angle in reversed(sampling_angles):
+        new_angle = math.pi - angle
+        if new_angle not in sampling_angles:
+            sampling_angles.append(new_angle)
+    for angle in sampling_angles[:]:
+        new_angle = math.pi + angle
+        if new_angle not in sampling_angles:
+            sampling_angles.append(new_angle)
+    sampling_angles.append(2 * math.pi + sampling_angles[0])
+
+    ellipse_x = []
+    ellipse_d1 = []
+    for i in range(len(sampling_angles) - 1):
+        ellipse = sampleEllipsePoints(
+            center, major_axis, minor_axis, sampling_angles[i], sampling_angles[i + 1], 1
+        )
+        ellipse_x.append(ellipse[0][0])
+        ellipse_d1.append(ellipse[1][0])
+    return ellipse_x, ellipse_d1
 
 def setNodeFieldParameters(field, fieldcache, x,
                            d1=None, d2=None, d3=None, d12=None, d13=None):
