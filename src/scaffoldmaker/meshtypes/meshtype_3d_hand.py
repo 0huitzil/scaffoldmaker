@@ -254,6 +254,15 @@ class MeshType_3d_hand1(Scaffold_base):
                 fieldmodule.createFieldAnd(finger_bone_group.getGroup(), is_exterior)
                 )
 
+class Bone():
+    def __init__(self):
+        pass
+    CARPAL = 0
+    METACARPAL = 1
+    PROX_PHALANX = 2
+    MID_PHALANX = 3
+    DIST_PHALANX = 4
+
 class Node_network():
 
     def __init__(self, region: Region, fieldcache: Fieldcache):
@@ -353,6 +362,27 @@ class Virtual_node_matrix():
         ix, iy, iz = matrix_dimensions
         self.node_matrix = [[[None for k in range(iz)] for j in range(iy)] for i in range(ix)]
 
+    def create_internal_vnode (self, node_identifier: int, x: list, annotation: dict):
+        virtual_node = {
+            Node.VALUE_LABEL_VALUE: [[node_identifier, *x]],
+            'node_identifier': node_identifier,
+            "Type": 'internal',
+            'Annotation': annotation
+        }
+        return virtual_node
+
+    def create_external_vnode (self, node_identifier: int, x: list, d1: list, d2: list,
+                               annotation: dict):
+        assert len(x) == len(d1) == len(d2) == 4,  "Scale factor vector must be length 4"
+        virtual_node = {
+            Node.VALUE_LABEL_VALUE: [[node_identifier, *x]],
+            Node.VALUE_LABEL_D_DS1: [[node_identifier, *d1]],
+            Node.VALUE_LABEL_D_DS2: [[node_identifier, *d2]],
+            'node_identifier': node_identifier,
+            "Type": 'external',
+            'Annotation': annotation
+        }
+        return virtual_node
     def set_virtual_node_to_index(self, node: dict, index: list, replace=True):
         i, j, k = index
         node_matrix = self.node_matrix
@@ -401,6 +431,11 @@ class Virtual_node_matrix():
         node_matrix = self.node_matrix
         virtual_node = node_matrix[i][j][k]
         return virtual_node
+
+    def get_node_identifier_at_index(self, index: list) -> int:
+        node = self.get_virtual_node(index)
+        node_id = node.get('node_identifier')
+        return node_id
 
     def print_cube_from_index(self, start_index: list):
         start_i, start_j, start_k = start_index
@@ -490,24 +525,24 @@ def generate_internal_nodes(node_network: Node_network, hand_elements_along: lis
         x = [0.0, j * carpal_spacing, 0.0]
         x1 = [1.0, 0.0, 0.0]
         x2 = [0.0, 1.0, 0.0]
-        for i, bone_dimensions in enumerate(finger_dimensions):
-            n_elements_along = hand_elements_along[i]
-            bone_dimensions = finger_dimensions[i]
-            if i == 2:
+        for bone, bone_dimensions in enumerate(finger_dimensions):
+            n_elements_along = hand_elements_along[bone]
+            bone_dimensions = finger_dimensions[bone]
+            if bone == Bone.METACARPAL:
                 x1 = rotate_vector_around_vector(x1, x3, (j - 2) * splaying_angle_radians)
                 x2 = rotate_vector_around_vector(x2, x3, (j - 2) * splaying_angle_radians)
             d1 = mult(x1, bone_dimensions[0])
-            if i == 4:
+            if bone == Bone.DIST_PHALANX:
                 d1 = mult(d1, 1 / (n_elements_along - 1))
             else:
                 d1 = mult(d1, 1 / n_elements_along)
             d2 = mult(x2, bone_dimensions[1])
             d3 = mult(x3, bone_dimensions[2])
-            if (j == 3) and (i == 1):
+            if (j == 3) and (bone == Bone.METACARPAL):
                 index_carpal_node_id = node_identifier
-            is_palm = True if i < 3 else False
+            is_palm = True if bone < 3 else False
             for i_along in range(n_elements_along):
-                if i == 2 and i_along == 1: #First node of finger
+                if bone == Bone.PROX_PHALANX and i_along == 1:
                     is_palm = False
                     d2 = mult(d2, 0.5)
                     x = add(x, mult(d2, -1.0 + (2.0 / 3.0) * j))
@@ -526,18 +561,18 @@ def generate_internal_nodes(node_network: Node_network, hand_elements_along: lis
     x, d1, d2, d3 = node_network.get_node_parameters(index_carpal_node_id)
     x = add(x, mult(d2, 2.5))
     x = add(x, mult(d1, 0.15))
-    for i in range(3):
-        bone_dimensions = thumb_dimensions[i]
-        n_elements_along = thumb_elements_along[i]
+    for bone in range(3):
+        bone_dimensions = thumb_dimensions[bone]
+        n_elements_along = thumb_elements_along[bone]
         d1 = mult(x1, bone_dimensions[0])
-        if i == 2:
+        if bone == Bone.PROX_PHALANX:
             d1 = mult(d1, 1 / (n_elements_along - 1))
         else:
             d1 = mult(d1, 1 / n_elements_along)
         d2 = mult(x2, bone_dimensions[1])
         d3 = mult(x3, bone_dimensions[2])
         x = x
-        if i == 0:
+        if bone == Bone.CARPAL:
             x = add(x, d2)
         for i_along in range(n_elements_along):
             node_network.set_node_parameters(
@@ -587,7 +622,7 @@ def generate_internal_node_matrix(hand_elements_along, node_identifier,
                 j_val = [index_y - 4, index_y, index_y + 1, index_y + 5, index_y + 6]
             else:
                 j_val = [index_y - 4, index_y, index_y + 1]
-            if bone in [0, 1]:
+            if bone in [Bone.CARPAL, Bone.METACARPAL]:
                 i_val = [index_x + i for i in range(n_elements_along)]
             else:
                 i_val = [index_x]
@@ -606,20 +641,17 @@ def generate_internal_node_matrix(hand_elements_along, node_identifier,
                         a3 = -a0 if k == 1 else a0
                         bone_name = bone_names[bone]
                         indices = [[i, j, k]]
-                        if bone == 0: # Carpal
+                        if bone == Bone.CARPAL:
                             annotation = [bone_name] if k == 1 else ""
                             if (j == index_y + 1 and finger_index == 3) \
                                 or (j == index_y + 6 and finger_index == 2):
                                 indices.append([i + 1, j + 4, k])
-                            node = {
-                                Node.VALUE_LABEL_VALUE: [[parent_node_id, a0, a1, a2, a3]],
-                                "Type": "internal",
-                                "Annotation": annotation,
-                            }
+                            node = virtual_node_matrix.create_internal_vnode(
+                                parent_node_id, [a0, a1, a2, a3], annotation)
                             virtual_node_matrix.set_virtual_node_to_indices(
                                 node, indices, False
                             )
-                        elif bone == 1: # Metacarpal
+                        elif bone == Bone.METACARPAL:
                             annotation = [bone_name] if k == 1 else ""
                             if (j == index_y + 1 and finger_index == 3) \
                                 or (j == index_y + 6 and finger_index == 2): # WebbingE
@@ -628,26 +660,20 @@ def generate_internal_node_matrix(hand_elements_along, node_identifier,
                                     indices.append([i + 3, j + 4, k])
                                 else:
                                     indices.append([i + 3, j + 4, k])
-                            node = {
-                                Node.VALUE_LABEL_VALUE: [[parent_node_id, a0, a1, a2, a3]],
-                                "Type": "internal",
-                                "Annotation": annotation,
-                            }
+                            node = virtual_node_matrix.create_internal_vnode(
+                                parent_node_id, [a0, a1, a2, a3], annotation)
                             virtual_node_matrix.set_virtual_node_to_indices(
                                 node, indices, False
                             )
-                        elif bone == 2: # First row of Proximal Phalanx
+                        elif bone == Bone.PROX_PHALANX:
                             n_elements_along = 1
                             finger_name = finger_names[finger_index]
                             if j > index_y + 1 and finger_index < 3:
                                 finger_name = finger_names[finger_index + 1]
                             finger_part = bone_name + ' of ' + finger_name
                             annotation = [bone_name, finger_name, finger_part]
-                            node = {
-                                Node.VALUE_LABEL_VALUE: [[parent_node_id, a0, a1, a2, a3]],
-                                "Type": "internal",
-                                "Annotation": annotation,
-                            }
+                            node = virtual_node_matrix.create_internal_vnode(
+                                parent_node_id, [a0, a1, a2, a3], annotation)
                             indices.append([i + 2, j, k])
                             virtual_node_matrix.set_virtual_node_to_indices(
                                 node, indices, False
@@ -657,29 +683,29 @@ def generate_internal_node_matrix(hand_elements_along, node_identifier,
             index_x += n_elements_along
         index_x += 2
         a0 = 1
-        phalanx_bones = [2, 3, 4] if hand_elements_along[2] > 1 else [3, 4]
+        if hand_elements_along[2] > 1:
+            phalanx_bones = [Bone.PROX_PHALANX, Bone.MID_PHALANX, Bone.DIST_PHALANX]
+        else:
+            phalanx_bones = [Bone.MID_PHALANX, Bone.DIST_PHALANX]
         # Proximal, middle and distal phalanx
         for bone in phalanx_bones:
             n_elements_along = hand_elements_along[bone]
-            n_elements_along = n_elements_along - 1 if bone == 2 else n_elements_along
+            n_elements_along = n_elements_along - 1 if bone == Bone.PROX_PHALANX \
+                  else n_elements_along
             j_val = [index_y, index_y + 1]
             i_val = [index_x + i for i in range(n_elements_along)]
             for i in i_val:
                 for j in j_val:
                     for k in k_val:
                         a2 = -bone_w if j == index_y else bone_w
-                        # a2 = 0 if bone == 2 else a2
                         a3 = -bone_h if k == 1 else bone_h
                         finger_name = finger_names[finger_index]
                         bone_name = bone_names[bone]
                         finger_part = bone_name + ' of ' + finger_name
                         annotation = [bone_name, finger_name, finger_part]
                         indices = [[i, j, k]]
-                        node = {
-                            Node.VALUE_LABEL_VALUE: [[parent_node_id, a0, a1, a2, a3]],
-                            "Type": "internal",
-                            "Annotation": annotation,
-                        }
+                        node = virtual_node_matrix.create_internal_vnode(
+                                parent_node_id, [a0, a1, a2, a3], annotation)
                         virtual_node_matrix.set_virtual_node_to_indices(node, indices, False)
                 parent_node_id += 1
             index_x += n_elements_along
@@ -689,9 +715,11 @@ def generate_internal_node_matrix(hand_elements_along, node_identifier,
     index_x = hand_elements_along[0]
     finger_index = 4
     finger_name = finger_names[-1]
-    for bone in [1, 2, 4]:
+    thumb_bones = [Bone.METACARPAL, Bone.PROX_PHALANX, Bone.DIST_PHALANX]
+    for bone in thumb_bones:
         n_elements_along = hand_elements_along[bone]
-        n_elements_along = n_elements_along - 1 if bone in [1, 2] else n_elements_along
+        n_elements_along = n_elements_along - 1 if bone in \
+            [Bone.METACARPAL, Bone.PROX_PHALANX] else n_elements_along
         j_val = [index_y, index_y + 1]
         i_val = [index_x + i for i in range(n_elements_along)]
         for i in i_val:
@@ -702,7 +730,7 @@ def generate_internal_node_matrix(hand_elements_along, node_identifier,
                     indices = [[i, j, k]]
                     if j == index_y:
                         indices.append([i + 3, index_y - 4, k])
-                    if bone == 1:
+                    if bone == Bone.METACARPAL:
                         annotation = [finger_name]
                         if j == index_y:
                             if i == index_x:
@@ -710,19 +738,16 @@ def generate_internal_node_matrix(hand_elements_along, node_identifier,
                         else:
                             if i == index_x:
                                 indices.append([i, index_y - 4, k])
-                    elif bone == 2:
+                    elif bone == Bone.PROX_PHALANX:
                         bone_name = bone_names[bone]
                         finger_part = bone_name + ' of ' + finger_name
                         annotation = [bone_name, finger_name, finger_part]
-                    elif bone == 4:
+                    elif bone == Bone.DIST_PHALANX:
                         bone_name = bone_names[bone]
                         finger_part = bone_name + ' of ' + finger_name
                         annotation = [bone_name, finger_name, finger_part]
-                    node = {
-                        Node.VALUE_LABEL_VALUE: [[parent_node_id, a0, a1, a2, a3]],
-                        "Type": "internal",
-                        "Annotation": annotation,
-                    }
+                    node = virtual_node_matrix.create_internal_vnode(
+                                parent_node_id, [a0, a1, a2, a3], annotation)
                     virtual_node_matrix.set_virtual_node_to_indices(node, indices, False)
             parent_node_id += 1
         index_x += n_elements_along
@@ -785,7 +810,7 @@ def generate_external_node_matrix(hand_elements_along,
         for bone in range(3):
             n_elements_along = hand_elements_along[bone]
             j_val = [index_y, index_y + 1] if finger_index == 0 else [index_y + 1]
-            if bone in [0, 1]:
+            if bone in [Bone.CARPAL, Bone.METACARPAL]:
                 i_val = [index_x + i for i in range(n_elements_along)]
             else:
                 i_val = [index_x]
@@ -806,7 +831,7 @@ def generate_external_node_matrix(hand_elements_along,
                         d1 = ellipse_d1[a1]
                         d2 = ellipse_d2[a1]
                         indices = [[i, j, k + a3]]
-                        if bone == 0:
+                        if bone == Bone.CARPAL:
                             annotation = ['']
                             if j == 1:
                                 indices.append([i, j + a2, k])
@@ -815,7 +840,7 @@ def generate_external_node_matrix(hand_elements_along,
                                 indices.append([i, j + 4, k + a3])
                             else:
                                 indices.append([i, j + 4, k + a3])
-                        elif bone == 1:
+                        elif bone == Bone.METACARPAL:
                             annotation = ['']
                             if j == 1:
                                 indices.append([i, j + a2, k])
@@ -826,7 +851,7 @@ def generate_external_node_matrix(hand_elements_along,
                             else:
                                 indices.append([i, j, k + a3])
                                 indices.append([i, j + 4, k + a3])
-                        elif bone == 2: # First row of Proximal Phalanx
+                        elif bone == Bone.PROX_PHALANX:
                             n_elements_along = 1
                             finger_name = finger_names[finger_index] if j == index_y else \
                                 finger_names[finger_index + 1]
@@ -845,13 +870,12 @@ def generate_external_node_matrix(hand_elements_along,
                             else:
                                 indices.append([i, j + 4, k + a3])
                                 indices.append([i + 2, j + 4, k + a3])
-                        node = {
-                            Node.VALUE_LABEL_VALUE: [[node_identifier, 1, 0, 0, 0]],
-                            Node.VALUE_LABEL_D_DS1: [[node_identifier, 0, 1, 0, 0]],
-                            Node.VALUE_LABEL_D_DS2: [[node_identifier, 0, 0, 1, 0]],
-                            "Type": "external",
-                            "Annotation": annotation,
-                        }
+                        node = virtual_node_matrix.create_external_vnode(
+                            x  = [1, 0, 0, 0],
+                            d1 = [0, 1, 0, 0],
+                            d2 = [0, 0, 1, 0],
+                            node_identifier = node_identifier, annotation = annotation
+                        )
                         virtual_node_matrix.set_virtual_node_to_indices(node, indices)
                         node_network.set_node_parameters(
                             [x, d1, d2, d3], node_identifier, internal_node=False
@@ -862,16 +886,20 @@ def generate_external_node_matrix(hand_elements_along,
                 parent_node_id += 1
             index_x += n_elements_along
         index_x += 2
-        phalanx_bones = [2, 3, 4] if hand_elements_along[2] > 1 else [3, 4]
+        if hand_elements_along[2] > 1:
+            phalanx_bones = [Bone.PROX_PHALANX, Bone.MID_PHALANX, Bone.DIST_PHALANX]
+        else:
+            phalanx_bones = [Bone.MID_PHALANX, Bone.DIST_PHALANX]
         # Proximal, middle and distal phalanx
         for bone in phalanx_bones:
             n_elements_along = hand_elements_along[bone]
-            n_elements_along = n_elements_along - 1 if bone == 2 else n_elements_along
+            n_elements_along = n_elements_along - 1 if bone == Bone.PROX_PHALANX \
+                else n_elements_along
             j_val = [index_y, index_y + 1]
             i_val = [index_x + i for i in range(n_elements_along)]
             # Estimate ellipse
             center, d1, d2, d3 = node_network.get_node_parameters(parent_node_id)
-            if bone in [4]:
+            if bone in [Bone.DIST_PHALANX]:
                 center = add(center, set_magnitude(d1, d1_offset/(n_elements_along - 1)))
             else:
                 center = add(center, set_magnitude(d1, d1_offset/(n_elements_along)))
@@ -899,45 +927,42 @@ def generate_external_node_matrix(hand_elements_along,
                         finger_part = bone_name + ' of ' + finger_name
                         annotation = [bone_name, finger_name, finger_part]
                         indices = [[i, j + a2, k], [i, j, k + a3]]
-                        node = {
-                            Node.VALUE_LABEL_VALUE: [[node_identifier, 1, 0, 0, 0]],
-                            Node.VALUE_LABEL_D_DS1: [[node_identifier, 0, 1, 0, 0]],
-                            Node.VALUE_LABEL_D_DS2: [[node_identifier, 0, 0, 1, 0]],
-                            "Type": "external",
-                            "Annotation": annotation,
-                        }
+                        node = virtual_node_matrix.create_external_vnode(
+                            x  = [1, 0, 0, 0],
+                            d1 = [0, 1, 0, 0],
+                            d2 = [0, 0, 1, 0],
+                            node_identifier = node_identifier, annotation = annotation
+                        )
                         virtual_node_matrix.set_virtual_node_to_indices(node, indices)
                         node_network.set_node_parameters(
                             [x, d1, d2, d3], node_identifier, internal_node=False
                         )
-                        if bone == 4 and i == i_val[-1]: # Special element to cap the fingers
+                        if bone == Bone.DIST_PHALANX and i == i_val[-1]:
                             c0 = 1
                             c1 = c0 * a2 * a3
                             c2 = c0 * a2
                             c3 = c0 * a3
-                            node = {
-                                Node.VALUE_LABEL_VALUE: [[node_identifier, 1, 0, 0, 0]],
-                                Node.VALUE_LABEL_D_DS1: [[node_identifier, 0, 1, 0, 0]],
-                                Node.VALUE_LABEL_D_DS2: [[node_identifier, 0, -c1, 1, 0]],
-                                "Type": "external",
-                                "Annotation": [finger_name],
-                            }
+                            annotation = [finger_name]
+                            node = virtual_node_matrix.create_external_vnode(
+                                x  = [1, 0, 0, 0],
+                                d1 = [0, 1, 0, 0],
+                                d2 = [0, -c1, 1, 0],
+                                node_identifier = node_identifier, annotation = annotation
+                            )
                             virtual_node_matrix.set_virtual_node_to_index(node, [i, j, k + a3])
-                            node = {
-                                Node.VALUE_LABEL_VALUE: [[node_identifier, 1, 0, 0, 0]],
-                                Node.VALUE_LABEL_D_DS1: [[node_identifier, 0, 1, 0, 0]],
-                                Node.VALUE_LABEL_D_DS2: [[node_identifier, 0, c1, 1, 0]],
-                                "Type": "external",
-                                "Annotation": [finger_name],
-                            }
+                            node = virtual_node_matrix.create_external_vnode(
+                                x  = [1, 0, 0, 0],
+                                d1 = [0, 1, 0, 0],
+                                d2 = [0, c1, 1, 0],
+                                node_identifier = node_identifier, annotation = annotation
+                            )
                             virtual_node_matrix.set_virtual_node_to_index(node, [i, j + a2, k])
-                            node = {
-                                Node.VALUE_LABEL_VALUE: [[node_identifier, 1, 0, 0, 0]],
-                                Node.VALUE_LABEL_D_DS1: [[node_identifier, 0, -c2, a3, 0]],
-                                Node.VALUE_LABEL_D_DS2: [[node_identifier, 0, c3, a2, 0]],
-                                "Type": "external",
-                                "Annotation": [finger_name],
-                            }
+                            node = virtual_node_matrix.create_external_vnode(
+                                x  = [1, 0, 0, 0],
+                                d1 = [0, -c2, a3, 0],
+                                d2 = [0, c3, a2, 0],
+                                node_identifier = node_identifier, annotation = annotation
+                            )
                             virtual_node_matrix.set_virtual_node_to_index(node, [i + 1, j, k])
                         node_identifier += 1
                         x = add(x, d1)
@@ -954,58 +979,55 @@ def generate_external_node_matrix(hand_elements_along,
     for j in j_val:
         for k in k_val:
             a3 = -1 if k == 1 else 1
+            c1 = 0.5 * a3
             finger_name = finger_names[finger_index]
             finger_part = bone_name + ' of ' + finger_name
             annotation = [bone_name, finger_name, finger_part]
-            node_id = virtual_node_matrix.get_virtual_node([i, j - 1, k + a3])
-            node_id = node_id[Node.VALUE_LABEL_VALUE][0][0]
-            c1 = 0.5 * a3
-            node = {
-                Node.VALUE_LABEL_VALUE: [[node_id, 1, 0, 0, 0]],
-                Node.VALUE_LABEL_D_DS1: [[node_id, 0, 1, -c1, 0]],
-                Node.VALUE_LABEL_D_DS2: [[node_id, 0, 0, 1, 0]],
-                "Type": "external",
-                "Annotation": annotation
-            }
+            index = [i, j - 1, k + a3]
+            node_id = virtual_node_matrix.get_node_identifier_at_index(index)
+            node = virtual_node_matrix.create_external_vnode(
+                x  = [1, 0, 0, 0],
+                d1 = [0, 1, -c1, 0],
+                d2 = [0, 0, 1, 0],
+                node_identifier = node_id, annotation = annotation
+            )
             virtual_node_matrix.set_virtual_node_to_index(node, [i, j - 1, k + a3])
-            node = {
-                Node.VALUE_LABEL_VALUE: [[node_id, 1, 0, 0, 0]],
-                Node.VALUE_LABEL_D_DS1: [[node_id, 0, 1, -c1, 0]],
-                Node.VALUE_LABEL_D_DS2: [[node_id, 0, a3, 0, 0]],
-                "Type": "external",
-                "Annotation": annotation
-            }
+            node = virtual_node_matrix.create_external_vnode(
+                x  = [1, 0, 0, 0],
+                d1 = [0, 1, -c1, 0],
+                d2 = [0, a3, 0, 0],
+                node_identifier = node_id, annotation = annotation
+            )
             virtual_node_matrix.set_virtual_node_to_index(node, [i, j, k])
 
             finger_name = finger_names[finger_index + 1]
             finger_part = bone_name + ' of ' + finger_name
             annotation = [bone_name, finger_name, finger_part]
-            node = {
-                Node.VALUE_LABEL_VALUE: [[node_id, 1, 0, 0, 0]],
-                Node.VALUE_LABEL_D_DS1: [[node_id, 0, 1, c1, 0]],
-                Node.VALUE_LABEL_D_DS2: [[node_id, 0, -a3, 0, 0]],
-                "Type": "external",
-                "Annotation": annotation
-            }
+            node = virtual_node_matrix.create_external_vnode(
+                x  = [1, 0, 0, 0],
+                d1 = [0, 1, c1, 0],
+                d2 = [0, -a3, 0, 0],
+                node_identifier = node_id, annotation = annotation
+            )
             virtual_node_matrix.set_virtual_node_to_index(node, [i, j + 2, k])
 
-            node = {
-                Node.VALUE_LABEL_VALUE: [[node_id, 1, 0, 0, 0]],
-                Node.VALUE_LABEL_D_DS1: [[node_id, 0, 1, c1, 0]],
-                Node.VALUE_LABEL_D_DS2: [[node_id, 0, 0, 1, 0]],
-                "Type": "external",
-                "Annotation": annotation
-            }
+            node = virtual_node_matrix.create_external_vnode(
+                x  = [1, 0, 0, 0],
+                d1 = [0, 1, c1, 0],
+                d2 = [0, 0, 1, 0],
+                node_identifier = node_id, annotation = annotation
+            )
             virtual_node_matrix.set_virtual_node_to_index(node, [i, j + 3, k + a3])
         finger_index += 1
     # Thumb
     index_y += 5
     index_x = c
     finger_index = 4
+    thumb_bones = [Bone.METACARPAL, Bone.PROX_PHALANX, Bone.DIST_PHALANX]
     # Metacarpal, proximal and distal phalanx
-    for bone in [1, 2, 4]:
+    for bone in thumb_bones:
         n_elements_along = hand_elements_along[bone]
-        if bone in [1, 2]:
+        if bone in [Bone.METACARPAL, Bone.PROX_PHALANX]:
             n_elements_along -= 1
         j_val = [index_y, index_y + 1]
         i_val = [index_x + i for i in range(n_elements_along)]
@@ -1035,52 +1057,49 @@ def generate_external_node_matrix(hand_elements_along,
                     finger_part = bone_name + ' of ' + finger_name
                     annotation = [bone_name, finger_name, finger_part]
                     indices = [[i, j, k + a3]]
-                    if bone == 1:
+                    if bone == Bone.METACARPAL:
                         if j == index_y + 1:
                             indices.append([i, j + a2, k])
-                    elif bone == 2:
+                    elif bone == Bone.PROX_PHALANX:
                         indices.append([i, j + a2, k])
-                    elif bone == 4:
+                    elif bone == Bone.DIST_PHALANX:
                         indices.append([i, j + a2, k])
-                    node = {
-                        Node.VALUE_LABEL_VALUE: [[node_identifier, 1, 0, 0, 0]],
-                        Node.VALUE_LABEL_D_DS1: [[node_identifier, 0, 1, 0, 0]],
-                        Node.VALUE_LABEL_D_DS2: [[node_identifier, 0, 0, 1, 0]],
-                        "Type": "external",
-                        "Annotation": annotation,
-                    }
+                    node = virtual_node_matrix.create_external_vnode(
+                        x  = [1, 0, 0, 0],
+                        d1 = [0, 1, 0, 0],
+                        d2 = [0, 0, 1, 0],
+                        node_identifier = node_identifier, annotation = annotation
+                    )
                     virtual_node_matrix.set_virtual_node_to_indices(node, indices)
                     node_network.set_node_parameters(
                         [x, d1, d2, d3], node_identifier, internal_node=False
                     )
-                    if bone == 4 and i == i_val[-1]: # Special element to cap the fingers
-                        a4 = 1
-                        c1 = a4 * a2 * a3
-                        c2 = a4 * a2
-                        c3 = a4 * a3
-                        node = {
-                            Node.VALUE_LABEL_VALUE: [[node_identifier, 1, 0, 0, 0]],
-                            Node.VALUE_LABEL_D_DS1: [[node_identifier, 0, 1, 0, 0]],
-                            Node.VALUE_LABEL_D_DS2: [[node_identifier, 0, -c1, 1, 0]],
-                            "Type": "external",
-                            "Annotation": [finger_name],
-                        }
+                    if bone == Bone.DIST_PHALANX and i == i_val[-1]:
+                        c0 = 1
+                        c1 = c0 * a2 * a3
+                        c2 = c0 * a2
+                        c3 = c0 * a3
+                        annotation = [finger_name]
+                        node = virtual_node_matrix.create_external_vnode(
+                            x  = [1, 0, 0, 0],
+                            d1 = [0, 1, 0, 0],
+                            d2 = [0, -c1, 1, 0],
+                            node_identifier = node_identifier, annotation = annotation
+                        )
                         virtual_node_matrix.set_virtual_node_to_index(node, [i, j, k + a3])
-                        node = {
-                            Node.VALUE_LABEL_VALUE: [[node_identifier, 1, 0, 0, 0]],
-                            Node.VALUE_LABEL_D_DS1: [[node_identifier, 0, 1, 0, 0]],
-                            Node.VALUE_LABEL_D_DS2: [[node_identifier, 0, c1, 1, 0]],
-                            "Type": "external",
-                            "Annotation": [finger_name],
-                        }
+                        node = virtual_node_matrix.create_external_vnode(
+                            x  = [1, 0, 0, 0],
+                            d1 = [0, 1, 0, 0],
+                            d2 = [0, c1, 1, 0],
+                            node_identifier = node_identifier, annotation = annotation
+                        )
                         virtual_node_matrix.set_virtual_node_to_index(node, [i, j + a2, k])
-                        node = {
-                            Node.VALUE_LABEL_VALUE: [[node_identifier, 1, 0, 0, 0]],
-                            Node.VALUE_LABEL_D_DS1: [[node_identifier, 0, -c2, a3, 0]],
-                            Node.VALUE_LABEL_D_DS2: [[node_identifier, 0, c3, a2, 0]],
-                            "Type": "external",
-                            "Annotation": [finger_name],
-                        }
+                        node = virtual_node_matrix.create_external_vnode(
+                            x  = [1, 0, 0, 0],
+                            d1 = [0, -c2, a3, 0],
+                            d2 = [0, c3, a2, 0],
+                            node_identifier = node_identifier, annotation = annotation
+                        )
                         virtual_node_matrix.set_virtual_node_to_index(node, [i + 1, j, k])
                     node_identifier += 1
                     x = add(x, d1)
@@ -1097,136 +1116,134 @@ def generate_external_node_matrix(hand_elements_along,
     for k in k_val:
         a1 = -1 if k == 3 else 1
         a3 = -1 if k == 3 else 1
-        node_id = virtual_node_matrix.get_virtual_node([0, index_y - 9, k])
-        node_id = node_id[Node.VALUE_LABEL_VALUE][0][0]
-        node = {
-            Node.VALUE_LABEL_VALUE: [[node_id, 1, 0, 0, 0]],
-            Node.VALUE_LABEL_D_DS1: [[node_id, 0, 0.5, -a1 * 0.5, 0]],
-            Node.VALUE_LABEL_D_DS2: [[node_id, 0, 0, 1, 0]],
-            "Type": "external",
-        }
+        index = [0, index_y - 9, k]
+        node_id = virtual_node_matrix.get_node_identifier_at_index(index)
+        node = virtual_node_matrix.create_external_vnode(
+                x  = [1, 0, 0, 0],
+                d1 = [0, 0.5, -a1 * 0.5, 0],
+                d2 = [0, 0, 1, 0],
+                node_identifier = node_id, annotation = annotation
+        )
         virtual_node_matrix.set_virtual_node_to_index(node, [0, index_y - 5, k + a3])
-        node_id = virtual_node_matrix.get_virtual_node([1, index_y + 1, k])
-        node_id = node_id[Node.VALUE_LABEL_VALUE][0][0]
-        node = {
-            Node.VALUE_LABEL_VALUE: [[node_id, 1, 0, 0, 0]],
-            Node.VALUE_LABEL_D_DS1: [[node_id, 0, 1, a1 * thumb_c, 0]],
-            Node.VALUE_LABEL_D_DS2: [[node_id, 0, 0, 1, 0]],
-            "Type": "external",
-        }
+        index = [1, index_y + 1, k]
+        node_id = virtual_node_matrix.get_node_identifier_at_index(index)
+        node = virtual_node_matrix.create_external_vnode(
+                x  = [1, 0, 0, 0],
+                d1 = [0, 1, a1 * thumb_c, 0],
+                d2 = [0, 0, 1, 0],
+                node_identifier = node_id, annotation = annotation
+        )
         virtual_node_matrix.set_virtual_node_to_index(node, [0, index_y - 4, k + a3])
 
     # Bottom carpal-metacarpal connection
     for k in k_val:
         a1 = -1 if k == 3 else 1
-        a2
-        node_id = virtual_node_matrix.get_virtual_node([1, index_y + 1, k])
-        node_id = node_id[Node.VALUE_LABEL_VALUE][0][0]
-        node = {
-            Node.VALUE_LABEL_VALUE: [[node_id, 1, 0, 0, 0]],
-            Node.VALUE_LABEL_D_DS1: [[node_id, 0, 0, a1, 0]],
-            Node.VALUE_LABEL_D_DS2: [[node_id, 0, -a1, -thumb_c, 0]],
-            "Type": "external",
-        }
+        index = [1, index_y + 1, k]
+        node_id = virtual_node_matrix.get_node_identifier_at_index(index)
+        node = virtual_node_matrix.create_external_vnode(
+                x  = [1, 0, 0, 0],
+                d1 = [0, 0, a1, 0],
+                d2 = [0, -a1, -thumb_c, 0],
+                node_identifier = node_id, annotation = annotation
+        )
+
         virtual_node_matrix.set_virtual_node_to_index(node, [1, index_y - 4, k])
 
-        node_id = virtual_node_matrix.get_virtual_node([1, index_y, k])
-        node_id = node_id[Node.VALUE_LABEL_VALUE][0][0]
-        node = {
-            Node.VALUE_LABEL_VALUE: [[node_id, 1, 0, 0, 0]],
-            Node.VALUE_LABEL_D_DS1: [[node_id, 0, 0, a1, 0]],
-            Node.VALUE_LABEL_D_DS2: [[node_id, 0, -a1 * thumb_c, 0, 0]],
-            "Type": "external",
-        }
+        index = [1, index_y, k]
+        node_id = virtual_node_matrix.get_node_identifier_at_index(index)
+        node = virtual_node_matrix.create_external_vnode(
+                x  = [1, 0, 0, 0],
+                d1 = [0, 0, a1, 0],
+                d2 = [0, -a1 * thumb_c, 0, 0],
+                node_identifier = node_id, annotation = annotation
+        )
         virtual_node_matrix.set_virtual_node_to_index(node, [2, index_y - 4, k])
 
-        node_id = virtual_node_matrix.get_virtual_node([0, index_y - 9, k])
-        node_id = node_id[Node.VALUE_LABEL_VALUE][0][0]
-        node = {
-            Node.VALUE_LABEL_VALUE: [[node_id, 1, 0, 0, 0]],
-            Node.VALUE_LABEL_D_DS1: [[node_id, 0, 1, 0, 0]],
-            Node.VALUE_LABEL_D_DS2: [[node_id, 0, -a1 * 0.5, 0.5, 0]],
-            "Type": "external",
-        }
+        index = [0, index_y - 9, k]
+        node_id = virtual_node_matrix.get_node_identifier_at_index(index)
+        node = virtual_node_matrix.create_external_vnode(
+                x  = [1, 0, 0, 0],
+                d1 = [0, 1, 0, 0],
+                d2 = [0, -a1 * 0.5, 0.5, 0],
+                node_identifier = node_id, annotation = annotation
+        )
         virtual_node_matrix.set_virtual_node_to_index(node, [1, index_y - 5, k])
 
-        node_id = virtual_node_matrix.get_virtual_node([1, index_y - 9, k])
-        node_id = node_id[Node.VALUE_LABEL_VALUE][0][0]
-        node = {
-            Node.VALUE_LABEL_VALUE: [[node_id, 1, 0, 0, 0]],
-            Node.VALUE_LABEL_D_DS1: [[node_id, 0, 1, 0, 0]],
-            Node.VALUE_LABEL_D_DS2: [[node_id, 0, 0, 0.25, 0]],
-            "Type": "external",
-        }
+        index = [1, index_y - 9, k]
+        node_id = virtual_node_matrix.get_node_identifier_at_index(index)
+        node = virtual_node_matrix.create_external_vnode(
+                x  = [1, 0, 0, 0],
+                d1 = [0, 1, 0, 0],
+                d2 = [0, 0, 0.25, 0],
+                node_identifier = node_id, annotation = annotation
+        )
         virtual_node_matrix.set_virtual_node_to_index(node, [2, index_y - 5, k])
     # Intermediate metacarpal connections
     for k in k_val:
         a1 = 2 * thumb_c
         a3 = -1 if k == 3 else 1
-
-        node_id = virtual_node_matrix.get_virtual_node([1, index_y, k])
-        node_id = node_id[Node.VALUE_LABEL_VALUE][0][0]
-        node = {
-            Node.VALUE_LABEL_VALUE: [[node_id, 1, 0, 0, 0]],
-            Node.VALUE_LABEL_D_DS1: [[node_id, 0, 1, 0, 0]],
-            Node.VALUE_LABEL_D_DS2: [[node_id, 0, -a3 * thumb_c, 0, 0]],
-            "Type": "external",
-        }
+        index = [1, index_y, k]
+        node_id = virtual_node_matrix.get_node_identifier_at_index(index)
+        node = virtual_node_matrix.create_external_vnode(
+                x  = [1, 0, 0, 0],
+                d1 = [0, 1, 0, 0],
+                d2 = [0, -a3 * thumb_c, 0, 0],
+                node_identifier = node_id, annotation = annotation
+        )
         virtual_node_matrix.set_virtual_node_to_index(node, [4, index_y - 4, k])
 
-        node_id = virtual_node_matrix.get_virtual_node([1, index_y - 9, k])
-        node_id = node_id[Node.VALUE_LABEL_VALUE][0][0]
-        node = {
-            Node.VALUE_LABEL_VALUE: [[node_id, 1, 0, 0, 0]],
-            Node.VALUE_LABEL_D_DS1: [[node_id, 0, 1, 0, 0]],
-            Node.VALUE_LABEL_D_DS2: [[node_id, 0, 0, 0.25, 0]],
-            "Type": "external",
-        }
+        index = [1, index_y - 9, k]
+        node_id = virtual_node_matrix.get_node_identifier_at_index(index)
+        node = virtual_node_matrix.create_external_vnode(
+                x  = [1, 0, 0, 0],
+                d1 = [0, 1, 0, 0],
+                d2 = [0, 0, 0.25, 0],
+                node_identifier = node_id, annotation = annotation
+        )
         virtual_node_matrix.set_virtual_node_to_index(node, [4, index_y - 5, k])
 
-        node_id = virtual_node_matrix.get_virtual_node([2, index_y, k])
-        node_id = node_id[Node.VALUE_LABEL_VALUE][0][0]
-        node = {
-            Node.VALUE_LABEL_VALUE: [[node_id, 1, 0, 0, 0]],
-            Node.VALUE_LABEL_D_DS1: [[node_id, 0, 1, 0, 0]],
-            Node.VALUE_LABEL_D_DS2: [[node_id, 0, -a1 * a3, 0.5, 0]],
-            "Type": "external",
-        }
+        index = [2, index_y, k]
+        node_id = virtual_node_matrix.get_node_identifier_at_index(index)
+        node = virtual_node_matrix.create_external_vnode(
+                x  = [1, 0, 0, 0],
+                d1 = [0, 1, 0, 0],
+                d2 = [0, -a1 * a3, 0.5, 0],
+                node_identifier = node_id, annotation = annotation
+        )
         virtual_node_matrix.set_virtual_node_to_index(node, [5, index_y - 4, k])
 
-        node_id = virtual_node_matrix.get_virtual_node([2, index_y - 9, k])
-        node_id = node_id[Node.VALUE_LABEL_VALUE][0][0]
-        node = {
-            Node.VALUE_LABEL_VALUE: [[node_id, 1, 0, 0, 0]],
-            Node.VALUE_LABEL_D_DS1: [[node_id, 0, 1, 0, 0]],
-            Node.VALUE_LABEL_D_DS2: [[node_id, 0, a1 * a3, 0.5, 0]],
-            "Type": "external",
-        }
+        index = [2, index_y - 9, k]
+        node_id = virtual_node_matrix.get_node_identifier_at_index(index)
+        node = virtual_node_matrix.create_external_vnode(
+                x  = [1, 0, 0, 0],
+                d1 = [0, 1, 0, 0],
+                d2 = [0, a1 * a3, 0.5, 0],
+                node_identifier = node_id, annotation = annotation
+        )
         virtual_node_matrix.set_virtual_node_to_index(node, [5, index_y - 5, k])
 
     # Front of the webbing
     for k in k_val:
         a1 = 2 * thumb_c
-        # a1 = -1 if k == 3 else 1
         a3 = -1 if k == 3 else 1
-        node_id = virtual_node_matrix.get_virtual_node([2, index_y - 9, k])
-        node_id = node_id[Node.VALUE_LABEL_VALUE][0][0]
-        node = {
-            Node.VALUE_LABEL_VALUE: [[node_id, 1, 0, 0, 0]],
-            Node.VALUE_LABEL_D_DS1: [[node_id, 0, -a1, -a3 * 0.5, 0]],
-            Node.VALUE_LABEL_D_DS2: [[node_id, 0, 0, 1, 0]],
-            "Type": "external",
-        }
+        index = [2, index_y - 9, k]
+        node_id = virtual_node_matrix.get_node_identifier_at_index(index)
+        node = virtual_node_matrix.create_external_vnode(
+                x  = [1, 0, 0, 0],
+                d1 = [0, -a1, -a3 * 0.5, 0],
+                d2 = [0, 0, 1, 0],
+                node_identifier = node_id, annotation = annotation
+        )
         virtual_node_matrix.set_virtual_node_to_index(node, [6, index_y - 5, k + a3])
 
-        node_id = virtual_node_matrix.get_virtual_node([2, index_y, k])
-        node_id = node_id[Node.VALUE_LABEL_VALUE][0][0]
-        node = {
-            Node.VALUE_LABEL_VALUE: [[node_id, 1, 0, 0, 0]],
-            Node.VALUE_LABEL_D_DS1: [[node_id, 0, a1, -a3 * 0.5, 0]],
-            Node.VALUE_LABEL_D_DS2: [[node_id, 0, 0, -1, 0]],
-            "Type": "external",
-        }
+        index = [2, index_y, k]
+        node_id = virtual_node_matrix.get_node_identifier_at_index(index)
+        node = virtual_node_matrix.create_external_vnode(
+                x  = [1, 0, 0, 0],
+                d1 = [0, a1, -a3 * 0.5, 0],
+                d2 = [0, 0, -1, 0],
+                node_identifier = node_id, annotation = annotation
+        )
         virtual_node_matrix.set_virtual_node_to_index(node, [6, index_y - 4, k + a3])
 
     return virtual_node_matrix, node_network, node_identifier
