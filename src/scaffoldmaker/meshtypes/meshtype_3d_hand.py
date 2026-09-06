@@ -93,7 +93,7 @@ class MeshType_3d_hand1(Scaffold_base):
     def checkOptions(cls, options):
         dependent_changes = False
         for key, angleRange in {
-            "Thumb angle": (10.0, 80.0),
+            "Thumb angle": (0.0, 80.0),
         }.items():
             if options[key] < angleRange[0]:
                 options[key] = angleRange[0]
@@ -383,6 +383,7 @@ class Virtual_node_matrix():
             'Annotation': annotation
         }
         return virtual_node
+
     def set_virtual_node_to_index(self, node: dict, index: list, replace=True):
         i, j, k = index
         node_matrix = self.node_matrix
@@ -508,9 +509,11 @@ def generate_internal_nodes(node_network: Node_network, hand_elements_along: lis
             [0.6, 0.2, 0.2],  # distal phalanx
         ],
         [ # Finger 5 (thumb finger)
-            [1.0, 0.25, 0.2, 0.2],  # metacarpal
-            [1.1, 0.25, 0.2, 0.2],  # proximal phalanx
-            [0.8, 0.20, 0.2, 0.2],  # distal phalanx
+            [0.0, 0.0, 0.0],  # carpal
+            [1.0, 0.2, 0.2, 0.2],  # metacarpal
+            [1.1, 0.2, 0.2, 0.2],  # proximal phalanx
+            [0.0, 0.0, 0.0],  # middle phalanx
+            [0.8, 0.2, 0.2, 0.2],  # distal phalanx
         ],
     ]
     carpal_spacing = hand_dimensions_by_finger[0][0][1] * 2.0
@@ -538,7 +541,7 @@ def generate_internal_nodes(node_network: Node_network, hand_elements_along: lis
                 d1 = mult(d1, 1 / n_elements_along)
             d2 = mult(x2, bone_dimensions[1])
             d3 = mult(x3, bone_dimensions[2])
-            if (j == 3) and (bone == Bone.METACARPAL):
+            if (j == 3) and (bone == Bone.CARPAL):
                 index_carpal_node_id = node_identifier
             is_palm = True if bone < 3 else False
             for i_along in range(n_elements_along):
@@ -551,32 +554,38 @@ def generate_internal_nodes(node_network: Node_network, hand_elements_along: lis
                 x = add(x, d1)
                 node_identifier += 1
     thumb_dimensions = hand_dimensions_by_finger[-1]
+    thumb_indices = [Bone.METACARPAL, Bone.PROX_PHALANX, Bone.DIST_PHALANX]
     thumb_angle_degrees = options["Thumb angle"]
     # Thumb flexion angle
     angle_radians = math.radians(thumb_angle_degrees)
     x1 = rotate_vector_around_vector(x1, x3, angle_radians)
     x2 = rotate_vector_around_vector(x2, x3, angle_radians)
     # Obtain the starting node position from the metacarpal node
-    thumb_elements_along = [1, 1, 2]
     x, d1, d2, d3 = node_network.get_node_parameters(index_carpal_node_id)
-    x = add(x, mult(d2, 2.5))
-    x = add(x, mult(d1, 0.15))
-    for bone in range(3):
+    x = add(x, mult(d2, 1))
+    x = add(x, mult(x1, 1.5*magnitude(d1)))
+    # x = add(x, mult(d1, 0.15))
+    for bone in thumb_indices:
         bone_dimensions = thumb_dimensions[bone]
-        n_elements_along = thumb_elements_along[bone]
+        n_elements_along = hand_elements_along[bone]
+        if bone in [Bone.METACARPAL, Bone.PROX_PHALANX]:
+            n_elements_along = max(1, n_elements_along - 1)
         d1 = mult(x1, bone_dimensions[0])
-        if bone == Bone.PROX_PHALANX:
+        if bone == Bone.DIST_PHALANX:
             d1 = mult(d1, 1 / (n_elements_along - 1))
         else:
             d1 = mult(d1, 1 / n_elements_along)
+        if bone == Bone.METACARPAL:
+            x = add(x, mult(d2, -1))
         d2 = mult(x2, bone_dimensions[1])
         d3 = mult(x3, bone_dimensions[2])
         x = x
-        if bone == Bone.CARPAL:
+        if bone == Bone.METACARPAL:
             x = add(x, d2)
         for i_along in range(n_elements_along):
             node_network.set_node_parameters(
-                [x, d1, d2, d3], node_identifier, internal_node=True)
+                [x, d1, d2, d3], node_identifier, internal_node=True
+            )
             x = add(x, d1)
             node_identifier += 1
     return node_network, node_identifier
@@ -654,12 +663,12 @@ def generate_internal_node_matrix(hand_elements_along, node_identifier,
                         elif bone == Bone.METACARPAL:
                             annotation = [bone_name] if k == 1 else ""
                             if (j == index_y + 1 and finger_index == 3) \
-                                or (j == index_y + 6 and finger_index == 2): # WebbingE
+                                or (j == index_y + 6 and finger_index == 2): # Webbing
                                 if i == index_x:
                                     indices.append([i + 1, j + 4, k])
                                     indices.append([i + 3, j + 4, k])
-                                else:
-                                    indices.append([i + 3, j + 4, k])
+                                # else:
+                                #     indices.append([i + 3, j + 4, k])
                             node = virtual_node_matrix.create_internal_vnode(
                                 parent_node_id, [a0, a1, a2, a3], annotation)
                             virtual_node_matrix.set_virtual_node_to_indices(
@@ -718,8 +727,8 @@ def generate_internal_node_matrix(hand_elements_along, node_identifier,
     thumb_bones = [Bone.METACARPAL, Bone.PROX_PHALANX, Bone.DIST_PHALANX]
     for bone in thumb_bones:
         n_elements_along = hand_elements_along[bone]
-        n_elements_along = n_elements_along - 1 if bone in \
-            [Bone.METACARPAL, Bone.PROX_PHALANX] else n_elements_along
+        if bone in [Bone.METACARPAL, Bone.PROX_PHALANX]:
+            n_elements_along = max(1, n_elements_along - 1)
         j_val = [index_y, index_y + 1]
         i_val = [index_x + i for i in range(n_elements_along)]
         for i in i_val:
@@ -777,7 +786,7 @@ def generate_external_node_matrix(hand_elements_along,
         major_axis = mult(d2, -a_palm[n])
         minor_axis = mult(d3, b_palm[n])
         major_ax_mag = magnitude(major_axis)
-        minor_ax_mag = magnitude(minor_axis)
+        # minor_ax_mag = magnitude(minor_axis)
         internal_box_length = 2 * magnitude(d2)
         sampling_along_x = [internal_box_length / major_ax_mag, 0] # between 0 and b
         sampling_along_y = [0.6] # between 0 and a
@@ -1028,7 +1037,7 @@ def generate_external_node_matrix(hand_elements_along,
     for bone in thumb_bones:
         n_elements_along = hand_elements_along[bone]
         if bone in [Bone.METACARPAL, Bone.PROX_PHALANX]:
-            n_elements_along -= 1
+            n_elements_along = max(1, n_elements_along - 1)
         j_val = [index_y, index_y + 1]
         i_val = [index_x + i for i in range(n_elements_along)]
         # Estimate ellipse
@@ -1595,8 +1604,8 @@ def sample_ellipse_along_angles(center: list, major_axis: list, minor_axis: list
     """
     From a list of angles on the first quadrant of an ellipse, calculate their reflection
     over the other three quadrants. Then alculate both the position and tangent angle at the
-    updated list of angles. 
-    
+    updated list of angles.
+
     :param center: Description
     :param major_axis: Description
     :param minor_axis: Description
