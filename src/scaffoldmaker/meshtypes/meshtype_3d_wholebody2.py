@@ -47,22 +47,22 @@ class MeshType_1d_human_body_network_layout1(MeshType_1d_network_layout1):
             "13.3-35-36-37-38-39,39-40-41")
         options["Define inner coordinates"] = True
         options["Head depth"] = 2.0
-        options["Head length"] = 1.8
+        options["Head length"] = 2.5
         options["Head width"] = 2.0
-        options["Neck length"] = 1.3
+        options["Neck length"] = 1.0
         options["Shoulder drop"] = 1.0
-        options["Shoulder width"] = 5.0
+        options["Shoulder width"] = 4.5
         options["Arm lateral angle degrees"] = 10.0
         options["Arm length"] = 7.3
         options["Arm top diameter"] = 1.0
         options["Arm twist angle degrees"] = 0.0
         options["Wrist thickness"] = 0.5
         options["Wrist width"] = 0.7
-        options["Hand length"] = 2.2
+        options["Hand length"] = 2.0
         options["Hand thickness"] = 0.2
         options["Hand width"] = 1.0
-        options["Thorax length"] = 3.0
-        options["Abdomen length"] = 2.5
+        options["Thorax length"] = 2.5
+        options["Abdomen length"] = 3.0
         options["Torso depth"] = 2.0
         options["Torso width"] = 3.2
         options["Pelvis drop"] = 1.25
@@ -997,7 +997,7 @@ class MeshType_3d_wholebody2(Scaffold_base):
             annotationGroups, region,
             get_body_term(annotation_group_name +  " skin epidermis outer surface"))
             skin_annotation_group.getMeshGroup(mesh2d).addElementsConditional(
-            fieldmodule.createFieldAnd(annotation_group.getGroup(), is_exterior))
+            fieldmodule.createFieldAnd(annotation_group.getGroup(), is_skin))
 
         if is_core and shell_count:
             # define cavity surfaces, diaphragm and spinal cord
