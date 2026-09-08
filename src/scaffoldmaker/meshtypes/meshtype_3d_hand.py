@@ -510,10 +510,10 @@ def generate_internal_nodes(node_network: Node_network, hand_elements_along: lis
         ],
         [ # Finger 5 (thumb finger)
             [0.0, 0.0, 0.0],  # carpal
-            [1.0, 0.2, 0.2, 0.2],  # metacarpal
-            [1.1, 0.2, 0.2, 0.2],  # proximal phalanx
+            [1.0, 0.25, 0.2, 0.2],  # metacarpal
+            [1.1, 0.25, 0.2, 0.2],  # proximal phalanx
             [0.0, 0.0, 0.0],  # middle phalanx
-            [0.8, 0.2, 0.2, 0.2],  # distal phalanx
+            [0.8, 0.25, 0.2, 0.2],  # distal phalanx
         ],
     ]
     carpal_spacing = hand_dimensions_by_finger[0][0][1] * 2.0
@@ -548,7 +548,7 @@ def generate_internal_nodes(node_network: Node_network, hand_elements_along: lis
                 if bone == Bone.PROX_PHALANX and i_along == 1:
                     is_palm = False
                     d2 = mult(d2, 0.5)
-                    x = add(x, mult(d2, -1.0 + (2.0 / 3.0) * j))
+                    # x = add(x, mult(d2, -1.0 + (2.0 / 3.0) * j))
                 node_network.set_node_parameters([x, d1, d2, d3], node_identifier,
                                              internal_node = True, palm_node = is_palm)
                 x = add(x, d1)
@@ -605,7 +605,9 @@ def generate_internal_node_matrix(hand_elements_along, node_identifier,
     :return: Description
     :rtype: Any
     """
-    bone_c = 0.5
+    # TODO calculate these constants as functions of the node parameters
+    bone_c_int = 0.5
+    bone_c_ext = 0.75
     bone_w = 1.0
     bone_h = 0.5
     a0 = 1.0
@@ -639,13 +641,13 @@ def generate_internal_node_matrix(hand_elements_along, node_identifier,
                 for j in j_val:
                     for k in k_val:
                         if j in [index_y - 5, index_y + 6]:
-                            a0 = bone_c - 1
+                            a0 = 0.5 - bone_c_ext
                         elif j in [index_y - 4, index_y + 5]:
-                            a0 = bone_c
+                            a0 = bone_c_int
                         elif j in [index_y]:
-                            a0 = bone_c + 1 if finger_index == 0 else bone_c
+                            a0 = 0.5 + bone_c_ext if finger_index == 0 else bone_c_int
                         elif j in [index_y + 1]:
-                            a0 = bone_c + 1 if finger_index == 3 else bone_c
+                            a0 = 0.5 + bone_c_ext if finger_index == 3 else bone_c_int
                         a2 = 0.0
                         a3 = -a0 if k == 1 else a0
                         bone_name = bone_names[bone]
@@ -772,7 +774,8 @@ def generate_external_node_matrix(hand_elements_along,
     parent_node_id = sum(hand_elements_along) + 1
     finger_names = options['finger names']
     bone_names = options['bone names']
-    a_palm = [5.5 + i * (5.5 - 5.5) / (palm_elements_along - 1) \
+    # TODO calculate formulas for these numbers, based on the width of the internal boxes.
+    a_palm = [4.65 + i * (4.65 - 4.65) / (palm_elements_along - 1) \
                 for i in range(palm_elements_along)]
     b_palm = [5.5 + i * (2.5 - 5.5) / (palm_elements_along - 1) \
                 for i in range(palm_elements_along)]
@@ -988,7 +991,7 @@ def generate_external_node_matrix(hand_elements_along,
     for j in j_val:
         for k in k_val:
             a3 = -1 if k == 1 else 1
-            c1 = 0.5 * a3
+            c1 = 0.25 * a3
             finger_name = finger_names[finger_index]
             finger_part = bone_name + ' of ' + finger_name
             annotation = [bone_name, finger_name, finger_part]
