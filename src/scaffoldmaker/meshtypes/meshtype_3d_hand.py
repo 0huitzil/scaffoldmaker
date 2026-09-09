@@ -54,6 +54,7 @@ class MeshType_3d_hand1(Scaffold_base):
             "Splaying angle": 0,
             'Create internal elements': True,
             'Create external elements': False,
+            'Internal elements across hand': 1,
             'Elements along carpal': 1,
             'Elements along metacarpal': 2,
             'Elements along proximal phalanx': 2,
@@ -82,6 +83,7 @@ class MeshType_3d_hand1(Scaffold_base):
             "Splaying angle",
             'Create internal elements',
             'Create external elements',
+            'Internal elements across hand',
             'Elements along carpal',
             'Elements along metacarpal',
             'Elements along proximal phalanx',
@@ -134,7 +136,9 @@ class MeshType_3d_hand1(Scaffold_base):
         node_network = Node_network(region, fieldcache)
         ix = 2 * sum(hand_elements_along)
         iy = 6 * 5 # 5 columns per finger, + 1 column for palm-thumb connection
-        iz = 4
+        internal_rows = options.get('Internal elements across hand') + 1
+        external_rows = 2
+        iz = internal_rows + external_rows
         virtual_node_matrix = Virtual_node_matrix([ix, iy, iz])
 
         node_network, node_identifier = generate_internal_nodes(
@@ -460,8 +464,6 @@ class Virtual_node_matrix():
                   node_matrix[start_i + i][start_j + j][start_k + k])
         print ("------------------------------")
 
-
-
 def generate_internal_nodes(node_network: Node_network, hand_elements_along: list,
                             node_identifier: int = 1, options: dict = {}):
     """
@@ -562,7 +564,7 @@ def generate_internal_nodes(node_network: Node_network, hand_elements_along: lis
     x2 = rotate_vector_around_vector(x2, x3, angle_radians)
     # Obtain the starting node position from the metacarpal node
     x, d1, d2, d3 = node_network.get_node_parameters(index_carpal_node_id)
-    x = add(x, mult(d2, 1))
+    x = add(x, mult(d2, 1.0))
     x = add(x, mult(x1, 1.5*magnitude(d1)))
     # x = add(x, mult(d1, 0.15))
     for bone in thumb_indices:
@@ -590,7 +592,6 @@ def generate_internal_nodes(node_network: Node_network, hand_elements_along: lis
             node_identifier += 1
     return node_network, node_identifier
 
-
 def generate_internal_node_matrix(hand_elements_along, node_identifier,
                                   virtual_node_matrix: Virtual_node_matrix,
                                   node_network: Node_network, options: dict =None):
@@ -608,12 +609,15 @@ def generate_internal_node_matrix(hand_elements_along, node_identifier,
     # TODO calculate these constants as functions of the node parameters
     bone_c_int = 0.5
     bone_c_ext = 0.75
+    # TODO eliminiate bone_w and bone_h
+    # TODO define a local lambda function for local row coefficients
     bone_w = 1.0
     bone_h = 0.5
     a0 = 1.0
     parent_node_id = 1
     index_y = 1
     a1 = 0.0
+    # TODO make k_val variable with number of internal rows
     k_val = [1, 2]
     columns_per_finger = 5
     finger_names = options.get('finger names')
@@ -649,6 +653,7 @@ def generate_internal_node_matrix(hand_elements_along, node_identifier,
                         elif j in [index_y + 1]:
                             a0 = 0.5 + bone_c_ext if finger_index == 3 else bone_c_int
                         a2 = 0.0
+                        # TODO change the formula for a3 based on the number of rows
                         a3 = -a0 if k == 1 else a0
                         bone_name = bone_names[bone]
                         indices = [[i, j, k]]
@@ -708,7 +713,9 @@ def generate_internal_node_matrix(hand_elements_along, node_identifier,
             for i in i_val:
                 for j in j_val:
                     for k in k_val:
+                        # TODO get rid of bone_w, replace with 1 
                         a2 = -bone_w if j == index_y else bone_w
+                        # TODO get rid of bone_h, replace with sampling formula
                         a3 = -bone_h if k == 1 else bone_h
                         finger_name = finger_names[finger_index]
                         bone_name = bone_names[bone]
@@ -736,7 +743,9 @@ def generate_internal_node_matrix(hand_elements_along, node_identifier,
         for i in i_val:
             for j in j_val:
                 for k in k_val:
+                    # TODO get rid of bone_w, replace with 1 
                     a2 = bone_w if j == index_y + 1 else -bone_w
+                    # TODO get rid of bone_h, replace with sampling formula
                     a3 = -bone_h if k == 1 else bone_h
                     indices = [[i, j, k]]
                     if j == index_y:
@@ -764,7 +773,6 @@ def generate_internal_node_matrix(hand_elements_along, node_identifier,
         index_x += n_elements_along
 
     return virtual_node_matrix, node_network, node_identifier
-
 
 def generate_external_node_matrix(hand_elements_along,
                                   node_identifier, virtual_node_matrix: Virtual_node_matrix,
@@ -1259,7 +1267,6 @@ def generate_external_node_matrix(hand_elements_along,
         virtual_node_matrix.set_virtual_node_to_index(node, [6, index_y - 4, k + a3])
 
     return virtual_node_matrix, node_network, node_identifier
-
 
 def create_cube_element(fieldmodule: Fieldmodule, element_identifier: int,
                         node_matrix: list, node_indices: list,) -> list:
