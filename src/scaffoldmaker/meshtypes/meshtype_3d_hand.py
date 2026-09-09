@@ -784,7 +784,10 @@ def generate_external_node_matrix(hand_elements_along,
     parent_node_id = sum(hand_elements_along) + 1
     finger_names = options['finger names']
     bone_names = options['bone names']
+    # TODO add n_rows and n_cols constants
+
     # TODO calculate formulas for these numbers, based on the width of the internal boxes.
+    # TODO reformulate how these numbers are calculated.
     a_palm = [4.65 + i * (4.65 - 4.65) / (palm_elements_along - 1) \
                 for i in range(palm_elements_along)]
     b_palm = [5.5 + i * (2.5 - 5.5) / (palm_elements_along - 1) \
@@ -801,6 +804,7 @@ def generate_external_node_matrix(hand_elements_along,
         major_ax_mag = magnitude(major_axis)
         # minor_ax_mag = magnitude(minor_axis)
         internal_box_length = 2 * magnitude(d2)
+        # TODO create sampling ratios based on sampling (?) of the internal boxes
         sampling_along_x = [internal_box_length / major_ax_mag, 0] # between 0 and b
         sampling_along_y = [0.6] # between 0 and a
         angles_along_x = [math.acos(value) for value in sampling_along_x]
@@ -824,6 +828,8 @@ def generate_external_node_matrix(hand_elements_along,
     index_y = 1
     d3 = None
     d1_offset = 0.0
+    # TODO formulate k_vals in terms of the number of internal rows
+    # TODO K_vals for the elemnents on the sides will probably need 3 elements instead of 2.
     k_val = [1, 2]
     # Virtual node creation goes up each finger fastest
     for finger_index in range(4):
@@ -840,6 +846,7 @@ def generate_external_node_matrix(hand_elements_along,
                 ellipse = ellipses[i]
                 for j in j_val:
                     for k in k_val:
+                        # TODO reformulate index_e, it is very unintuitive as it is
                         index_e = slice(0, 5, 1) if k == 2 else slice(10, 4, -1)
                         ellipse_x = ellipse[0][index_e]
                         ellipse_d1 = ellipse[1][index_e]
@@ -848,6 +855,7 @@ def generate_external_node_matrix(hand_elements_along,
                         a2 = -1 if j == index_y else 1
                         a3 = -1 if k == 1 else 1
                         x = ellipse_x[a1]
+                        # TODO figure out the offsetting? (maybe out of scope)
                         # if bone > 0:
                         # d1 = add(d1, set_magnitude(d1, d1_offset/(c+mc+pp)))
                         d1 = ellipse_d1[a1]
@@ -927,6 +935,7 @@ def generate_external_node_matrix(hand_elements_along,
                 center = add(center, set_magnitude(d1, d1_offset/(n_elements_along)))
             major_axis = mult(d2, -a_finger)
             minor_axis = mult(d3, b_finger)
+            # TODO formulate sampling_angles based on the number of internal elements
             sampling_angles = [1 * math.pi / 4]
             ellipse_x, ellipse_d2 = sample_ellipse_along_angles(
                 center, major_axis, minor_axis, sampling_angles
@@ -934,7 +943,6 @@ def generate_external_node_matrix(hand_elements_along,
             ellipse_d1 = [d1 for i in range(len(ellipse_x))]
             ellipse_x = [ellipse_x[i] for i in [3, 0, 2, 1]]
             ellipse_d2 = [ellipse_d2[i] for i in [3, 0, 2, 1]]
-            ""
             for i in i_val:
                 a1 = 0
                 for j in j_val:
@@ -959,6 +967,8 @@ def generate_external_node_matrix(hand_elements_along,
                         node_network.set_node_parameters(
                             [x, d1, d2, d3], node_identifier, internal_node=False
                         )
+                        # TODO welp. Need to figure this out again.
+                        # TODO Potentially write as a side function instead?
                         if bone == Bone.DIST_PHALANX and i == i_val[-1]:
                             c0 = 1
                             c1 = c0 * a2 * a3
@@ -994,6 +1004,7 @@ def generate_external_node_matrix(hand_elements_along,
             index_x += n_elements_along
         index_y += 5
     # Finger-palm connections
+    # TODO rewrite this whole section, it will not survive the change from 4- to 6-around
     j_val = [3, 8, 13]
     i = c + mc + 2  # First row of PP elements
     bone_name = bone_names[2]
@@ -1042,6 +1053,8 @@ def generate_external_node_matrix(hand_elements_along,
             virtual_node_matrix.set_virtual_node_to_index(node, [i, j + 3, k + a3])
         finger_index += 1
     # Thumb
+    # TODO I have a hunch that I can fold this into the main loop
+    # TODO by using the correct indices.
     index_y += 5
     index_x = c
     finger_index = 4
@@ -1130,10 +1143,14 @@ def generate_external_node_matrix(hand_elements_along,
             parent_node_id += 1
         index_x += n_elements_along
     # The Thumb-palm connection elements
+    # TODO perish.
+    # TODO the day has come
+    # TODO when I have to figure this out.
     # It is against every fiber of my being that I am forced to set these manually
     thumb_angle_degrees = options["Thumb angle"]
     thumb_c = thumb_angle_degrees / 90
     # Back of the thumb
+    # TODO reformulate k_val, and make it consistent with the values used at the palm
     k_val = [0, 3]
     for k in k_val:
         a1 = -1 if k == 3 else 1
