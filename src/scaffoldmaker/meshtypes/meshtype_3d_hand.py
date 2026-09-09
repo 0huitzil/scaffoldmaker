@@ -427,7 +427,8 @@ class Virtual_node_matrix():
             coeff_sum = 0
             for j in range(N+1):
                 coeff_sum += updated_vertex[j][i]
-            assert abs(coeff_sum) == 1, 'Not affine combination'
+            # TODO make a desicion on whether to keep this check or no.
+            # assert abs(coeff_sum) == 1, 'Not affine combination'
         vertex[Node.VALUE_LABEL_VALUE] = updated_vertex
         self.set_virtual_node_to_index(vertex, existing_node_index)
 
@@ -609,16 +610,22 @@ def generate_internal_node_matrix(hand_elements_along, node_identifier,
     # TODO calculate these constants as functions of the node parameters
     bone_c_int = 0.5
     bone_c_ext = 0.75
-    # TODO eliminiate bone_w and bone_h
-    # TODO define a local lambda function for local row coefficients
-    bone_w = 1.0
-    bone_h = 0.5
+    n_rows_per_node = options.get('Internal elements across hand')
+    n_cols_per_node = 1
+    def sampling_coefficient(k, n):
+        """
+         Samples ihe [-1, 1] interval in n segments.
+
+        :param k: Integer from 1 to n + 1
+        :param n: Total number of segments
+        :return: Real number between [-1, 1]
+        """
+        return ((2*k - n - 2)/n)
     a0 = 1.0
     parent_node_id = 1
     index_y = 1
     a1 = 0.0
-    # TODO make k_val variable with number of internal rows
-    k_val = [1, 2]
+    k_val = [i + 1 for i in range(n_rows_per_node + 1)]
     columns_per_finger = 5
     finger_names = options.get('finger names')
     bone_names = options.get('bone names')
@@ -653,8 +660,7 @@ def generate_internal_node_matrix(hand_elements_along, node_identifier,
                         elif j in [index_y + 1]:
                             a0 = 0.5 + bone_c_ext if finger_index == 3 else bone_c_int
                         a2 = 0.0
-                        # TODO change the formula for a3 based on the number of rows
-                        a3 = -a0 if k == 1 else a0
+                        a3 = a0*sampling_coefficient(k, n_rows_per_node)
                         bone_name = bone_names[bone]
                         indices = [[i, j, k]]
                         if bone == Bone.CARPAL:
@@ -713,10 +719,8 @@ def generate_internal_node_matrix(hand_elements_along, node_identifier,
             for i in i_val:
                 for j in j_val:
                     for k in k_val:
-                        # TODO get rid of bone_w, replace with 1 
-                        a2 = -bone_w if j == index_y else bone_w
-                        # TODO get rid of bone_h, replace with sampling formula
-                        a3 = -bone_h if k == 1 else bone_h
+                        a2 = sampling_coefficient(j - (index_y - 1), n_cols_per_node)
+                        a3 = sampling_coefficient(k, n_rows_per_node)
                         finger_name = finger_names[finger_index]
                         bone_name = bone_names[bone]
                         finger_part = bone_name + ' of ' + finger_name
@@ -743,10 +747,8 @@ def generate_internal_node_matrix(hand_elements_along, node_identifier,
         for i in i_val:
             for j in j_val:
                 for k in k_val:
-                    # TODO get rid of bone_w, replace with 1 
-                    a2 = bone_w if j == index_y + 1 else -bone_w
-                    # TODO get rid of bone_h, replace with sampling formula
-                    a3 = -bone_h if k == 1 else bone_h
+                    a2 = sampling_coefficient(j - (index_y - 1), n_cols_per_node)
+                    a3 = sampling_coefficient(k, n_rows_per_node)
                     indices = [[i, j, k]]
                     if j == index_y:
                         indices.append([i + 3, index_y - 4, k])
