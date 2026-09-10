@@ -629,7 +629,7 @@ def generate_internal_node_matrix(hand_elements_along, node_identifier,
     columns_per_finger = 5
     finger_names = options.get('finger names')
     bone_names = options.get('bone names')
-    # Finger
+    # TODO rewrite this section into a single for loop that does all the palm elements
     # Palm and first four fingers
     for finger_index in range(4):
         index_x = 0
@@ -703,13 +703,14 @@ def generate_internal_node_matrix(hand_elements_along, node_identifier,
                             indices
                 parent_node_id += 1
             index_x += n_elements_along
+        # TODO calculate this number at the beginning and store as a constant
         index_x += 2
         a0 = 1
         if hand_elements_along[2] > 1:
             phalanx_bones = [Bone.PROX_PHALANX, Bone.MID_PHALANX, Bone.DIST_PHALANX]
         else:
             phalanx_bones = [Bone.MID_PHALANX, Bone.DIST_PHALANX]
-        # Proximal, middle and distal phalanx
+        # TODO rewrite this section (w/ thumb) into a for loop that does all the finger element
         for bone in phalanx_bones:
             n_elements_along = hand_elements_along[bone]
             n_elements_along = n_elements_along - 1 if bone == Bone.PROX_PHALANX \
@@ -760,11 +761,8 @@ def generate_internal_node_matrix(hand_elements_along, node_identifier,
                         else:
                             if i == index_x:
                                 indices.append([i, index_y - 4, k])
-                    elif bone == Bone.PROX_PHALANX:
-                        bone_name = bone_names[bone]
-                        finger_part = bone_name + ' of ' + finger_name
-                        annotation = [bone_name, finger_name, finger_part]
-                    elif bone == Bone.DIST_PHALANX:
+                    # TODO unify behaviour for all phalanx bones
+                    elif bone in [Bone.PROX_PHALANX, Bone.DIST_PHALANX]:
                         bone_name = bone_names[bone]
                         finger_part = bone_name + ' of ' + finger_name
                         annotation = [bone_name, finger_name, finger_part]
