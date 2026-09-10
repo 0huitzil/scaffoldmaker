@@ -630,7 +630,7 @@ def generate_internal_node_matrix(hand_elements_along, node_identifier,
     columns_per_finger = 5
     elements_along_palm = sum(hand_elements_along[0:2]) + 1 #one row of prox.phalanx
     elements_along_finger = sum(hand_elements_along[2:]) - 1
-    finger_index_x = elements_along_palm +  2 # Frist P.phalanx element is two-sided
+    finger_index_x = elements_along_palm +  2 # First P.phalanx element is two-sided
     palm_bones = [Bone.CARPAL, Bone.METACARPAL, Bone.PROX_PHALANX]
     finger_names = options.get('finger names')
     bone_names = options.get('bone names')
@@ -715,7 +715,7 @@ def generate_internal_node_matrix(hand_elements_along, node_identifier,
     parent_node_id = elements_along_palm + 1
     # Finger elements
     for finger_index in range(5):
-        if finger_index == THUMB_INDEX: 
+        if finger_index == THUMB_INDEX:
             finger_bones = [Bone.METACARPAL, Bone.PROX_PHALANX, Bone.DIST_PHALANX]
             index_x = hand_elements_along[0]
         else:
@@ -769,10 +769,14 @@ def generate_external_node_matrix(hand_elements_along,
     c, mc, pp, mp, dp = hand_elements_along
     palm_elements_along = c + mc + 1
     parent_node_id = sum(hand_elements_along) + 1
+    columns_per_finger = 5
+    elements_along_palm = sum(hand_elements_along[0:2]) + 1 #one row of prox.phalanx
+    elements_along_finger = sum(hand_elements_along[2:]) - 1
+    finger_index_x = elements_along_palm +  2 # First P.phalanx element is two-sided
     finger_names = options['finger names']
     bone_names = options['bone names']
+    THUMB_INDEX = 4
     # TODO add n_rows and n_cols constants
-
     # TODO calculate formulas for these numbers, based on the width of the internal boxes.
     # TODO reformulate how these numbers are calculated.
     a_palm = [4.65 + i * (4.65 - 4.65) / (palm_elements_along - 1) \
@@ -818,7 +822,7 @@ def generate_external_node_matrix(hand_elements_along,
     # TODO formulate k_vals in terms of the number of internal rows
     # TODO K_vals for the elemnents on the sides will probably need 3 elements instead of 2.
     k_val = [1, 2]
-    # Virtual node creation goes up each finger fastest
+    # Palm elements
     for finger_index in range(4):
         index_x = 0
         # Carpal, metacarpal and proximal phalanx
@@ -902,16 +906,25 @@ def generate_external_node_matrix(hand_elements_along,
                         ellipse_x[a1] = x
                 parent_node_id += 1
             index_x += n_elements_along
-        index_x += 2
-        if hand_elements_along[2] > 1:
-            phalanx_bones = [Bone.PROX_PHALANX, Bone.MID_PHALANX, Bone.DIST_PHALANX]
+        index_y += columns_per_finger
+        parent_node_id += elements_along_finger
+    index_y = 1
+    parent_node_id = elements_along_palm + 1
+    # Finger elements
+    for finger_index in range(5):
+        if finger_index == THUMB_INDEX:
+            finger_bones = [Bone.METACARPAL, Bone.PROX_PHALANX, Bone.DIST_PHALANX]
+            index_x = hand_elements_along[0]
         else:
-            phalanx_bones = [Bone.MID_PHALANX, Bone.DIST_PHALANX]
-        # Proximal, middle and distal phalanx
-        for bone in phalanx_bones:
+            if hand_elements_along[2] > 1:
+                finger_bones = [Bone.PROX_PHALANX, Bone.MID_PHALANX, Bone.DIST_PHALANX]
+            else:
+                finger_bones = [Bone.MID_PHALANX, Bone.DIST_PHALANX]
+            index_x = finger_index_x
+        for bone in finger_bones:
             n_elements_along = hand_elements_along[bone]
-            n_elements_along = n_elements_along - 1 if bone == Bone.PROX_PHALANX \
-                else n_elements_along
+            if bone in [Bone.METACARPAL, Bone.PROX_PHALANX]:
+                n_elements_along = max(1, n_elements_along - 1)
             j_val = [index_y, index_y + 1]
             i_val = [index_x + i for i in range(n_elements_along)]
             # Estimate ellipse
@@ -943,7 +956,12 @@ def generate_external_node_matrix(hand_elements_along,
                         bone_name = bone_names[bone]
                         finger_part = bone_name + ' of ' + finger_name
                         annotation = [bone_name, finger_name, finger_part]
-                        indices = [[i, j + a2, k], [i, j, k + a3]]
+                        indices = [[i, j, k + a3]]
+                        if bone == Bone.METACARPAL:
+                            if j == index_y + 1:
+                                indices.append([i, j + a2, k])
+                        else:
+                            indices.append([i, j + a2, k])
                         node = virtual_node_matrix.create_external_vnode(
                             x  = [1, 0, 0, 0],
                             d1 = [0, 1, 0, 0],
@@ -989,8 +1007,12 @@ def generate_external_node_matrix(hand_elements_along,
                         a1 += 1
                 parent_node_id += 1
             index_x += n_elements_along
-        index_y += 5
-    # Finger-palm connections
+        if finger_index < THUMB_INDEX - 1:
+            parent_node_id += elements_along_palm
+            index_y += columns_per_finger
+        else:
+            index_y += 2*columns_per_finger
+    #Palm-connection
     # TODO rewrite this whole section, it will not survive the change from 4- to 6-around
     j_val = [3, 8, 13]
     i = c + mc + 2  # First row of PP elements
@@ -1039,101 +1061,14 @@ def generate_external_node_matrix(hand_elements_along,
             )
             virtual_node_matrix.set_virtual_node_to_index(node, [i, j + 3, k + a3])
         finger_index += 1
-    # Thumb
-    # TODO I have a hunch that I can fold this into the main loop
-    # TODO by using the correct indices.
-    index_y += 5
-    index_x = c
-    finger_index = 4
-    thumb_bones = [Bone.METACARPAL, Bone.PROX_PHALANX, Bone.DIST_PHALANX]
-    # Metacarpal, proximal and distal phalanx
-    for bone in thumb_bones:
-        n_elements_along = hand_elements_along[bone]
-        if bone in [Bone.METACARPAL, Bone.PROX_PHALANX]:
-            n_elements_along = max(1, n_elements_along - 1)
-        j_val = [index_y, index_y + 1]
-        i_val = [index_x + i for i in range(n_elements_along)]
-        # Estimate ellipse
-        center, d1, d2, d3 = node_network.get_node_parameters(parent_node_id)
-        center = add(center, set_magnitude(d1, d1_offset/n_elements_along))
-        major_axis = mult(d2, -a_finger)
-        minor_axis = mult(d3, b_finger)
-        sampling_angles = [1 * math.pi / 4]
-        ellipse_x, ellipse_d2 = sample_ellipse_along_angles(
-            center, major_axis, minor_axis, sampling_angles
-            )
-        ellipse_d1 = [d1 for i in range(len(ellipse_x))]
-        ellipse_x = [ellipse_x[i] for i in [3, 0, 2, 1]]
-        ellipse_d2 = [ellipse_d2[i] for i in [3, 0, 2, 1]]
-        for i in i_val:
-            a1 = 0
-            for j in j_val:
-                for k in k_val:
-                    a2 = -1 if j == index_y else 1
-                    a3 = -1 if k == 1 else 1
-                    x = ellipse_x[a1]
-                    d1 = ellipse_d1[a1]
-                    d2 = ellipse_d2[a1]
-                    finger_name = finger_names[finger_index]
-                    bone_name = bone_names[bone]
-                    finger_part = bone_name + ' of ' + finger_name
-                    annotation = [bone_name, finger_name, finger_part]
-                    indices = [[i, j, k + a3]]
-                    if bone == Bone.METACARPAL:
-                        if j == index_y + 1:
-                            indices.append([i, j + a2, k])
-                    elif bone == Bone.PROX_PHALANX:
-                        indices.append([i, j + a2, k])
-                    elif bone == Bone.DIST_PHALANX:
-                        indices.append([i, j + a2, k])
-                    node = virtual_node_matrix.create_external_vnode(
-                        x  = [1, 0, 0, 0],
-                        d1 = [0, 1, 0, 0],
-                        d2 = [0, 0, 1, 0],
-                        node_identifier = node_identifier, annotation = annotation
-                    )
-                    virtual_node_matrix.set_virtual_node_to_indices(node, indices)
-                    node_network.set_node_parameters(
-                        [x, d1, d2, d3], node_identifier, internal_node=False
-                    )
-                    if bone == Bone.DIST_PHALANX and i == i_val[-1]:
-                        c0 = 1
-                        c1 = c0 * a2 * a3
-                        c2 = c0 * a2
-                        c3 = c0 * a3
-                        annotation = [finger_name]
-                        node = virtual_node_matrix.create_external_vnode(
-                            x  = [1, 0, 0, 0],
-                            d1 = [0, 1, 0, 0],
-                            d2 = [0, -c1, 1, 0],
-                            node_identifier = node_identifier, annotation = annotation
-                        )
-                        virtual_node_matrix.set_virtual_node_to_index(node, [i, j, k + a3])
-                        node = virtual_node_matrix.create_external_vnode(
-                            x  = [1, 0, 0, 0],
-                            d1 = [0, 1, 0, 0],
-                            d2 = [0, c1, 1, 0],
-                            node_identifier = node_identifier, annotation = annotation
-                        )
-                        virtual_node_matrix.set_virtual_node_to_index(node, [i, j + a2, k])
-                        node = virtual_node_matrix.create_external_vnode(
-                            x  = [1, 0, 0, 0],
-                            d1 = [0, -c2, a3, 0],
-                            d2 = [0, c3, a2, 0],
-                            node_identifier = node_identifier, annotation = annotation
-                        )
-                        virtual_node_matrix.set_virtual_node_to_index(node, [i + 1, j, k])
-                    node_identifier += 1
-                    x = add(x, d1)
-                    ellipse_x[a1] = x
-                    a1 += 1
-            parent_node_id += 1
-        index_x += n_elements_along
+    """
+    """
     # The Thumb-palm connection elements
     # TODO perish.
     # TODO the day has come
     # TODO when I have to figure this out.
     # It is against every fiber of my being that I am forced to set these manually
+    index_y = 26
     thumb_angle_degrees = options["Thumb angle"]
     thumb_c = thumb_angle_degrees / 90
     # Back of the thumb
