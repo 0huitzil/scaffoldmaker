@@ -607,11 +607,6 @@ def generate_internal_node_matrix(hand_elements_along, node_identifier,
     :return: Description
     :rtype: Any
     """
-    # TODO calculate these constants as functions of the node parameters
-    bone_c_int = 0.5
-    bone_c_ext = 0.75
-    n_rows_per_node = options.get('Internal elements across hand')
-    n_cols_per_node = 1
     def sampling_coefficient(k, n):
         """
          Samples ihe [-1, 1] interval in n segments.
@@ -621,20 +616,30 @@ def generate_internal_node_matrix(hand_elements_along, node_identifier,
         :return: Real number between [-1, 1]
         """
         return ((2*k - n - 2)/n)
+    # TODO calculate these constants as functions of the node parameters
+    bone_c_int = 0.5
+    bone_c_ext = 0.75
+    n_rows_per_node = options.get('Internal elements across hand')
+    n_cols_per_node = 1
     a0 = 1.0
     parent_node_id = 1
     index_y = 1
     a1 = 0.0
+    a2 = 0.0
     k_val = [i + 1 for i in range(n_rows_per_node + 1)]
     columns_per_finger = 5
+    elements_along_palm = sum(hand_elements_along[0:2]) + 1 #one row of prox.phalanx
+    elements_along_finger = sum(hand_elements_along[2:]) - 1
+    finger_index_x = elements_along_palm +  2 # Frist P.phalanx element is two-sided
+    palm_bones = [Bone.CARPAL, Bone.METACARPAL, Bone.PROX_PHALANX]
     finger_names = options.get('finger names')
     bone_names = options.get('bone names')
-    # TODO rewrite this section into a single for loop that does all the palm elements
-    # Palm and first four fingers
+    THUMB_INDEX = 4
+    # Palm elements
     for finger_index in range(4):
         index_x = 0
         # Carpal, metacarpal and first row of proximal phalanx
-        for bone in range(3):
+        for bone in palm_bones:
             n_elements_along = hand_elements_along[bone]
             if finger_index == 0:
                 j_val = [index_y, index_y + 1, index_y + 5]
@@ -659,7 +664,6 @@ def generate_internal_node_matrix(hand_elements_along, node_identifier,
                             a0 = 0.5 + bone_c_ext if finger_index == 0 else bone_c_int
                         elif j in [index_y + 1]:
                             a0 = 0.5 + bone_c_ext if finger_index == 3 else bone_c_int
-                        a2 = 0.0
                         a3 = a0*sampling_coefficient(k, n_rows_per_node)
                         bone_name = bone_names[bone]
                         indices = [[i, j, k]]
@@ -703,18 +707,27 @@ def generate_internal_node_matrix(hand_elements_along, node_identifier,
                             indices
                 parent_node_id += 1
             index_x += n_elements_along
-        # TODO calculate this number at the beginning and store as a constant
-        index_x += 2
-        a0 = 1
-        if hand_elements_along[2] > 1:
-            phalanx_bones = [Bone.PROX_PHALANX, Bone.MID_PHALANX, Bone.DIST_PHALANX]
+        index_y += columns_per_finger
+        parent_node_id += elements_along_finger
+
+    a0 = 1.0
+    index_y = 1
+    parent_node_id = elements_along_palm + 1
+    # Finger elements
+    for finger_index in range(5):
+        if finger_index == THUMB_INDEX: 
+            finger_bones = [Bone.METACARPAL, Bone.PROX_PHALANX, Bone.DIST_PHALANX]
+            index_x = hand_elements_along[0]
         else:
-            phalanx_bones = [Bone.MID_PHALANX, Bone.DIST_PHALANX]
-        # TODO rewrite this section (w/ thumb) into a for loop that does all the finger element
-        for bone in phalanx_bones:
+            if hand_elements_along[2] > 1:
+                finger_bones = [Bone.PROX_PHALANX, Bone.MID_PHALANX, Bone.DIST_PHALANX]
+            else:
+                finger_bones = [Bone.MID_PHALANX, Bone.DIST_PHALANX]
+            index_x = finger_index_x
+        for bone in finger_bones:
             n_elements_along = hand_elements_along[bone]
-            n_elements_along = n_elements_along - 1 if bone == Bone.PROX_PHALANX \
-                  else n_elements_along
+            if bone in [Bone.METACARPAL, Bone.PROX_PHALANX]:
+                n_elements_along = max(1, n_elements_along - 1)
             j_val = [index_y, index_y + 1]
             i_val = [index_x + i for i in range(n_elements_along)]
             for i in i_val:
@@ -722,56 +735,32 @@ def generate_internal_node_matrix(hand_elements_along, node_identifier,
                     for k in k_val:
                         a2 = sampling_coefficient(j - (index_y - 1), n_cols_per_node)
                         a3 = sampling_coefficient(k, n_rows_per_node)
+                        indices = [[i, j, k]]
                         finger_name = finger_names[finger_index]
                         bone_name = bone_names[bone]
                         finger_part = bone_name + ' of ' + finger_name
                         annotation = [bone_name, finger_name, finger_part]
-                        indices = [[i, j, k]]
+                        if finger_index == THUMB_INDEX:
+                            if j == index_y:
+                                indices.append([i + 3, index_y - 4, k])
+                            if bone == Bone.METACARPAL:
+                                annotation = [finger_name]
+                                if j == index_y:
+                                    if i == index_x:
+                                        indices.append([i + 1, index_y - 4, k])
+                                else:
+                                    if i == index_x:
+                                        indices.append([i, index_y - 4, k])
                         node = virtual_node_matrix.create_internal_vnode(
                                 parent_node_id, [a0, a1, a2, a3], annotation)
                         virtual_node_matrix.set_virtual_node_to_indices(node, indices, False)
                 parent_node_id += 1
             index_x += n_elements_along
-        index_y += columns_per_finger
-    # Thumb
-    index_y += columns_per_finger
-    index_x = hand_elements_along[0]
-    finger_index = 4
-    finger_name = finger_names[-1]
-    thumb_bones = [Bone.METACARPAL, Bone.PROX_PHALANX, Bone.DIST_PHALANX]
-    for bone in thumb_bones:
-        n_elements_along = hand_elements_along[bone]
-        if bone in [Bone.METACARPAL, Bone.PROX_PHALANX]:
-            n_elements_along = max(1, n_elements_along - 1)
-        j_val = [index_y, index_y + 1]
-        i_val = [index_x + i for i in range(n_elements_along)]
-        for i in i_val:
-            for j in j_val:
-                for k in k_val:
-                    a2 = sampling_coefficient(j - (index_y - 1), n_cols_per_node)
-                    a3 = sampling_coefficient(k, n_rows_per_node)
-                    indices = [[i, j, k]]
-                    if j == index_y:
-                        indices.append([i + 3, index_y - 4, k])
-                    if bone == Bone.METACARPAL:
-                        annotation = [finger_name]
-                        if j == index_y:
-                            if i == index_x:
-                                indices.append([i + 1, index_y - 4, k])
-                        else:
-                            if i == index_x:
-                                indices.append([i, index_y - 4, k])
-                    # TODO unify behaviour for all phalanx bones
-                    elif bone in [Bone.PROX_PHALANX, Bone.DIST_PHALANX]:
-                        bone_name = bone_names[bone]
-                        finger_part = bone_name + ' of ' + finger_name
-                        annotation = [bone_name, finger_name, finger_part]
-                    node = virtual_node_matrix.create_internal_vnode(
-                                parent_node_id, [a0, a1, a2, a3], annotation)
-                    virtual_node_matrix.set_virtual_node_to_indices(node, indices, False)
-            parent_node_id += 1
-        index_x += n_elements_along
-
+        if finger_index < THUMB_INDEX - 1:
+            parent_node_id += elements_along_palm
+            index_y += columns_per_finger
+        else:
+            index_y += 2*columns_per_finger
     return virtual_node_matrix, node_network, node_identifier
 
 def generate_external_node_matrix(hand_elements_along,
