@@ -183,7 +183,8 @@ class MeshType_3d_hand1(Scaffold_base):
                 annotation_groups.append(finger_bone_group)
 
         element_identifier = 1
-        # elements_along_per_finger = sum(hand_elements_along)
+        # TODO remove these linesi
+        # elements_along_per_fingk,er = sum(hand_elements_along)
         # for i in range(4):
         #     node_network.remove_node(1 + i * elements_along_per_finger)
         node_network.set_zinc_nodes()
@@ -259,6 +260,7 @@ class MeshType_3d_hand1(Scaffold_base):
                 )
 
 class Bone():
+
     def __init__(self):
         pass
     CARPAL = 0
@@ -266,6 +268,162 @@ class Bone():
     PROX_PHALANX = 2
     MID_PHALANX = 3
     DIST_PHALANX = 4
+
+class Ellipse():
+
+    def __init__(self, parent_node_id, major_axis_mag, minor_axis_mag, node_network):
+        x, d1, d2, d3 = node_network.get_node_parameters(parent_node_id)
+        center = add(x, d2)
+        major_axis = mult(d2, -major_axis_mag)
+        minor_axis = mult(d3, minor_axis_mag)
+        major_ax_mag = magnitude(major_axis)
+        minor_ax_mag = magnitude(minor_axis)
+        internal_box_length = 2.0 * magnitude(d2) / major_ax_mag
+        internal_box_width = 1.25 * magnitude(d3) / minor_ax_mag
+
+        self.center = center
+        self.major_axis = major_axis
+        self.minor_axis = minor_axis
+        self.internal_box_length = internal_box_length
+        self.internal_box_width = internal_box_width
+        self.first_quadrant_angles = None
+        self.ellipse_x = None
+        self.ellipse_d1 = None
+        self.ellipse_d2 = None
+
+    def set_n_internal_rows(self, n_internal_rows):
+        self.n_internal_rows = n_internal_rows
+        n_half_rows = math.ceil(n_internal_rows/2)
+        self.n_half_rows = n_half_rows
+
+    def set_n_internal_cols(self, n_internal_cols):
+        self.n_internal_cols = n_internal_cols
+        n_half_cols = math.ceil(n_internal_cols/2)
+        self.n_half_cols = n_half_cols
+
+    def sampling_coefficient(k, n):
+        """
+        Samples the [-1, 1] interval in n segments.
+
+        :param k: Integer from 1 to n + 1
+        :param n: Total number of segments
+        :return: Real number between [-1, 1]
+        """
+        return ((2*k - n - 2)/n)
+
+    def create_sampling_angles(self):
+        internal_box_length = self.internal_box_length
+        internal_box_width = self.internal_box_width
+        n_internal_rows = self.n_internal_rows
+        n_internal_cols = self.n_internal_cols
+        n_half_rows = self.n_half_rows
+        n_half_cols = self.n_half_cols
+        sampling_along_major_ax = [
+            internal_box_length * sampling_coefficient(k, n_internal_cols) \
+                for k in range(n_half_cols + 1, n_internal_cols + 2)
+        ]
+        sampling_along_minor_ax = [
+            internal_box_width * sampling_coefficient(k, n_internal_rows) \
+                    for k in range(n_half_rows + 1, n_internal_rows + 2)
+        ]
+        angles_along_major_ax = [math.acos(value) for value in sampling_along_major_ax]
+        angles_along_minor_ax = [math.asin(value) for value in sampling_along_minor_ax]
+        first_quadrant_angles = sorted(angles_along_major_ax + angles_along_minor_ax)
+        self.first_quadrant_angles = first_quadrant_angles
+
+    def sample_ellipse_along_angles(self):
+        """
+        From a list of angles on the first quadrant of an ellipse, calculate their reflection
+        over the other three quadrants. Then alculate both the position and tangent angle at
+        the updated list of angles.
+
+        :param center: Description
+        :param major_axis: Description
+        :param minor_axis: Description
+        :param sampling_angles: Description
+        """
+        center = self.center
+        major_axis = self.major_axis
+        minor_axis = self.minor_axis
+        first_quadrant_angles = self.first_quadrant_angles
+        for angle in reversed(first_quadrant_angles):
+            new_angle = math.pi - angle
+            if new_angle not in first_quadrant_angles:
+                first_quadrant_angles.append(new_angle)
+        for angle in first_quadrant_angles[:]:
+            new_angle = math.pi + angle
+            if new_angle not in first_quadrant_angles:
+                first_quadrant_angles.append(new_angle)
+        angle = 2 * math.pi + first_quadrant_angles[0]
+        if angle not in first_quadrant_angles:
+            first_quadrant_angles.append(2 * math.pi + first_quadrant_angles[0])
+
+        ellipse_x = []
+        ellipse_d2 = []
+        for i in range(len(first_quadrant_angles) - 1):
+            ellipse = sampleEllipsePoints(
+                center, major_axis, minor_axis,
+                first_quadrant_angles[i], first_quadrant_angles[i + 1], 1
+            )
+            ellipse_x.append(ellipse[0][0])
+            ellipse_d2.append(ellipse[1][0])
+        self.ellipse_x = ellipse_x
+        self.ellipse_d2 = ellipse_d2
+
+    def sort_ellipse_samples(self):
+        n_internal_rows = self.n_internal_rows
+        n_internal_cols = self.n_internal_cols
+        n_half_rows = self.n_half_rows
+        n_half_cols = self.n_half_cols
+        ellipse_x = self.ellipse_x
+        ellipse_d2 = self.ellipse_d2
+
+        sorted_ellipse_x, sorted_ellipse_d1 ,sorted_ellipse_d2  = \
+            [[[None for f in range(n_internal_cols + 3)]
+                for k in range(n_internal_rows + 3)] for i in range(3)]
+        i = -n_half_rows
+        for k in range(1, n_internal_rows + 2):
+            sorted_ellipse_x[k][0] = ellipse_x[i]
+            sorted_ellipse_d2[k][0] = ellipse_d2[i]
+            i+= 1
+        for f in range(1, n_internal_cols + 2):
+            sorted_ellipse_x[n_internal_rows + 1][f] = ellipse_x[i]
+            sorted_ellipse_d2[n_internal_rows + 1][f] = ellipse_d2[i]
+            i+= 1
+        for k in reversed(range(1, n_internal_rows + 2)):
+            sorted_ellipse_x[k][n_internal_cols + 2] = ellipse_x[i]
+            sorted_ellipse_d2[k][n_internal_cols + 2] = ellipse_d2[i]
+            i+= 1
+        for f in reversed(range(1, n_internal_cols + 2)):
+            sorted_ellipse_x[1][f] = ellipse_x[i]
+            sorted_ellipse_d2[1][f] = ellipse_d2[i]
+            i+= 1
+        """
+        Debug code
+        """
+        # i = -2
+        # sorted_ellipse_x = [[None for f in range(5)]for k in range(n_internal_rows + 3)]
+        # for k in range(1, n_internal_rows + 2):
+        #     sorted_ellipse_x[k][0] = i
+        #     i+= 1
+        # for f in range(1, 4):
+        #     sorted_ellipse_x[n_internal_rows + 1][f] = i
+        #     i+= 1
+        # for k in reversed(range(1, n_internal_rows + 2)):
+        #     sorted_ellipse_x[k][4] = i
+        #     i+= 1
+        # for f in reversed(range(1, 4)):
+        #     sorted_ellipse_x[1][f] = i
+        #     i+= 1
+        """
+        End debug code
+        """
+        self.ellipse_x = sorted_ellipse_x
+        self.ellipse_d1 = sorted_ellipse_d1
+        self.ellipse_d2 = sorted_ellipse_d2
+
+    def get_ellipse_samples(self):
+        return [self.ellipse_x, self.ellipse_d1, self.ellipse_d2]
 
 class Node_network():
 
@@ -364,6 +522,7 @@ class Virtual_node_matrix():
 
     def __init__(self, matrix_dimensions: list):
         ix, iy, iz = matrix_dimensions
+        self.n_internal_rows = iz - 2
         self.node_matrix = [[[None for k in range(iz)] for j in range(iy)] for i in range(ix)]
 
     def create_internal_vnode (self, node_identifier: int, x: list, annotation: dict):
@@ -481,33 +640,35 @@ def generate_internal_nodes(node_network: Node_network, hand_elements_along: lis
     :return: Description
     :rtype: int
     """
-
+    c_d3 = 0.35
+    m_d3 = 0.30
+    p_d3 = 0.30
     hand_dimensions_by_finger = [ # d1, d2, d3
         [ # Finger 1 (little finger)
-            [1.0, 0.4, 0.2],  # carpal
-            [2.0, 0.4, 0.2],  # metacarpal
-            [1.1, 0.4, 0.2],  # proximal phalanx
+            [1.0, 0.4, c_d3],  # carpal
+            [2.0, 0.4, m_d3],  # metacarpal
+            [1.1, 0.4, p_d3],  # proximal phalanx
             [0.7, 0.2, 0.2],  # middle phalanx
             [0.6, 0.2, 0.2],  # distal phalanx
         ],
         [ # Finger 2 (ring finger)
-            [1.0, 0.4, 0.2],  # carpal
-            [2.0, 0.4, 0.2],  # metacarpal
-            [1.5, 0.4, 0.2],  # proximal phalanx
+            [1.0, 0.4, c_d3],  # carpal
+            [2.0, 0.4, m_d3],  # metacarpal
+            [1.5, 0.4, p_d3],  # proximal phalanx
             [1.0, 0.2, 0.2],  # middle phalanx
             [0.7, 0.2, 0.2],  # distal phalanx
         ],
         [ # Finger 3 (middle finger)
-            [1.0, 0.4, 0.2],  # carpal
-            [2.0, 0.4, 0.2],  # metacarpal
-            [1.9, 0.4, 0.2],  # proximal phalanx
+            [1.0, 0.4, c_d3],  # carpal
+            [2.0, 0.4, m_d3],  # metacarpal
+            [1.9, 0.4, p_d3],  # proximal phalanx
             [1.0, 0.2, 0.2],  # middle phalanx
             [0.6, 0.2, 0.2],  # distal phalanx
         ],
         [ # Finger 4 (index finger)
-            [1.0, 0.4, 0.2],  # carpal
-            [2.0, 0.4, 0.2],  # metacarpal
-            [1.9, 0.4, 0.2],  # proximal phalanx
+            [1.0, 0.4, c_d3],  # carpal
+            [2.0, 0.4, m_d3],  # metacarpal
+            [1.9, 0.4, p_d3],  # proximal phalanx
             [0.8, 0.2, 0.2],  # middle phalanx
             [0.6, 0.2, 0.2],  # distal phalanx
         ],
@@ -607,26 +768,17 @@ def generate_internal_node_matrix(hand_elements_along, node_identifier,
     :return: Description
     :rtype: Any
     """
-    def sampling_coefficient(k, n):
-        """
-         Samples ihe [-1, 1] interval in n segments.
-
-        :param k: Integer from 1 to n + 1
-        :param n: Total number of segments
-        :return: Real number between [-1, 1]
-        """
-        return ((2*k - n - 2)/n)
     # TODO calculate these constants as functions of the node parameters
     bone_c_int = 0.5
     bone_c_ext = 0.75
-    n_rows_per_node = options.get('Internal elements across hand')
+    n_internal_rows = options.get('Internal elements across hand')
     n_cols_per_node = 1
     a0 = 1.0
     parent_node_id = 1
     index_y = 1
     a1 = 0.0
     a2 = 0.0
-    k_val = [i + 1 for i in range(n_rows_per_node + 1)]
+    k_val = [i + 1 for i in range(n_internal_rows + 1)]
     columns_per_finger = 5
     elements_along_palm = sum(hand_elements_along[0:2]) + 1 #one row of prox.phalanx
     elements_along_finger = sum(hand_elements_along[2:]) - 1
@@ -664,7 +816,7 @@ def generate_internal_node_matrix(hand_elements_along, node_identifier,
                             a0 = 0.5 + bone_c_ext if finger_index == 0 else bone_c_int
                         elif j in [index_y + 1]:
                             a0 = 0.5 + bone_c_ext if finger_index == 3 else bone_c_int
-                        a3 = a0*sampling_coefficient(k, n_rows_per_node)
+                        a3 = a0*sampling_coefficient(k, n_internal_rows)
                         bone_name = bone_names[bone]
                         indices = [[i, j, k]]
                         if bone == Bone.CARPAL:
@@ -684,8 +836,6 @@ def generate_internal_node_matrix(hand_elements_along, node_identifier,
                                 if i == index_x:
                                     indices.append([i + 1, j + 4, k])
                                     indices.append([i + 3, j + 4, k])
-                                # else:
-                                #     indices.append([i + 3, j + 4, k])
                             node = virtual_node_matrix.create_internal_vnode(
                                 parent_node_id, [a0, a1, a2, a3], annotation)
                             virtual_node_matrix.set_virtual_node_to_indices(
@@ -734,7 +884,7 @@ def generate_internal_node_matrix(hand_elements_along, node_identifier,
                 for j in j_val:
                     for k in k_val:
                         a2 = sampling_coefficient(j - (index_y - 1), n_cols_per_node)
-                        a3 = sampling_coefficient(k, n_rows_per_node)
+                        a3 = sampling_coefficient(k, n_internal_rows)
                         indices = [[i, j, k]]
                         finger_name = finger_names[finger_index]
                         bone_name = bone_names[bone]
@@ -772,6 +922,8 @@ def generate_external_node_matrix(hand_elements_along,
     columns_per_finger = 5
     elements_along_palm = sum(hand_elements_along[0:2]) + 1 #one row of prox.phalanx
     elements_along_finger = sum(hand_elements_along[2:]) - 1
+    n_internal_rows = options.get('Internal elements across hand')
+    n_internal_cols = 2 #First and last cols are ignored, used in sampling rows instead.
     finger_index_x = elements_along_palm +  2 # First P.phalanx element is two-sided
     finger_names = options['finger names']
     bone_names = options['bone names']
@@ -779,42 +931,117 @@ def generate_external_node_matrix(hand_elements_along,
     # TODO add n_rows and n_cols constants
     # TODO calculate formulas for these numbers, based on the width of the internal boxes.
     # TODO reformulate how these numbers are calculated.
-    a_palm = [4.65 + i * (4.65 - 4.65) / (palm_elements_along - 1) \
-                for i in range(palm_elements_along)]
-    b_palm = [5.5 + i * (2.5 - 5.5) / (palm_elements_along - 1) \
-                for i in range(palm_elements_along)]
+    a_palm = 4.65
+    b_palm = 2.25
     a_finger = 2
     b_finger = 1.75
-
+    """
+    New ellipse code
+    """
     ellipses = [None for i in range(sum(hand_elements_along[0:2]) + 1)]
     for n in range(palm_elements_along):
-        x, d1, d2, d3 = node_network.get_node_parameters(parent_node_id)
-        center = add(x, d2)
-        major_axis = mult(d2, -a_palm[n])
-        minor_axis = mult(d3, b_palm[n])
-        major_ax_mag = magnitude(major_axis)
-        # minor_ax_mag = magnitude(minor_axis)
-        internal_box_length = 2 * magnitude(d2)
-        # TODO create sampling ratios based on sampling (?) of the internal boxes
-        sampling_along_x = [internal_box_length / major_ax_mag, 0] # between 0 and b
-        sampling_along_y = [0.6] # between 0 and a
-        angles_along_x = [math.acos(value) for value in sampling_along_x]
-        angles_along_y = [math.asin(value) for value in sampling_along_y]
-        sampling_angles = sorted(angles_along_x + angles_along_y)
-        ellipse_x, ellipse_d2 = sample_ellipse_along_angles(
-            center, major_axis, minor_axis, sampling_angles
-            )
-        ellipse_d1 = [None for i in range(len(ellipse_x)) ]
-        ellipses[n] = [ellipse_x, ellipse_d1, ellipse_d2]
+        ellipse = Ellipse(parent_node_id, a_palm, b_palm, node_network)
+        ellipse.set_n_internal_cols(n_internal_cols)
+        ellipse.set_n_internal_rows(n_internal_rows)
+        ellipse.create_sampling_angles()
+        ellipse.sample_ellipse_along_angles()
+        ellipse.sort_ellipse_samples()
+        ellipses[n] = ellipse.get_ellipse_samples()
         parent_node_id += 1
-
     for n in range(palm_elements_along - 1):
         ellipse_x, ellipse_d1, _ = ellipses[n]
         next_ellipse_x, next_ellipse_d1, _ = ellipses[n + 1]
-        for i in range(len(ellipse_x)):
-            d1 = sub(next_ellipse_x[i], ellipse_x[i])
-            ellipse_d1[i] = next_ellipse_d1[i] = d1
+        for f in range(5):
+            for k in range(1, n_internal_rows + 2):
+                if ellipse_x[k][f] is not None:
+                    d1 = sub(next_ellipse_x[k][f], ellipse_x[k][f])
+                    ellipse_d1[k][f] = next_ellipse_d1[k][f] = d1
+    """
+    Old ellipse code
+    """
+    # ellipses = [None for i in range(sum(hand_elements_along[0:2]) + 1)]
+    # for n in range(palm_elements_along):
+    #     x, d1, d2, d3 = node_network.get_node_parameters(parent_node_id)
+    #     center = add(x, d2)
+    #     major_axis = mult(d2, -a_palm)
+    #     minor_axis = mult(d3, b_palm)
+    #     major_ax_mag = magnitude(major_axis)
+    #     minor_ax_mag = magnitude(minor_axis)
+    #     internal_box_length = 2.0 * magnitude(d2) / major_ax_mag
+    #     internal_box_width = 1.25 * magnitude(d3) / minor_ax_mag
+    #     sampling_along_major_ax = [
+    #         internal_box_length * sampling_coefficient(k, n_internal_cols) \
+    #             for k in range(n_half_cols + 1, n_internal_cols + 2)
+    #     ]
+    #     sampling_along_minor_ax = [
+    #         internal_box_width * sampling_coefficient(k, n_internal_rows) \
+    #               for k in range(n_half_rows + 1, n_internal_rows + 2)
+    #     ]
+    #     angles_along_major_ax = [math.acos(value) for value in sampling_along_major_ax]
+    #     angles_along_minor_ax = [math.asin(value) for value in sampling_along_minor_ax]
+    #     first_quadrant_angles = sorted(angles_along_major_ax + angles_along_minor_ax)
+    #     ellipse_x, ellipse_d2 = sample_ellipse_along_angles(
+    #         center, major_axis, minor_axis, first_quadrant_angles
+    #         )
+    #     ellipse_d1 = [None for i in range(len(ellipse_x)) ]
 
+    #     sorted_ellipse_x, sorted_ellipse_d1 ,sorted_ellipse_d2  = \
+    #         [[[None for f in range(n_internal_cols + 3)]
+    #           for k in range(n_internal_rows + 3)] for i in range(3)]
+    #     i = -n_half_rows
+    #     for k in range(1, n_internal_rows + 2):
+    #         sorted_ellipse_x[k][0] = ellipse_x[i]
+    #         sorted_ellipse_d2[k][0] = ellipse_d2[i]
+    #         i+= 1
+    #     for f in range(1, 4):
+    #         sorted_ellipse_x[n_internal_rows + 1][f] = ellipse_x[i]
+    #         sorted_ellipse_d2[n_internal_rows + 1][f] = ellipse_d2[i]
+    #         i+= 1
+    #     for k in reversed(range(1, n_internal_rows + 2)):
+    #         sorted_ellipse_x[k][4] = ellipse_x[i]
+    #         sorted_ellipse_d2[k][4] = ellipse_d2[i]
+    #         i+= 1
+    #     for f in reversed(range(1, 4)):
+    #         sorted_ellipse_x[1][f] = ellipse_x[i]
+    #         sorted_ellipse_d2[1][f] = ellipse_d2[i]
+    #         i+= 1
+    #     ellipses[n] = [sorted_ellipse_x, sorted_ellipse_d1, sorted_ellipse_d2]
+    #     parent_node_id += 1
+    #     """
+    #     Debug code
+    #     """
+    #     # i = -2
+    #     # sorted_ellipse_x = [[None for f in range(5)]for k in range(n_internal_rows + 3)]
+    #     # for k in range(1, n_internal_rows + 2):
+    #     #     sorted_ellipse_x[k][0] = i
+    #     #     i+= 1
+    #     # for f in range(1, 4):
+    #     #     sorted_ellipse_x[n_internal_rows + 1][f] = i
+    #     #     i+= 1
+    #     # for k in reversed(range(1, n_internal_rows + 2)):
+    #     #     sorted_ellipse_x[k][4] = i
+    #     #     i+= 1
+    #     # for f in reversed(range(1, 4)):
+    #     #     sorted_ellipse_x[1][f] = i
+    #     #     i+= 1
+    #     """
+    #     End debug code
+    #     """
+    # # Calculate d1's for the ellipse elements
+    # for n in range(palm_elements_along - 1):
+    #     ellipse_x, ellipse_d1, _ = ellipses[n]
+    #     next_ellipse_x, next_ellipse_d1, _ = ellipses[n + 1]
+    #     for f in range(5):
+    #         for k in range(1, n_internal_rows + 2):
+    #             if ellipse_x[k][f] is not None:
+    #                 d1 = sub(next_ellipse_x[k][f], ellipse_x[k][f])
+    #                 ellipse_d1[k][f] = next_ellipse_d1[k][f] = d1
+    """
+    End old ellipse code
+    """
+    """
+    """
+    palm_bones = [Bone.CARPAL, Bone.METACARPAL, Bone.PROX_PHALANX]
     parent_node_id = 1
     index_y = 1
     d3 = None
@@ -826,9 +1053,12 @@ def generate_external_node_matrix(hand_elements_along,
     for finger_index in range(4):
         index_x = 0
         # Carpal, metacarpal and proximal phalanx
-        for bone in range(3):
+        for bone in palm_bones:
             n_elements_along = hand_elements_along[bone]
-            j_val = [index_y, index_y + 1] if finger_index == 0 else [index_y + 1]
+            if finger_index == 0:
+                j_val = [index_y, index_y + 1]
+            else:
+                j_val = [index_y + 1]
             if bone in [Bone.CARPAL, Bone.METACARPAL]:
                 i_val = [index_x + i for i in range(n_elements_along)]
             else:
@@ -836,55 +1066,56 @@ def generate_external_node_matrix(hand_elements_along,
             for i in i_val:
                 ellipse = ellipses[i]
                 for j in j_val:
+                    # TODO make k_val variable
+                    if j == index_y or (finger_index == 3 and j == index_y + 1):
+                        k_val = [i + 1 for i in range(n_internal_rows + 1)]
+                    else:
+                        k_val = [1, n_internal_rows + 1]
                     for k in k_val:
                         # TODO reformulate index_e, it is very unintuitive as it is
-                        index_e = slice(0, 5, 1) if k == 2 else slice(10, 4, -1)
-                        ellipse_x = ellipse[0][index_e]
-                        ellipse_d1 = ellipse[1][index_e]
-                        ellipse_d2 = ellipse[2][index_e]
+                        # TODO fix bug on ellipse sampling function
+                        ellipse_x, ellipse_d1, ellipse_d2 = ellipse
                         a1 = finger_index if j == index_y else finger_index + 1
                         a2 = -1 if j == index_y else 1
                         a3 = -1 if k == 1 else 1
-                        x = ellipse_x[a1]
+                        x = ellipse_x[k][a1]
+                        d1 = ellipse_d1[k][a1]
+                        d2 = ellipse_d2[k][a1]
                         # TODO figure out the offsetting? (maybe out of scope)
                         # if bone > 0:
                         # d1 = add(d1, set_magnitude(d1, d1_offset/(c+mc+pp)))
-                        d1 = ellipse_d1[a1]
-                        d2 = ellipse_d2[a1]
-                        indices = [[i, j, k + a3]]
+                        indices = [[i, j, k + a3]] if k in [1, n_internal_rows + 1] else []
+                        annotation = ['']
                         if bone == Bone.CARPAL:
-                            annotation = ['']
-                            if j == 1:
+                            if (j == index_y):
                                 indices.append([i, j + a2, k])
-                            elif j == 17:
+                            elif (finger_index == 3 and j == index_y + 1):
                                 indices.append([i, j + a2, k])
                                 indices.append([i, j + 4, k + a3])
                             else:
                                 indices.append([i, j + 4, k + a3])
                         elif bone == Bone.METACARPAL:
-                            annotation = ['']
-                            if j == 1:
+                            if (j == index_y):
                                 indices.append([i, j + a2, k])
-                            elif j == 17:
+                            elif (finger_index == 3 and j == index_y + 1):
                                 if i > 1:
                                     indices.append([i, j + a2, k])
-                                indices.append([i, j, k + a3])
                             else:
-                                indices.append([i, j, k + a3])
                                 indices.append([i, j + 4, k + a3])
                         elif bone == Bone.PROX_PHALANX:
                             n_elements_along = 1
                             finger_name = finger_names[finger_index] if j == index_y else \
                                 finger_names[finger_index + 1]
                             finger_name = finger_names[3] if finger_index == 3 else finger_name
-                            bone_name = bone_names[2]
+                            bone_name = bone_names[Bone.PROX_PHALANX]
                             finger_part = bone_name + ' of ' + finger_name
                             annotation = [bone_name, finger_name, finger_part]
-                            indices.append([i + 2, j, k + a3])
-                            if j == 1:
+                            if k in [1, n_internal_rows + 1]:
+                                indices.append([i + 2, j, k + a3])
+                            if (j == index_y):
                                 indices.append([i, j + a2, k])
                                 indices.append([i + 2, j + a2, k])
-                            elif j == 17:
+                            elif (finger_index == 3 and j == index_y + 1):
                                 if i > 1:
                                     indices.append([i, j + a2, k])
                                     indices.append([i + 2, j + a2, k])
@@ -902,8 +1133,6 @@ def generate_external_node_matrix(hand_elements_along,
                             [x, d1, d2, d3], node_identifier, internal_node=False
                         )
                         node_identifier += 1
-                        x = add(x, d1)
-                        ellipse_x[a1] = x
                 parent_node_id += 1
             index_x += n_elements_along
         index_y += columns_per_finger
@@ -936,9 +1165,9 @@ def generate_external_node_matrix(hand_elements_along,
             major_axis = mult(d2, -a_finger)
             minor_axis = mult(d3, b_finger)
             # TODO formulate sampling_angles based on the number of internal elements
-            sampling_angles = [1 * math.pi / 4]
+            first_quadrant_angles = [1 * math.pi / 4]
             ellipse_x, ellipse_d2 = sample_ellipse_along_angles(
-                center, major_axis, minor_axis, sampling_angles
+                center, major_axis, minor_axis, first_quadrant_angles
                 )
             ellipse_d1 = [d1 for i in range(len(ellipse_x))]
             ellipse_x = [ellipse_x[i] for i in [3, 0, 2, 1]]
@@ -946,6 +1175,11 @@ def generate_external_node_matrix(hand_elements_along,
             for i in i_val:
                 a1 = 0
                 for j in j_val:
+                    if j == index_y or (finger_index == 3 and j == index_y + 1):
+                        k_val = [i + 1 for i in range(n_internal_rows + 1)]
+                    else:
+                        k_val = [1, n_internal_rows + 1]
+                    k_val = [1, n_internal_rows + 1]
                     for k in k_val:
                         a2 = -1 if j == index_y else 1
                         a3 = -1 if k == 1 else 1
@@ -1014,53 +1248,53 @@ def generate_external_node_matrix(hand_elements_along,
             index_y += 2*columns_per_finger
     #Palm-connection
     # TODO rewrite this whole section, it will not survive the change from 4- to 6-around
-    j_val = [3, 8, 13]
-    i = c + mc + 2  # First row of PP elements
-    bone_name = bone_names[2]
-    finger_index = 0
-    for j in j_val:
-        for k in k_val:
-            a3 = -1 if k == 1 else 1
-            c1 = 0.25 * a3
-            finger_name = finger_names[finger_index]
-            finger_part = bone_name + ' of ' + finger_name
-            annotation = [bone_name, finger_name, finger_part]
-            index = [i, j - 1, k + a3]
-            node_id = virtual_node_matrix.get_node_identifier_at_index(index)
-            node = virtual_node_matrix.create_external_vnode(
-                x  = [1, 0, 0, 0],
-                d1 = [0, 1, -c1, 0],
-                d2 = [0, 0, 1, 0],
-                node_identifier = node_id, annotation = annotation
-            )
-            virtual_node_matrix.set_virtual_node_to_index(node, [i, j - 1, k + a3])
-            node = virtual_node_matrix.create_external_vnode(
-                x  = [1, 0, 0, 0],
-                d1 = [0, 1, -c1, 0],
-                d2 = [0, a3, 0, 0],
-                node_identifier = node_id, annotation = annotation
-            )
-            virtual_node_matrix.set_virtual_node_to_index(node, [i, j, k])
+    # j_val = [3, 8, 13]
+    # i = c + mc + 2  # First row of PP elements
+    # bone_name = bone_names[2]
+    # finger_index = 0
+    # for j in j_val:
+    #     for k in k_val:
+    #         a3 = -1 if k == 1 else 1
+    #         c1 = 0.25 * a3
+    #         finger_name = finger_names[finger_index]
+    #         finger_part = bone_name + ' of ' + finger_name
+    #         annotation = [bone_name, finger_name, finger_part]
+    #         index = [i, j - 1, k + a3]
+    #         node_id = virtual_node_matrix.get_node_identifier_at_index(index)
+    #         node = virtual_node_matrix.create_external_vnode(
+    #             x  = [1, 0, 0, 0],
+    #             d1 = [0, 1, -c1, 0],
+    #             d2 = [0, 0, 1, 0],
+    #             node_identifier = node_id, annotation = annotation
+    #         )
+    #         virtual_node_matrix.set_virtual_node_to_index(node, [i, j - 1, k + a3])
+    #         node = virtual_node_matrix.create_external_vnode(
+    #             x  = [1, 0, 0, 0],
+    #             d1 = [0, 1, -c1, 0],
+    #             d2 = [0, a3, 0, 0],
+    #             node_identifier = node_id, annotation = annotation
+    #         )
+    #         virtual_node_matrix.set_virtual_node_to_index(node, [i, j, k])
 
-            finger_name = finger_names[finger_index + 1]
-            finger_part = bone_name + ' of ' + finger_name
-            annotation = [bone_name, finger_name, finger_part]
-            node = virtual_node_matrix.create_external_vnode(
-                x  = [1, 0, 0, 0],
-                d1 = [0, 1, c1, 0],
-                d2 = [0, -a3, 0, 0],
-                node_identifier = node_id, annotation = annotation
-            )
-            virtual_node_matrix.set_virtual_node_to_index(node, [i, j + 2, k])
+    #         finger_name = finger_names[finger_index + 1]
+    #         finger_part = bone_name + ' of ' + finger_name
+    #         annotation = [bone_name, finger_name, finger_part]
+    #         node = virtual_node_matrix.create_external_vnode(
+    #             x  = [1, 0, 0, 0],
+    #             d1 = [0, 1, c1, 0],
+    #             d2 = [0, -a3, 0, 0],
+    #             node_identifier = node_id, annotation = annotation
+    #         )
+    #         virtual_node_matrix.set_virtual_node_to_index(node, [i, j + 2, k])
 
-            node = virtual_node_matrix.create_external_vnode(
-                x  = [1, 0, 0, 0],
-                d1 = [0, 1, c1, 0],
-                d2 = [0, 0, 1, 0],
-                node_identifier = node_id, annotation = annotation
-            )
-            virtual_node_matrix.set_virtual_node_to_index(node, [i, j + 3, k + a3])
-        finger_index += 1
+    #         node = virtual_node_matrix.create_external_vnode(
+    #             x  = [1, 0, 0, 0],
+    #             d1 = [0, 1, c1, 0],
+    #             d2 = [0, 0, 1, 0],
+    #             node_identifier = node_id, annotation = annotation
+    #         )
+    #         virtual_node_matrix.set_virtual_node_to_index(node, [i, j + 3, k + a3])
+    #     finger_index += 1
     """
     """
     # The Thumb-palm connection elements
@@ -1068,144 +1302,144 @@ def generate_external_node_matrix(hand_elements_along,
     # TODO the day has come
     # TODO when I have to figure this out.
     # It is against every fiber of my being that I am forced to set these manually
-    index_y = 26
-    thumb_angle_degrees = options["Thumb angle"]
-    thumb_c = thumb_angle_degrees / 90
-    # Back of the thumb
-    # TODO reformulate k_val, and make it consistent with the values used at the palm
-    k_val = [0, 3]
-    for k in k_val:
-        a1 = -1 if k == 3 else 1
-        a3 = -1 if k == 3 else 1
-        index = [0, index_y - 9, k]
-        node_id = virtual_node_matrix.get_node_identifier_at_index(index)
-        node = virtual_node_matrix.create_external_vnode(
-                x  = [1, 0, 0, 0],
-                d1 = [0, 0.5, -a1 * 0.5, 0],
-                d2 = [0, 0, 1, 0],
-                node_identifier = node_id, annotation = annotation
-        )
-        virtual_node_matrix.set_virtual_node_to_index(node, [0, index_y - 5, k + a3])
-        index = [1, index_y + 1, k]
-        node_id = virtual_node_matrix.get_node_identifier_at_index(index)
-        node = virtual_node_matrix.create_external_vnode(
-                x  = [1, 0, 0, 0],
-                d1 = [0, 1, a1 * thumb_c, 0],
-                d2 = [0, 0, 1, 0],
-                node_identifier = node_id, annotation = annotation
-        )
-        virtual_node_matrix.set_virtual_node_to_index(node, [0, index_y - 4, k + a3])
+    # index_y = 26
+    # thumb_angle_degrees = options["Thumb angle"]
+    # thumb_c = thumb_angle_degrees / 90
+    # # Back of the thumb
+    # # TODO reformulate k_val, and make it consistent with the values used at the palm
+    # k_val = [0, 3]
+    # for k in k_val:
+    #     a1 = -1 if k == 3 else 1
+    #     a3 = -1 if k == 3 else 1
+    #     index = [0, index_y - 9, k]
+    #     node_id = virtual_node_matrix.get_node_identifier_at_index(index)
+    #     node = virtual_node_matrix.create_external_vnode(
+    #             x  = [1, 0, 0, 0],
+    #             d1 = [0, 0.5, -a1 * 0.5, 0],
+    #             d2 = [0, 0, 1, 0],
+    #             node_identifier = node_id, annotation = annotation
+    #     )
+    #     virtual_node_matrix.set_virtual_node_to_index(node, [0, index_y - 5, k + a3])
+    #     index = [1, index_y + 1, k]
+    #     node_id = virtual_node_matrix.get_node_identifier_at_index(index)
+    #     node = virtual_node_matrix.create_external_vnode(
+    #             x  = [1, 0, 0, 0],
+    #             d1 = [0, 1, a1 * thumb_c, 0],
+    #             d2 = [0, 0, 1, 0],
+    #             node_identifier = node_id, annotation = annotation
+    #     )
+    #     virtual_node_matrix.set_virtual_node_to_index(node, [0, index_y - 4, k + a3])
 
-    # Bottom carpal-metacarpal connection
-    for k in k_val:
-        a1 = -1 if k == 3 else 1
-        index = [1, index_y + 1, k]
-        node_id = virtual_node_matrix.get_node_identifier_at_index(index)
-        node = virtual_node_matrix.create_external_vnode(
-                x  = [1, 0, 0, 0],
-                d1 = [0, 0, a1, 0],
-                d2 = [0, -a1, -thumb_c, 0],
-                node_identifier = node_id, annotation = annotation
-        )
+    # # Bottom carpal-metacarpal connection
+    # for k in k_val:
+    #     a1 = -1 if k == 3 else 1
+    #     index = [1, index_y + 1, k]
+    #     node_id = virtual_node_matrix.get_node_identifier_at_index(index)
+    #     node = virtual_node_matrix.create_external_vnode(
+    #             x  = [1, 0, 0, 0],
+    #             d1 = [0, 0, a1, 0],
+    #             d2 = [0, -a1, -thumb_c, 0],
+    #             node_identifier = node_id, annotation = annotation
+    #     )
 
-        virtual_node_matrix.set_virtual_node_to_index(node, [1, index_y - 4, k])
+    #     virtual_node_matrix.set_virtual_node_to_index(node, [1, index_y - 4, k])
 
-        index = [1, index_y, k]
-        node_id = virtual_node_matrix.get_node_identifier_at_index(index)
-        node = virtual_node_matrix.create_external_vnode(
-                x  = [1, 0, 0, 0],
-                d1 = [0, 0, a1, 0],
-                d2 = [0, -a1 * thumb_c, 0, 0],
-                node_identifier = node_id, annotation = annotation
-        )
-        virtual_node_matrix.set_virtual_node_to_index(node, [2, index_y - 4, k])
+    #     index = [1, index_y, k]
+    #     node_id = virtual_node_matrix.get_node_identifier_at_index(index)
+    #     node = virtual_node_matrix.create_external_vnode(
+    #             x  = [1, 0, 0, 0],
+    #             d1 = [0, 0, a1, 0],
+    #             d2 = [0, -a1 * thumb_c, 0, 0],
+    #             node_identifier = node_id, annotation = annotation
+    #     )
+    #     virtual_node_matrix.set_virtual_node_to_index(node, [2, index_y - 4, k])
 
-        index = [0, index_y - 9, k]
-        node_id = virtual_node_matrix.get_node_identifier_at_index(index)
-        node = virtual_node_matrix.create_external_vnode(
-                x  = [1, 0, 0, 0],
-                d1 = [0, 1, 0, 0],
-                d2 = [0, -a1 * 0.5, 0.5, 0],
-                node_identifier = node_id, annotation = annotation
-        )
-        virtual_node_matrix.set_virtual_node_to_index(node, [1, index_y - 5, k])
+    #     index = [0, index_y - 9, k]
+    #     node_id = virtual_node_matrix.get_node_identifier_at_index(index)
+    #     node = virtual_node_matrix.create_external_vnode(
+    #             x  = [1, 0, 0, 0],
+    #             d1 = [0, 1, 0, 0],
+    #             d2 = [0, -a1 * 0.5, 0.5, 0],
+    #             node_identifier = node_id, annotation = annotation
+    #     )
+    #     virtual_node_matrix.set_virtual_node_to_index(node, [1, index_y - 5, k])
 
-        index = [1, index_y - 9, k]
-        node_id = virtual_node_matrix.get_node_identifier_at_index(index)
-        node = virtual_node_matrix.create_external_vnode(
-                x  = [1, 0, 0, 0],
-                d1 = [0, 1, 0, 0],
-                d2 = [0, 0, 0.25, 0],
-                node_identifier = node_id, annotation = annotation
-        )
-        virtual_node_matrix.set_virtual_node_to_index(node, [2, index_y - 5, k])
-    # Intermediate metacarpal connections
-    for k in k_val:
-        a1 = 2 * thumb_c
-        a3 = -1 if k == 3 else 1
-        index = [1, index_y, k]
-        node_id = virtual_node_matrix.get_node_identifier_at_index(index)
-        node = virtual_node_matrix.create_external_vnode(
-                x  = [1, 0, 0, 0],
-                d1 = [0, 1, 0, 0],
-                d2 = [0, -a3 * thumb_c, 0, 0],
-                node_identifier = node_id, annotation = annotation
-        )
-        virtual_node_matrix.set_virtual_node_to_index(node, [4, index_y - 4, k])
+    #     index = [1, index_y - 9, k]
+    #     node_id = virtual_node_matrix.get_node_identifier_at_index(index)
+    #     node = virtual_node_matrix.create_external_vnode(
+    #             x  = [1, 0, 0, 0],
+    #             d1 = [0, 1, 0, 0],
+    #             d2 = [0, 0, 0.25, 0],
+    #             node_identifier = node_id, annotation = annotation
+    #     )
+    #     virtual_node_matrix.set_virtual_node_to_index(node, [2, index_y - 5, k])
+    # # Intermediate metacarpal connections
+    # for k in k_val:
+    #     a1 = 2 * thumb_c
+    #     a3 = -1 if k == 3 else 1
+    #     index = [1, index_y, k]
+    #     node_id = virtual_node_matrix.get_node_identifier_at_index(index)
+    #     node = virtual_node_matrix.create_external_vnode(
+    #             x  = [1, 0, 0, 0],
+    #             d1 = [0, 1, 0, 0],
+    #             d2 = [0, -a3 * thumb_c, 0, 0],
+    #             node_identifier = node_id, annotation = annotation
+    #     )
+    #     virtual_node_matrix.set_virtual_node_to_index(node, [4, index_y - 4, k])
 
-        index = [1, index_y - 9, k]
-        node_id = virtual_node_matrix.get_node_identifier_at_index(index)
-        node = virtual_node_matrix.create_external_vnode(
-                x  = [1, 0, 0, 0],
-                d1 = [0, 1, 0, 0],
-                d2 = [0, 0, 0.25, 0],
-                node_identifier = node_id, annotation = annotation
-        )
-        virtual_node_matrix.set_virtual_node_to_index(node, [4, index_y - 5, k])
+    #     index = [1, index_y - 9, k]
+    #     node_id = virtual_node_matrix.get_node_identifier_at_index(index)
+    #     node = virtual_node_matrix.create_external_vnode(
+    #             x  = [1, 0, 0, 0],
+    #             d1 = [0, 1, 0, 0],
+    #             d2 = [0, 0, 0.25, 0],
+    #             node_identifier = node_id, annotation = annotation
+    #     )
+    #     virtual_node_matrix.set_virtual_node_to_index(node, [4, index_y - 5, k])
 
-        index = [2, index_y, k]
-        node_id = virtual_node_matrix.get_node_identifier_at_index(index)
-        node = virtual_node_matrix.create_external_vnode(
-                x  = [1, 0, 0, 0],
-                d1 = [0, 1, 0, 0],
-                d2 = [0, -a1 * a3, 0.5, 0],
-                node_identifier = node_id, annotation = annotation
-        )
-        virtual_node_matrix.set_virtual_node_to_index(node, [5, index_y - 4, k])
+    #     index = [2, index_y, k]
+    #     node_id = virtual_node_matrix.get_node_identifier_at_index(index)
+    #     node = virtual_node_matrix.create_external_vnode(
+    #             x  = [1, 0, 0, 0],
+    #             d1 = [0, 1, 0, 0],
+    #             d2 = [0, -a1 * a3, 0.5, 0],
+    #             node_identifier = node_id, annotation = annotation
+    #     )
+    #     virtual_node_matrix.set_virtual_node_to_index(node, [5, index_y - 4, k])
 
-        index = [2, index_y - 9, k]
-        node_id = virtual_node_matrix.get_node_identifier_at_index(index)
-        node = virtual_node_matrix.create_external_vnode(
-                x  = [1, 0, 0, 0],
-                d1 = [0, 1, 0, 0],
-                d2 = [0, a1 * a3, 0.5, 0],
-                node_identifier = node_id, annotation = annotation
-        )
-        virtual_node_matrix.set_virtual_node_to_index(node, [5, index_y - 5, k])
+    #     index = [2, index_y - 9, k]
+    #     node_id = virtual_node_matrix.get_node_identifier_at_index(index)
+    #     node = virtual_node_matrix.create_external_vnode(
+    #             x  = [1, 0, 0, 0],
+    #             d1 = [0, 1, 0, 0],
+    #             d2 = [0, a1 * a3, 0.5, 0],
+    #             node_identifier = node_id, annotation = annotation
+    #     )
+    #     virtual_node_matrix.set_virtual_node_to_index(node, [5, index_y - 5, k])
 
-    # Front of the webbing
-    for k in k_val:
-        a1 = 2 * thumb_c
-        a3 = -1 if k == 3 else 1
-        index = [2, index_y - 9, k]
-        node_id = virtual_node_matrix.get_node_identifier_at_index(index)
-        node = virtual_node_matrix.create_external_vnode(
-                x  = [1, 0, 0, 0],
-                d1 = [0, -a1, -a3 * 0.5, 0],
-                d2 = [0, 0, 1, 0],
-                node_identifier = node_id, annotation = annotation
-        )
-        virtual_node_matrix.set_virtual_node_to_index(node, [6, index_y - 5, k + a3])
+    # # Front of the webbing
+    # for k in k_val:
+    #     a1 = 2 * thumb_c
+    #     a3 = -1 if k == 3 else 1
+    #     index = [2, index_y - 9, k]
+    #     node_id = virtual_node_matrix.get_node_identifier_at_index(index)
+    #     node = virtual_node_matrix.create_external_vnode(
+    #             x  = [1, 0, 0, 0],
+    #             d1 = [0, -a1, -a3 * 0.5, 0],
+    #             d2 = [0, 0, 1, 0],
+    #             node_identifier = node_id, annotation = annotation
+    #     )
+    #     virtual_node_matrix.set_virtual_node_to_index(node, [6, index_y - 5, k + a3])
 
-        index = [2, index_y, k]
-        node_id = virtual_node_matrix.get_node_identifier_at_index(index)
-        node = virtual_node_matrix.create_external_vnode(
-                x  = [1, 0, 0, 0],
-                d1 = [0, a1, -a3 * 0.5, 0],
-                d2 = [0, 0, -1, 0],
-                node_identifier = node_id, annotation = annotation
-        )
-        virtual_node_matrix.set_virtual_node_to_index(node, [6, index_y - 4, k + a3])
+    #     index = [2, index_y, k]
+    #     node_id = virtual_node_matrix.get_node_identifier_at_index(index)
+    #     node = virtual_node_matrix.create_external_vnode(
+    #             x  = [1, 0, 0, 0],
+    #             d1 = [0, a1, -a3 * 0.5, 0],
+    #             d2 = [0, 0, -1, 0],
+    #             node_identifier = node_id, annotation = annotation
+    #     )
+    #     virtual_node_matrix.set_virtual_node_to_index(node, [6, index_y - 4, k + a3])
 
     return virtual_node_matrix, node_network, node_identifier
 
@@ -1406,7 +1640,10 @@ def create_cube_element(fieldmodule: Fieldmodule, element_identifier: int,
             ret = []
             i, j, k = indices[local_node - 1]
             virtual_node = node_matrix[ix + i][iy + j][iz + k]
-            virtual_node = virtual_node[label]
+            try:
+                virtual_node = virtual_node[label]
+            except KeyError:
+                return -1, None
             for global_node in virtual_node:
                 for factor in range(len(global_node)):
                     if factor == 0:
@@ -1570,7 +1807,9 @@ def sample_ellipse_along_angles(center: list, major_axis: list, minor_axis: list
         new_angle = math.pi + angle
         if new_angle not in sampling_angles:
             sampling_angles.append(new_angle)
-    sampling_angles.append(2 * math.pi + sampling_angles[0])
+    angle = 2 * math.pi + sampling_angles[0]
+    if angle not in sampling_angles:
+        sampling_angles.append(2 * math.pi + sampling_angles[0])
 
     ellipse_x = []
     ellipse_d1 = []
@@ -1581,6 +1820,16 @@ def sample_ellipse_along_angles(center: list, major_axis: list, minor_axis: list
         ellipse_x.append(ellipse[0][0])
         ellipse_d1.append(ellipse[1][0])
     return ellipse_x, ellipse_d1
+
+def sampling_coefficient(k, n):
+    """
+    Samples ihe [-1, 1] interval in n segments.
+
+    :param k: Integer from 1 to n + 1
+    :param n: Total number of segments
+    :return: Real number between [-1, 1]
+    """
+    return ((2*k - n - 2)/n)
 
 def setNodeFieldParameters(field, fieldcache, x,
                            d1=None, d2=None, d3=None, d12=None, d13=None):
