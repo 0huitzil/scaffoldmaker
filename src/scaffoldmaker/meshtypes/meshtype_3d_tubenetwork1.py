@@ -120,12 +120,12 @@ class MeshType_3d_tubenetwork1(Scaffold_base):
             options["Network layout"] = cls.getOptionScaffoldPackage("Network layout", MeshType_1d_network_layout1)
         dependentChanges = False
 
-        # element counts across core box major/minor are used for domes even without a core so must be checked here
         networkLayoutOptions = options["Network layout"].getScaffoldSettings()
         structure_string = networkLayoutOptions["Structure"]
+
+        # element counts across core box major/minor are used for domes even without a core so must be checked here
         has_domes = any(end_style in structure_string for end_style in ('(', ')'))
         core = options["Core"]
-
         if core or has_domes:
             if options["Number of elements around"] < 8:
                 options["Number of elements around"] = 8
@@ -143,6 +143,8 @@ class MeshType_3d_tubenetwork1(Scaffold_base):
                     if annotationAroundCounts[i] < 0:
                         annotationAroundCounts[i] = 0
                         dependentChanges = True
+                    elif annotationAroundCounts[i] == 0:
+                        pass  # 0 == use global default
                     else:
                         if annotationAroundCounts[i] < 8:
                             annotationAroundCounts[i] = 8

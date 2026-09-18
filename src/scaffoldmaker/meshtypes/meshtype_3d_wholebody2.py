@@ -63,7 +63,7 @@ class MeshType_1d_human_body_network_layout1(MeshType_1d_network_layout1):
         options["Hand width"] = 1.0
         options["Thorax length"] = 2.5
         options["Abdomen length"] = 3.0
-        options["Torso depth"] = 2.0
+        options["Torso depth"] = 2.2
         options["Torso width"] = 3.2
         options["Pelvis drop"] = 1.25
         options["Pelvis width"] = 2.0
@@ -663,6 +663,7 @@ class MeshType_3d_wholebody2(Scaffold_base):
         options["Number of elements through shell"] = 1
         options["Show trim surfaces"] = False
         options["Use Core"] = True
+        options["Define body coordinates"] = True
         options["Number of elements across core box minor"] = 2
         options["Number of elements across core transition"] = 1
         if "Medium" in useParameterSetName:
@@ -714,6 +715,7 @@ class MeshType_3d_wholebody2(Scaffold_base):
             "Number of elements through shell",
             "Show trim surfaces",
             "Use Core",
+            "Define body coordinates",
             "Number of elements across core box minor",
             "Number of elements across core transition"]
         return optionNames
@@ -816,6 +818,7 @@ class MeshType_3d_wholebody2(Scaffold_base):
         elementsCountAroundLeg = options["Number of elements around leg"]
         shell_count = options["Number of elements through shell"]
         core = options["Use Core"]
+        define_body_coordinates = options["Define body coordinates"]
 
         layoutRegion = region.createRegion()
         networkLayout.generate(layoutRegion)  # ask scaffold to generate to get user-edited parameters
@@ -887,50 +890,50 @@ class MeshType_3d_wholebody2(Scaffold_base):
         tubeNetworkMeshBuilder.generateMesh(generateData)
         annotationGroups = generateData.getAnnotationGroups()
 
-        # Body coordinates
-        # Generate network layout with default parameters
-        materialNetworkLayout = ScaffoldPackage(MeshType_1d_human_body_network_layout1)
-        tmp_region = region.createRegion()
-        tmp_layoutRegion = region.createRegion()
+        if define_body_coordinates:
+            # Generate network layout with default parameters
+            materialNetworkLayout = ScaffoldPackage(MeshType_1d_human_body_network_layout1)
+            tmp_region = region.createRegion()
+            tmp_layoutRegion = region.createRegion()
 
-        materialNetworkLayout.generate(tmp_layoutRegion)
-        materialAnnotationGroups = materialNetworkLayout.getAnnotationGroups()
-        materialNetworkMesh = materialNetworkLayout.getConstructionObject()
+            materialNetworkLayout.generate(tmp_layoutRegion)
+            materialAnnotationGroups = materialNetworkLayout.getAnnotationGroups()
+            materialNetworkMesh = materialNetworkLayout.getConstructionObject()
 
-        materialTubeNetworkMeshBuilder = BodyTubeNetworkMeshBuilder(
-            materialNetworkMesh,
-            targetElementDensityAlongLongestSegment=2.0,  # not used for body
-            layoutAnnotationGroups=materialAnnotationGroups,
-            annotationElementsCountsAlong=annotationAlongCounts,
-            defaultElementsCountAround=options["Number of elements around head"],
-            annotationElementsCountsAround=annotationAroundCounts,
-            shell_count=shell_count,
-            core=core,
-            transition_count=options['Number of elements across core transition'],
-            defaultElementsCountCoreBoxMinor=options["Number of elements across core box minor"],
-            annotationElementsCountsCoreBoxMinor=[],
-            defaultCoreBoundaryScalingMode=defaultCoreBoundaryScalingMode,
-            annotationCoreBoundaryScalingMode=annotationCoreBoundaryScalingMode,
-            useOuterTrimSurfaces=True
+            materialTubeNetworkMeshBuilder = BodyTubeNetworkMeshBuilder(
+                materialNetworkMesh,
+                targetElementDensityAlongLongestSegment=2.0,  # not used for body
+                layoutAnnotationGroups=materialAnnotationGroups,
+                annotationElementsCountsAlong=annotationAlongCounts,
+                defaultElementsCountAround=options["Number of elements around head"],
+                annotationElementsCountsAround=annotationAroundCounts,
+                shell_count=shell_count,
+                core=core,
+                transition_count=options['Number of elements across core transition'],
+                defaultElementsCountCoreBoxMinor=options["Number of elements across core box minor"],
+                annotationElementsCountsCoreBoxMinor=[],
+                defaultCoreBoundaryScalingMode=defaultCoreBoundaryScalingMode,
+                annotationCoreBoundaryScalingMode=annotationCoreBoundaryScalingMode,
+                useOuterTrimSurfaces=True
+                )
+            materialTubeNetworkMeshBuilder.build()
+            generateData = TubeNetworkMeshGenerateData(
+                tmp_region, meshDimension,
+                coordinateFieldName= 'body coordinates',
+                isLinearThroughShell=False,
+                isShowTrimSurfaces=options["Show trim surfaces"]
             )
-        materialTubeNetworkMeshBuilder.build()
-        generateData = TubeNetworkMeshGenerateData(
-            tmp_region, meshDimension,
-            coordinateFieldName= 'body coordinates', \
-            isLinearThroughShell=False,
-            isShowTrimSurfaces=options["Show trim surfaces"]
-        )
-        materialTubeNetworkMeshBuilder.generateMesh(generateData)
-        sir = tmp_region.createStreaminformationRegion()
-        srm = sir.createStreamresourceMemory()
-        tmp_region.write(sir)
-        result, buffer = srm.getBuffer()
-        sir = region.createStreaminformationRegion()
-        srm = sir.createStreamresourceMemoryBuffer(buffer)
-        region.read(sir)
+            materialTubeNetworkMeshBuilder.generateMesh(generateData)
+            sir = tmp_region.createStreaminformationRegion()
+            srm = sir.createStreamresourceMemory()
+            tmp_region.write(sir)
+            result, buffer = srm.getBuffer()
+            sir = region.createStreaminformationRegion()
+            srm = sir.createStreamresourceMemoryBuffer(buffer)
+            region.read(sir)
 
-        del tmp_region
-        del tmp_layoutRegion
+            del tmp_region
+            del tmp_layoutRegion
 
         if core and shell_count:
             fieldmodule = region.getFieldmodule()

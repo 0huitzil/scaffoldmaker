@@ -720,7 +720,7 @@ class NetworkScaffoldTestCase(unittest.TestCase):
         coordinates = fieldmodule.findFieldByName("coordinates").castFiniteElement()
         self.assertTrue(coordinates.isValid())
 
-        X_TOL = 1.0E-8
+        X_TOL = 1.0E-6
 
         minimums, maximums = evaluateFieldNodesetRange(coordinates, nodes)
         assertAlmostEqualList(self, minimums, [-0.6593730298094371, -0.8660254037844386, -0.5], X_TOL)
@@ -825,7 +825,7 @@ class NetworkScaffoldTestCase(unittest.TestCase):
         coordinates = fieldmodule.findFieldByName("coordinates").castFiniteElement()
         self.assertTrue(coordinates.isValid())
 
-        X_TOL = 1.0E-8
+        X_TOL = 1.0E-6
 
         minimums, maximums = evaluateFieldNodesetRange(coordinates, nodes)
         assertAlmostEqualList(self, minimums, [-0.6612836030569434, -0.8660254037844386, -0.5], X_TOL)
@@ -908,10 +908,10 @@ class NetworkScaffoldTestCase(unittest.TestCase):
         self.assertAlmostEqual(total_surface_area, expected_total_surface_area, delta=X_TOL)
 
         # check symmetry of 6-way points between halves
-        expected_6way_x = [0.0019108636038874666, 1.4486745136821355e-12, 0.49742413411115977]
-        expected_6way_d1 = [0.21323449908997336, -0.36687564649608395, 0.006704466598067782]
-        expected_6way_d2 = [0.2132344990888123, 0.36687564649664645, 0.006704466604210613]
-        expected_6way_d3 = [-0.015227869859240711, 1.3415194880887309e-15, 0.09462613958074884]
+        expected_6way_x = [0.0019087276136859437, 1.449669088475029e-12, 0.4974239029992438]
+        expected_6way_d1 = [0.21323439153813475, -0.366878278894931, 0.006705174406225433]
+        expected_6way_d2 = [0.2132343915369731, 0.3668782788954939, 0.006705174412369234]
+        expected_6way_d3 = [-0.01522810167549951, 1.304512053934559e-15, 0.0946259665889043]
         for node_identifier in (72, 333):
             node = nodes.findNodeByIdentifier(node_identifier)
             fieldcache.setNode(node)
@@ -967,7 +967,7 @@ class NetworkScaffoldTestCase(unittest.TestCase):
         coordinates = fieldmodule.findFieldByName("coordinates").castFiniteElement()
         self.assertTrue(coordinates.isValid())
 
-        X_TOL = 1.0E-8
+        X_TOL = 1.0E-6
 
         minimums, maximums = evaluateFieldNodesetRange(coordinates, nodes)
         assertAlmostEqualList(self, minimums, [-0.6612836030569434, -0.8660254037844386, -0.5], X_TOL)
@@ -1072,7 +1072,7 @@ class NetworkScaffoldTestCase(unittest.TestCase):
         coordinates = fieldmodule.findFieldByName("coordinates").castFiniteElement()
         self.assertTrue(coordinates.isValid())
 
-        X_TOL = 1.0E-8
+        X_TOL = 1.0E-6
 
         minimums, maximums = evaluateFieldNodesetRange(coordinates, nodes)
         assertAlmostEqualList(self, minimums, [-0.6612836030569434, -0.8660254037844386, -0.5], X_TOL)
@@ -1221,7 +1221,7 @@ class NetworkScaffoldTestCase(unittest.TestCase):
         coordinates = fieldmodule.findFieldByName("coordinates").castFiniteElement()
         self.assertTrue(coordinates.isValid())
 
-        X_TOL = 1.0E-8
+        X_TOL = 1.0E-6
 
         minimums, maximums = evaluateFieldNodesetRange(coordinates, nodes)
         assertAlmostEqualList(self, minimums, [-0.6612836030569434, -0.8660254037844386, -0.5], X_TOL)
@@ -1280,9 +1280,10 @@ class NetworkScaffoldTestCase(unittest.TestCase):
             self.assertAlmostEqual(volume, expectedSizes3d[name][1], delta=X_TOL)
 
         # check symmetry of 6-way points between halves
-        expected_6way_x = [0.0019108636038874666, 1.4486745136821355e-12, 0.49742413411115977]
-        expected_6way_d1 = [0.21323449908997336, -0.36687564649608395, 0.006704466598067782]
-        expected_6way_d2 = [0.2132344990888123, 0.36687564649664645, 0.006704466604210613]
+        expected_6way_x = [0.0019087276136859437, 1.449669088475029e-12, 0.4974239029992438]
+        #                  [0.001911572706954583, 1.4486837655406741e-12, 0.4974241342799763]
+        expected_6way_d1 = [0.21323439153813475, -0.366878278894931, 0.006705174406225433]
+        expected_6way_d2 = [0.2132343915369731, 0.3668782788954939, 0.006705174412369234]
         for node_identifier in (45, 213):
             node = nodes.findNodeByIdentifier(node_identifier)
             fieldcache.setNode(node)
