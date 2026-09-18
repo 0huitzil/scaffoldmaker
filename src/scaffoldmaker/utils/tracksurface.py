@@ -1191,7 +1191,7 @@ class TrackSurface:
         return position
 
     def findNearestPositionOnCurve(self, cx, cd1, loop=False, startCurveLocation=None, curveSamples: int = 4,
-                                   sampleEnds=True, sampleHalf=0, instrument=False):
+                                   sampleEnds=True, sampleHalf=0, sampleCurveDirection=None, instrument=False):
         """
         Find nearest/intersection point on curve to this surface.
         :param cx: Coordinates along curve.
@@ -1203,6 +1203,9 @@ class TrackSurface:
         initial nearest curve location.
         :param sampleEnds: If not loop: set False to remove start/end points from search for initial curve location.
         :param sampleHalf: Region of curve to search for initial curve location: 0=all, 1=first half, 2=last half.
+        :param sampleCurveDirection: If startLocation not supplied, optionally set to True or False to set the curve
+        direction to True/forward/+d1 or False/reverse/-d1 to limit allowed surface positions to those whose surface
+        normal is in the direction of the curve.
         :param instrument: Set to True to print debug messages.
         :return: Nearest TrackSurfacePosition on self, nearest/intersection point on curve (element index, xi),
         isIntersection (True/False).
@@ -1219,6 +1222,7 @@ class TrackSurface:
             surfacePosition = self.findNearestPositionSample(targetx)[0]
         else:
             nearestDistance = None
+            validDirection = sampleCurveDirection is None
             sCount = eCount * curveSamples
             sStart = 0 if (loop or sampleEnds) else 1
             sLimit = sCount if (loop or not sampleEnds) else sCount + 1
@@ -1226,16 +1230,30 @@ class TrackSurface:
                 sLimit = (sCount + 1) // 2  # first half
             elif sampleHalf == 2:
                 sStart = (sCount - 1) // 2  # last half
-            for s in range(sStart, sLimit):
+            sIncr = 1
+            if sampleCurveDirection is False:
+                sStart, sLimit, sIncr = sLimit - 1, sStart - 1, -1
+            for s in range(sStart, sLimit, sIncr):
                 tmpCurveLocation = (s // curveSamples, (s % curveSamples) / curveSamples)
                 if not loop and (s == sCount):
                     tmpCurveLocation = (tmpCurveLocation[0] - 1, 1.0)
-                targetx = evaluateCoordinatesOnCurve(cx, cd1, tmpCurveLocation, loop)
-                tmpSurfacePosition, tmpDistance = self.findNearestPositionSample(targetx)
-                if (nearestDistance is None) or (tmpDistance < nearestDistance):
+                targetx, line_direction = evaluateCoordinatesOnCurve(cx, cd1, tmpCurveLocation, loop, derivative=True)
+                tmpSurfacePosition, tmpDistance = self.findNearestPositionParameter(targetx)
+                tmpValidDirection = True
+                if sampleCurveDirection is not None:
+                    # get surface normal at tmpSurfacePosition
+                    surface_x, surface_d1, surface_d2 = self.evaluateCoordinates(tmpSurfacePosition, derivatives=True)
+                    surface_normal = cross(surface_d1, surface_d2)
+                    outward = dot(line_direction, surface_normal)
+                    tmpValidDirection = ((sampleCurveDirection and (outward >= 0.0)) or
+                                   (not sampleCurveDirection and (outward <= 0.0)))
+                if ((nearestDistance is None) or (tmpDistance < nearestDistance) or
+                        (tmpValidDirection and not validDirection)):
                     nearestDistance = tmpDistance
                     curveLocation = tmpCurveLocation
                     surfacePosition = tmpSurfacePosition
+                elif tmpValidDirection and (sampleCurveDirection is not None):
+                    break  # stop once tmpDistance increases
         MAX_MAG_DXI = 0.5  # target/maximum magnitude of xi increment
         XI_TOL = 1.0E-7
         X_TOL = 1.0E-6 * max(self._xRange)
@@ -1479,7 +1497,7 @@ class TrackSurface:
         return onBoundary
 
     def generateMesh(self, region, startNodeIdentifier: int = None, startElementIdentifier: int = None,
-                     serendipity=False, group_name=None):
+                     serendipity=False, coordinate_field=None, group_name=None):
         """
         Generate nodes and surface elements in region to show track surface.
         Client is required to define all faces.
@@ -1487,12 +1505,14 @@ class TrackSurface:
         :param startNodeIdentifier: Optional first node identifier to use.
         :param startElementIdentifier: Optional first 2D element identifier to use.
         :param serendipity: Set to True to use Hermite serendipity basis.
+        :param coordinate_field: Optional coordinate field to define.
+        If not specified finds coordinate field of name "coordinates".
         :param group_name: Optional name of group to put new nodes and elements in.
         :return: next node identifier, next 2D element identifier
         """
         fieldmodule = region.getFieldmodule()
         with ChangeManager(fieldmodule):
-            coordinates = find_or_create_field_coordinates(fieldmodule)
+            coordinates = coordinate_field if coordinate_field else find_or_create_field_coordinates(fieldmodule)
             group = find_or_create_field_group(fieldmodule, group_name) if group_name else None
 
             nodes = fieldmodule.findNodesetByFieldDomainType(Field.DOMAIN_TYPE_NODES)

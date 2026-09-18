@@ -769,7 +769,7 @@ class GeneralScaffoldTestCase(unittest.TestCase):
         p2, cp2, p2intersects = surf2.findNearestPositionOnCurve(curve4_x, curve4_d1)
         self.assertTrue(p2intersects)
         self.assertEqual(cp2[0], 0)
-        self.assertAlmostEqual(cp2[1], 0.23080643876585413, delta=XI_TOL)
+        self.assertAlmostEqual(cp2[1], 0.23080435325687435, delta=XI_TOL)
         p2x = surf2.evaluateCoordinates(p2)
         cp2x = evaluateCoordinatesOnCurve(curve4_x, curve4_d1, cp2)
         assertAlmostEqualList(self, p2x, cp2x, delta=X_TOL)
@@ -1645,19 +1645,19 @@ class GeneralScaffoldTestCase(unittest.TestCase):
 
         # non-intersecting curve and surface
         px, _, pd2, _ = tubeSegments[0].getRawTubeCoordinates()
-        cx = [px[0][0], px[1][0], px[2][0]]
-        cd1 = [pd2[0][0], pd2[1][0], pd2[2][0]]
+        cx = [[1.0, 0.4, 0.0], [1.8, -0.5, 0.2]]
+        cd1 = [[1.0, 0.0, 0.0], [0.0, -1.2, 0.1]]
         nearestPosition, nearestCurveLocation, isIntersection = \
             trackSurfaces[1].findNearestPositionOnCurve(cx, cd1, loop=False, sampleEnds=False)
         p9x = evaluateCoordinatesOnCurve(cx, cd1, nearestCurveLocation)
         p10x = trackSurfaces[1].evaluateCoordinates(nearestPosition)
         self.assertFalse(isIntersection)
-        self.assertEqual(nearestCurveLocation[0], 1)
-        self.assertAlmostEqual(nearestCurveLocation[1], 1.0, delta=XI_TOL)
-        self.assertEqual(nearestPosition.e1, 15)
-        self.assertEqual(nearestPosition.e2, 0)
-        self.assertAlmostEqual(nearestPosition.xi1, 1.0, delta=XI_TOL)
-        self.assertAlmostEqual(nearestPosition.xi2, 0.0, delta=XI_TOL)
+        self.assertEqual(nearestCurveLocation[0], 0)
+        self.assertAlmostEqual(nearestCurveLocation[1], 0.8798274719652143, delta=XI_TOL)
+        self.assertEqual(nearestPosition.e1, 1)
+        self.assertEqual(nearestPosition.e2, 1)
+        self.assertAlmostEqual(nearestPosition.xi1, 0.7685409157940459, delta=XI_TOL)
+        self.assertAlmostEqual(nearestPosition.xi2, 0.5313185345910925, delta=XI_TOL)
 
         # context = Context("TrackSurface")
         # region = context.getDefaultRegion()

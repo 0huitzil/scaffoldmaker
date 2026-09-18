@@ -423,7 +423,9 @@ class TubeNetworkMeshSegment(NetworkMeshSegment):
         for p in paths:
             px, pd1, pd2, pd12 = self._rawTubeCoordinatesList[p]
             startTrimSurface = self._junctions[0].getTrimSurfaces(self)[p]
+            startTrimCurveLocation = self._junctions[0].getTrimCurveLocations(self)[p]
             endTrimSurface = self._junctions[1].getTrimSurfaces(self)[p]
+            endTrimCurveLocation = self._junctions[1].getTrimCurveLocations(self)[p]
 
             for q in range(self._elementsCountAround):
                 cx = [px[p][q] for p in range(rawNodesCountAlong)]
@@ -431,7 +433,8 @@ class TubeNetworkMeshSegment(NetworkMeshSegment):
                 startCurveLocation = curveLocationMin
                 startLength = 0.0
                 if startTrimSurface:
-                    surfacePosition, curveLocation, intersects = startTrimSurface.findNearestPositionOnCurve(cx, cd2)
+                    surfacePosition, curveLocation, intersects = startTrimSurface.findNearestPositionOnCurve(
+                        cx, cd2, startCurveLocation=startTrimCurveLocation)
                     if intersects:
                         startCurveLocation = curveLocation
                         startLength = evaluateCoordinatesOnCurve(lx, ld, startCurveLocation)[0]
@@ -440,7 +443,8 @@ class TubeNetworkMeshSegment(NetworkMeshSegment):
                 endCurveLocation = curveLocationMax
                 endLength = lx[-1][0]
                 if endTrimSurface:
-                    surfacePosition, curveLocation, intersects = endTrimSurface.findNearestPositionOnCurve(cx, cd2)
+                    surfacePosition, curveLocation, intersects = endTrimSurface.findNearestPositionOnCurve(
+                        cx, cd2, startCurveLocation=endTrimCurveLocation)
                     if intersects:
                         endCurveLocation = curveLocation
                         endLength = evaluateCoordinatesOnCurve(lx, ld, endCurveLocation)[0]
@@ -3146,7 +3150,10 @@ class TubeNetworkMeshJunction(NetworkMeshJunction):
         """
         super(TubeNetworkMeshJunction, self).__init__(inSegments, outSegments)
         pathsCount = self._segments[0].getPathsCount()
+        # track surfaces to trim segments to, optionally different for outer and inner paths
         self._trimSurfaces = [[None for p in range(pathsCount)] for s in range(self._segmentsCount)]
+        # initial curve location for intersecting longitudinal lines with trim surface
+        self._trimCurveLocations = [[None for p in range(pathsCount)] for s in range(self._segmentsCount)]
         self._useOuterTrimSurfaces = useOuterTrimSurfaces
         self._calculateTrimSurfaces()
         # rim indexes are issued for interior points connected to 2 or more segment node indexes
@@ -3222,6 +3229,7 @@ class TubeNetworkMeshJunction(NetworkMeshJunction):
             for p in range(pathsCount):
                 if self._useOuterTrimSurfaces and (p > 0):
                     self._trimSurfaces[s][p] = self._trimSurfaces[s][p - 1]
+                    self._trimCurveLocations[s][p] = self._trimCurveLocations[s][p - 1]
                     continue
                 pathParameters = self._segments[s].getPathParameters(p)
                 d2End = pathParameters[2][endIndex]
@@ -3298,7 +3306,7 @@ class TubeNetworkMeshJunction(NetworkMeshJunction):
                                 otherSegment.getRawTrackSurface(p) if (i == 0) else segmentEndPlaneTrackSurfaces[os][p]
                             otherSurfacePosition, curveLocation, isIntersection = \
                                 otherTrackSurface.findNearestPositionOnCurve(
-                                    cx, cd2, loop=False, sampleEnds=False, sampleHalf=2 if self._segmentsIn[s] else 1)
+                                    cx, cd2, loop=False, sampleEnds=False, sampleCurveDirection=not self._segmentsIn[s])
                             if isIntersection:
                                 if i == 1:
                                     # must be within ellipse inside rectangular plane
@@ -3328,12 +3336,14 @@ class TubeNetworkMeshJunction(NetworkMeshJunction):
                     # centre of trim surfaces is at lowestMaxProportionFromEnd
                     if lowestMaxProportionFromEnd <= 0.0:
                         xCentre = pathParameters[0][endIndex]
+                        self._trimCurveLocations[s][p] = (pointsCountAlong - 2, 1.0) if self._segmentsIn[s] else (0, 0)
                     else:
                         proportion = \
                             (1.0 - lowestMaxProportionFromEnd) if self._segmentsIn[s] else lowestMaxProportionFromEnd
                         eProportion = proportion * (pointsCountAlong - 1)
                         e = min(int(eProportion), (pointsCountAlong - 2))
                         xi = eProportion - e
+                        self._trimCurveLocations[s][p] = (e, xi)
                         # get mean coordinates of points around at lowestMaxProportionFromEnd
                         xCentre = [0.0, 0.0, 0.0]
                         for n1 in range(trimPointsCountAround):
@@ -3377,6 +3387,16 @@ class TubeNetworkMeshJunction(NetworkMeshJunction):
         :return: List of trim surfaces for paths of segment at junction.
         """
         return self._trimSurfaces[self._segments.index(segment)]
+
+    def getTrimCurveLocations(self, segment):
+        """
+        Get estimate of where to start on longitudinal curves when intersecting with trim surfaces for each path.
+        Currently equal to the closes curve location to the respective junction (so not on the other side of trim
+        surface).
+        :param segment: TubeNetworkMeshSegment which must join at junction.
+        :return: List of initial curve locations for paths of segment at junction.
+        """
+        return self._trimCurveLocations[self._segments.index(segment)]
 
     def _sampleMidPoint(self, segmentsParameterLists):
         """
@@ -4347,6 +4367,7 @@ class TubeNetworkMeshJunction(NetworkMeshJunction):
                         annotationGroup = generateData.getNewTrimAnnotationGroup()
                         nodeIdentifier, faceIdentifier = \
                             trimSurface.generateMesh(generateData.getRegion(), nodeIdentifier, faceIdentifier,
+                                                     coordinate_field=generateData.getCoordinates(),
                                                      group_name=annotationGroup.getName())
                         if self._useOuterTrimSurfaces:
                             break
