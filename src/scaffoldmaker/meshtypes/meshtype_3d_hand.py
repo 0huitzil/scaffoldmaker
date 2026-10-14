@@ -52,8 +52,8 @@ class MeshType_3d_hand1(Scaffold_base):
             "Base parameter set": baseParameterSetName,
             "Thumb angle": 25.0,
             "Splaying angle": 0,
-            "a_finger": 2.0,
-            "b_finger": 2.0,
+            "Magnitude of major axis for finger ellipses": 2.0,
+            "Magnitude of minor axis for finger ellipses": 2.0,
             "finger_d2": 0.15,
             "finger_d3": 0.15,
             "Create internal elements": True,
@@ -78,6 +78,13 @@ class MeshType_3d_hand1(Scaffold_base):
                 "middle phalanx",
                 "distal phalanx",
             ],
+            "Number of matrix columns per finger": 5,
+            "Internal elements along each finger": 1,
+            "Scale factor for blending inner nodes of palm": 0.5,
+            "Scale factor for blending outer nodes of palm": 0.75,
+            "Magnitude of major axis for palm ellipses": 4.35,
+            "Magnitude of minor axis for palm ellipses": 2.25,
+
         }
         return options
 
@@ -86,8 +93,8 @@ class MeshType_3d_hand1(Scaffold_base):
         return [
             "Thumb angle",
             # "Splaying angle",
-            "a_finger",
-            "b_finger",
+            "Magnitude of major axis for finger ellipses",
+            "Magnitude of minor axis for finger ellipses",
             "finger_d2",
             "finger_d3",
             "Create internal elements",
@@ -122,8 +129,8 @@ class MeshType_3d_hand1(Scaffold_base):
             if options[key] > 3:
                 options[key] = 3
         for key in [
-            "a_finger",
-            "b_finger",
+            "Magnitude of major axis for finger ellipses",
+            "Magnitude of minor axis for finger ellipses",
         ]:
             if options[key] < 1:
                 options[key] = 1
@@ -154,13 +161,9 @@ class MeshType_3d_hand1(Scaffold_base):
             options["Elements along middle phalanx"],
             options["Elements along distal phalanx"],
         ]
+
         node_network = Node_network(region, fieldcache)
-        ix = 2 * sum(hand_elements_along)
-        iy = 6 * 5  # 5 columns per finger, + 1 column for palm-thumb connection
-        internal_rows = options.get("Internal elements across hand") + 1
-        external_rows = 2
-        iz = internal_rows + external_rows
-        virtual_node_matrix = Virtual_node_matrix([ix, iy, iz])
+        virtual_node_matrix = Virtual_node_matrix(options)
 
         node_network, node_identifier = generate_internal_node_network(
             node_network, hand_elements_along, node_identifier, options=options
@@ -211,12 +214,13 @@ class MeshType_3d_hand1(Scaffold_base):
                 annotation_groups.append(finger_bone_group)
 
         element_identifier = 1
-        # TODO remove these linesi
+        # TODO remove these lines
         # elements_along_per_fingk,er = sum(hand_elements_along)
         # for i in range(4):
         #     node_network.remove_node(1 + i * elements_along_per_finger)
         node_network.set_zinc_nodes()
         matrix = virtual_node_matrix.get_matrix()
+        [ix, iy, iz] = virtual_node_matrix.get_matrix_dimensions()
         for k in range(iz - 1):
             for j in range(iy - 1):
                 for i in range(ix - 1):
@@ -653,10 +657,24 @@ class Node_network:
 
 
 class Virtual_node_matrix:
-    def __init__(self, matrix_dimensions: list):
-        ix, iy, iz = matrix_dimensions
-        self.n_internal_rows = iz - 2
-        self.node_matrix = [[[None for k in range(iz)] for j in range(iy)] for i in range(ix)]
+    def __init__(self, options: dict):
+        hand_elements_along = [
+            options["Elements along carpal"],
+            options["Elements along metacarpal"],
+            options["Elements along proximal phalanx"],
+            options["Elements along middle phalanx"],
+            options["Elements along distal phalanx"],
+        ]
+        columns_per_finger = options.get("Number of matrix columns per finger")
+        n_internal_rows = options.get("Internal elements across hand")
+        n_external_rows = 2
+        ix = 2 * sum(hand_elements_along)
+        iy = 6 * columns_per_finger
+        iz = n_internal_rows + 1 + n_external_rows
+        node_matrix = [[[None for k in range(iz)] for j in range(iy)] for i in range(ix)]
+
+        self.matrix_dimensions = [ix, iy, iz]
+        self.node_matrix = node_matrix
 
     def create_internal_vnode(self, node_identifier: int, x: list, annotation: dict):
         virtual_node = {
@@ -701,6 +719,9 @@ class Virtual_node_matrix:
 
     def get_matrix(self) -> list:
         return self.node_matrix
+
+    def get_matrix_dimensions(self) -> list:
+        return self.matrix_dimensions
 
     def blend_vnode(self, existing_node_index: list, new_vnode):
         """
@@ -923,19 +944,20 @@ def generate_internal_node_matrix(
     :rtype: Any
     """
     # TODO calculate these constants as functions of the node parameters
-    bone_c_int = 0.5
-    bone_c_ext = 0.75
+    bone_c_int = options.get("Scale factor for blending inner nodes of palm")
+    bone_c_ext = options.get("Scale factor for blending outer nodes of palm")
     n_internal_rows = options.get("Internal elements across hand")
-    n_cols_per_node = 1
+    n_cols_per_node = options.get("Internal elements along each finger")
     a0 = 1.0
-    parent_node_id = 1
-    index_y = 1
     a1 = 0.0
     a2 = 0.0
+    index_y = 1
     k_val = [i + 1 for i in range(n_internal_rows + 1)]
-    columns_per_finger = 5
-    elements_along_palm = sum(hand_elements_along[0:2]) + 1  # one row of prox.phalanx
-    elements_along_finger = sum(hand_elements_along[2:]) - 1
+    # k_val = virtual_node_matrix.get_kval_outer()
+    parent_node_id = 1
+    columns_per_finger = options.get("Number of matrix columns per finger")
+    elements_along_palm = sum(hand_elements_along[Bone.CARPAL:Bone.PROX_PHALANX]) + 1
+    elements_along_finger = sum(hand_elements_along[Bone.PROX_PHALANX:]) - 1
     finger_index_x = elements_along_palm + 2  # First P.phalanx element is two-sided
     palm_bones = [Bone.CARPAL, Bone.METACARPAL, Bone.PROX_PHALANX]
     finger_names = options.get("finger names")
@@ -1084,51 +1106,45 @@ def generate_external_node_matrix(
     node_network: Node_network,
     options,
 ):
-    # c, mc, pp, mp, dp = hand_elements_along
     parent_node_id = sum(hand_elements_along) + 1
-    columns_per_finger = 5
-    elements_along_palm = sum(hand_elements_along[0:2]) + 1  # one row of prox.phalanx
+    elements_along_palm = sum(hand_elements_along[0:2]) + 1
     elements_along_finger = sum(hand_elements_along[2:]) - 1
     n_internal_rows = options.get("Internal elements across hand")
-    palm_internal_cols = 4
-    finger_internal_cols = 1
+    columns_per_finger = options.get("Number of matrix columns per finger")
+    n_finger_internal_cols = options.get("Internal elements along each finger")
+    n_palm_internal_cols = 4 * n_finger_internal_cols
     finger_index_x = elements_along_palm + 2  # First P.phalanx element is two-sided
-    finger_names = options["finger names"]
-    bone_names = options["bone names"]
+    finger_names = options.get("finger names")
+    bone_names = options.get("bone names")
     THUMB_INDEX = 4
     # TODO calculate formulas for these numbers, based on the width of the internal boxes.
     # TODO reformulate how these numbers are calculated.
-    a_palm = 4.35
-    b_palm = 2.25
-    a_finger = options["a_finger"]
-    b_finger = options["b_finger"]
-    """
-    New ellipse code
-    """
-    ellipses = [None for i in range(sum(hand_elements_along[0:2]) + 1)]
+    a_palm = options.get("Magnitude of major axis for palm ellipses")
+    b_palm = options.get("Magnitude of minor axis for palm ellipses")
+    a_finger = options.get("Magnitude of major axis for finger ellipses")
+    b_finger = options.get("Magnitude of minor axis for finger ellipses")
+    palm_ellipses = [None for i in range(sum(hand_elements_along[0:2]) + 1)]
+    palm_bones = [Bone.CARPAL, Bone.METACARPAL, Bone.PROX_PHALANX]
     for n in range(elements_along_palm):
         x, d1, d2, d3 = node_network.get_node_parameters(parent_node_id)
         x = add(x, d2)
         ## TODO get rid of the multiple function calls
         ## simplify everything into one simple function
-        ellipse = Ellipse([x, d1, d2, d3], a_palm, b_palm, n_internal_rows, palm_internal_cols)
+        ellipse = Ellipse([x, d1, d2, d3], a_palm, b_palm, n_internal_rows, n_palm_internal_cols)
         ellipse.create_sampling_angles_along_axis()
         ellipse.sample_ellipse_along_angles()
         ellipse.sort_ellipse_samples()
-        ellipses[n] = ellipse.get_ellipse_samples()
+        palm_ellipses[n] = ellipse.get_ellipse_samples()
         parent_node_id += 1
     for n in range(elements_along_palm - 1):
-        ellipse_x, ellipse_d1, _ = ellipses[n]
-        next_ellipse_x, next_ellipse_d1, _ = ellipses[n + 1]
+        ellipse_x, ellipse_d1, _ = palm_ellipses[n]
+        next_ellipse_x, next_ellipse_d1, _ = palm_ellipses[n + 1]
         for f in range(5):
             for k in range(1, n_internal_rows + 2):
                 if ellipse_x[k][f] is not None:
                     ## TODO calculate the d1s more carefully on the last ellipse
                     d1 = sub(next_ellipse_x[k][f], ellipse_x[k][f])
                     ellipse_d1[k][f] = next_ellipse_d1[k][f] = d1
-    """
-    """
-    palm_bones = [Bone.CARPAL, Bone.METACARPAL, Bone.PROX_PHALANX]
     parent_node_id = 1
     index_y = 1
     d3 = None
@@ -1150,7 +1166,7 @@ def generate_external_node_matrix(
             else:
                 i_val = [index_x]
             for i in i_val:
-                ellipse = ellipses[i]
+                ellipse = palm_ellipses[i]
                 for j in j_val:
                     # TODO make k_val variable
                     if j == index_y or (finger_index == 3 and j == index_y + 1):
@@ -1254,7 +1270,7 @@ def generate_external_node_matrix(
                     a_finger,
                     b_finger,
                     n_internal_rows,
-                    finger_internal_cols,
+                    n_finger_internal_cols,
                 )
                 ellipse.create_sampling_angles_uniform()
                 ellipse.sample_ellipse_along_angles()
@@ -1900,43 +1916,6 @@ def create_cube_element(
     scale_factors = list(global_to_local_scale_factor_ids.keys())
     element.setScaleFactors(eft, scale_factors)
     return result, element
-
-
-def sample_ellipse_along_angles(
-    center: list, major_axis: list, minor_axis: list, sampling_angles: list
-):
-    """
-    From a list of angles on the first quadrant of an ellipse, calculate their reflection
-    over the other three quadrants. Then alculate both the position and tangent angle at the
-    updated list of angles.
-
-    :param center: Description
-    :param major_axis: Description
-    :param minor_axis: Description
-    :param sampling_angles: Description
-    """
-    for angle in reversed(sampling_angles):
-        new_angle = math.pi - angle
-        if new_angle not in sampling_angles:
-            sampling_angles.append(new_angle)
-    for angle in sampling_angles[:]:
-        new_angle = math.pi + angle
-        if new_angle not in sampling_angles:
-            sampling_angles.append(new_angle)
-    angle = 2 * math.pi + sampling_angles[0]
-    if angle not in sampling_angles:
-        sampling_angles.append(2 * math.pi + sampling_angles[0])
-
-    ellipse_x = []
-    ellipse_d1 = []
-    for i in range(len(sampling_angles) - 1):
-        ellipse = sampleEllipsePoints(
-            center, major_axis, minor_axis, sampling_angles[i], sampling_angles[i + 1], 1
-        )
-        ellipse_x.append(ellipse[0][0])
-        ellipse_d1.append(ellipse[1][0])
-    return ellipse_x, ellipse_d1
-
 
 def sampling_coefficient(k, n):
     """
