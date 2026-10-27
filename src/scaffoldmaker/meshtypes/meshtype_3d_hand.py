@@ -1,4 +1,5 @@
 import math
+import copy
 from itertools import product
 
 from cmlibs.maths.vectorops import (
@@ -167,28 +168,26 @@ class MeshType_3d_hand1(Scaffold_base):
         ]
 
         node_network = Node_network(region, fieldcache)
-        virtual_node_matrix = Virtual_node_matrix(options)
+        vnm = Virtual_node_matrix(options)
 
         node_network, node_identifier = generate_internal_node_network(
             node_network, hand_elements_along, node_identifier, options=options
         )
         if create_internal:
-            virtual_node_matrix, node_network, node_identifier = generate_internal_node_matrix(
+            vnm, node_network, node_identifier = generate_internal_node_matrix(
                 hand_elements_along,
                 node_identifier,
-                virtual_node_matrix,
+                vnm,
                 node_network=node_network,
                 options=options,
             )
             if create_external:
-                virtual_node_matrix, node_network, node_identifier = (
-                    generate_external_node_matrix(
-                        hand_elements_along,
-                        node_identifier,
-                        virtual_node_matrix,
-                        node_network=node_network,
-                        options=options,
-                    )
+                vnm, node_network, node_identifier = generate_external_node_matrix(
+                    hand_elements_along,
+                    node_identifier,
+                    vnm,
+                    node_network=node_network,
+                    options=options,
                 )
 
         finger_names = options["finger names"]
@@ -223,15 +222,14 @@ class MeshType_3d_hand1(Scaffold_base):
         # for i in range(4):
         #     node_network.remove_node(1 + i * elements_along_per_finger)
         node_network.set_zinc_nodes()
-        matrix = virtual_node_matrix.get_matrix()
-        [ix, iy, iz] = virtual_node_matrix.get_matrix_dimensions()
+        [ix, iy, iz] = vnm.get_matrix_dimensions()
         for k in range(iz - 1):
             for j in range(iy - 1):
                 for i in range(ix - 1):
                     result, element = create_cube_element(
                         fieldmodule,
                         element_identifier,
-                        matrix,
+                        vnm,
                         [i, j, k],
                     )
                     if result == RESULT_OK:
@@ -240,7 +238,7 @@ class MeshType_3d_hand1(Scaffold_base):
                         element_annotations = [hand_group]
                         # find annotation groups
                         try:
-                            node_annotations = matrix[i][j][k]["Annotation"]
+                            node_annotations = vnm.get_vnode([i, j, k]).get_annotation()
                             for group in annotation_groups:
                                 if group.getName() in node_annotations:
                                     element_annotations.append(group)
@@ -489,6 +487,8 @@ class Ellipse:
         self.list_ellipse_d2 = ellipse_d2
 
     def create_fingercap_scale_factors(self):
+        # TODO this fix was formatted with help from Claude, I am not quite happy with it.
+        # TODO need to go back and revisit the logic in the future.
         """
         Calculate the scale factors of the fingercap at every node of the ring, where the
         fingercap derivatives are combinations of the ring derivatives D1 and D2:
@@ -803,6 +803,60 @@ class Node_network:
         nodes_dict.pop(node_identifier)
 
 
+class Virtual_node:
+    """
+    A class defining a virtual (also called hanging) node.
+    A node can be internal (with only a positional, x, term),
+    or external (defined as having an additional d1 and d2 terms).
+    A virtual node does not have parameters of it own, instead it points
+    to a 'real' zinc node via its node identifiers and has scale factors
+    that create linear combinations of the parameters of the parent node
+    """
+
+    def __init__(
+        self, node_identifier: int, annotation: list, x: list, d1: list = None, d2: list = None
+    ):
+        self.node_identifier = node_identifier
+        self.annotation = annotation
+        assert len(x) == 4, "Scale factor vector must be length 4"
+        self.scalefactors = {
+            Node.VALUE_LABEL_VALUE: [[node_identifier, *x]],
+        }
+        if d1 is not None:
+            assert len(d1) == len(d2) == 4, "Scale factor vector must be length 4"
+            self.scalefactors[Node.VALUE_LABEL_D_DS1] = [[node_identifier, *d1]]
+            self.scalefactors[Node.VALUE_LABEL_D_DS2] = [[node_identifier, *d2]]
+            self.is_external = True
+        else:
+            self.is_external = False
+
+    def get_scalefactors(self, label) -> list:
+        return self.scalefactors.get(label)
+
+    def get_node_identifier(self):
+        return self.node_identifier
+
+    def get_annotation(self):
+        return self.annotation
+
+    def copy(self):
+        vnode = copy.copy(self)
+        vnode.scalefactors = {
+            label: [[*sf] for sf in scalefactors]
+            for label, scalefactors in self.scalefactors.items()
+        }
+        return vnode
+
+    def blend(self, new_vnode):
+        # Append the positional (x) scalefactors from the incoming node to the current one
+        assert not self.is_external and not new_vnode.is_external, (
+            "Blending only supported for internal nodes"
+        )
+        self.scalefactors[Node.VALUE_LABEL_VALUE] = self.scalefactors[
+            Node.VALUE_LABEL_VALUE
+        ] + [[*sf] for sf in new_vnode.get_scalefactors(Node.VALUE_LABEL_VALUE)]
+
+
 class Virtual_node_matrix:
     def __init__(self, options: dict):
         hand_elements_along = [
@@ -847,45 +901,45 @@ class Virtual_node_matrix:
         ]
         self.phys_to_logic_k_val = phys_to_logic_k_val
 
-    def create_internal_vnode(self, node_identifier: int, x: list, annotation: dict):
-        virtual_node = {
-            Node.VALUE_LABEL_VALUE: [[node_identifier, *x]],
-            "node_identifier": node_identifier,
-            "Type": "internal",
-            "Annotation": annotation,
-        }
-        return virtual_node
+    # def create_internal_vnode(self, node_identifier: int, x: list, annotation: dict):
+    #     virtual_node = {
+    #         Node.VALUE_LABEL_VALUE: [[node_identifier, *x]],
+    #         "node_identifier": node_identifier,
+    #         "Type": "internal",
+    #         "Annotation": annotation,
+    #     }
+    #     return virtual_node
 
-    def create_external_vnode(
-        self, node_identifier: int, x: list, d1: list, d2: list, annotation: dict
-    ):
-        assert len(x) == len(d1) == len(d2) == 4, "Scale factor vector must be length 4"
-        virtual_node = {
-            Node.VALUE_LABEL_VALUE: [[node_identifier, *x]],
-            Node.VALUE_LABEL_D_DS1: [[node_identifier, *d1]],
-            Node.VALUE_LABEL_D_DS2: [[node_identifier, *d2]],
-            "node_identifier": node_identifier,
-            "Type": "external",
-            "Annotation": annotation,
-        }
-        return virtual_node
+    # def create_external_vnode(
+    #     self, node_identifier: int, x: list, d1: list, d2: list, annotation: dict
+    # ):
+    #     assert len(x) == len(d1) == len(d2) == 4, "Scale factor vector must be length 4"
+    #     virtual_node = {
+    #         Node.VALUE_LABEL_VALUE: [[node_identifier, *x]],
+    #         Node.VALUE_LABEL_D_DS1: [[node_identifier, *d1]],
+    #         Node.VALUE_LABEL_D_DS2: [[node_identifier, *d2]],
+    #         "node_identifier": node_identifier,
+    #         "Type": "external",
+    #         "Annotation": annotation,
+    #     }
+    #     return virtual_node
 
-    def set_vnode_to_index(self, vnode: dict, index: list, replace=True):
+    def set_vnode_to_index(self, vnode: Virtual_node, index: list, overwrite=True):
         i, j, k = index
         node_matrix = self.node_matrix
-        if replace:
+        if overwrite:
             node_matrix[i][j][k] = vnode.copy()
         else:
             if node_matrix[i][j][k] is None:
                 node_matrix[i][j][k] = vnode.copy()
             else:
-                if vnode.get("Type") == "internal":
-                    new_vnode = vnode.get(Node.VALUE_LABEL_VALUE)
-                    new_vnode = new_vnode[0]
-                    self.blend_vnode(index, new_vnode)
+                if not vnode.is_external:
+                    existing_vnode = self.get_vnode(index)
+                    existing_vnode.blend(vnode)
+                    node_matrix[i][j][k] = existing_vnode
 
     def set_vnode_to_indices(
-        self, vnode: dict, indices: list, replace=True, k_allocation_mode="both"
+        self, vnode: Virtual_node, indices: list, overwrite=True, k_allocation_mode="both"
     ):
         ## TODO rename the k_allocation_mode
         for index in indices:
@@ -901,7 +955,7 @@ class Virtual_node_matrix:
                 raise ValueError("Valid modes are upper, lower or both")
             for k in logic_k_vals:
                 l_index = [i, j, k]
-                self.set_vnode_to_index(vnode, l_index, replace)
+                self.set_vnode_to_index(vnode, l_index, overwrite)
 
     def get_matrix(self) -> list:
         return self.node_matrix
@@ -915,41 +969,49 @@ class Virtual_node_matrix:
         else:
             return self.kval_outer
 
-    def blend_vnode(self, existing_node_index: list, new_vnode):
-        """
-        Only works for blending internal linear nodes for now
+    # def blend_vnode(self, existing_node_index: list, new_vnode):
+    #     """
+    #     Only works for blending internal linear nodes for now
 
-        :param self: Description
-        :param existing_node_index: Description
-        :type existing_node_index: list
-        :param new_node: Description
-        """
-        vertex = self.get_vnode(existing_node_index)
-        original_vertex = vertex[Node.VALUE_LABEL_VALUE]
-        N = len(original_vertex)
-        updated_vertex = [*original_vertex]
-        updated_vertex.append([*new_vnode])
-        for i in [1, 4]:
-            coeff_sum = 0
-            for j in range(N + 1):
-                coeff_sum += updated_vertex[j][i]
-            # TODO make a decision on whether to keep this check or no.
-            # assert abs(coeff_sum) == 1, 'Not affine combination'
-        vertex[Node.VALUE_LABEL_VALUE] = updated_vertex
-        self.set_vnode_to_index(vertex, existing_node_index)
+    #     :param self: Description
+    #     :param existing_node_index: Description
+    #     :type existing_node_index: list
+    #     :param new_node: Description
+    #     """
+    #     vertex = self.get_vnode(existing_node_index)
+    #     original_vertex = vertex[Node.VALUE_LABEL_VALUE]
+    #     N = len(original_vertex)
+    #     updated_vertex = [*original_vertex]
+    #     updated_vertex.append([*new_vnode])
+    #     for i in [1, 4]:
+    #         coeff_sum = 0
+    #         for j in range(N + 1):
+    #             coeff_sum += updated_vertex[j][i]
+    #         # TODO make a decision on whether to keep this check or no.
+    #         # assert abs(coeff_sum) == 1, 'Not affine combination'
+    #     vertex[Node.VALUE_LABEL_VALUE] = updated_vertex
+    #     self.set_vnode_to_index(vertex, existing_node_index)
 
-    def get_vnode(self, index: list) -> dict:
+    def get_vnode(self, index: list) -> Virtual_node:
         i, j, k = index
         node_matrix = self.node_matrix
-        virtual_node = node_matrix[i][j][k]
-        return virtual_node
+        vnode = node_matrix[i][j][k]
+        return vnode
 
     def get_node_identifier_at_index(self, index: list) -> int:
         node = self.get_vnode(index)
-        node_id = node.get("node_identifier")
-        return node_id
+        node_identifier = node.get_node_identifier()
+        return node_identifier
 
     def print_cube_from_index(self, start_index: list):
+        """
+        For debugging purposes, prints the instructions for creating the cube element
+        starting at start_index.
+
+        :param self: Description
+        :param start_index: Description
+        :type start_index: list
+        """
         start_i, start_j, start_k = start_index
         ranges = [[0, 1], [0, 1], [0, 1]]  # 1
         order = [2, 1, 0]
@@ -1122,7 +1184,7 @@ def generate_internal_node_network(
 def generate_internal_node_matrix(
     hand_elements_along,
     node_identifier,
-    virtual_node_matrix: Virtual_node_matrix,
+    vnm: Virtual_node_matrix,
     node_network: Node_network,
     options: dict = None,
 ):
@@ -1132,7 +1194,7 @@ def generate_internal_node_matrix(
     :param fieldmodule: Description
     :param hand_elements_along: Description
     :param node_identifier: Description
-    :param virtual_node_matrix: Description
+    :param vnm: Description
     :param options: Description
     :return: Description
     :rtype: Any
@@ -1148,7 +1210,7 @@ def generate_internal_node_matrix(
     a2 = 0.0
     index_y = 1
     # k_val = [i + 1 for i in range(n_internal_rows + 1)]
-    k_val = virtual_node_matrix.get_kval(inner=True)
+    k_val = vnm.get_kval(inner=True)
     # k_val = virtual_node_matrix.get_kval_outer()
     parent_node_id = 1
     columns_per_finger = options.get("Number of matrix columns per finger")
@@ -1197,10 +1259,8 @@ def generate_internal_node_matrix(
                                 j == index_y + 6 and finger_index == 2
                             ):
                                 indices.append([i + 1, j + 4, k])
-                            node = virtual_node_matrix.create_internal_vnode(
-                                parent_node_id, [a0, a1, a2, a3], annotation
-                            )
-                            virtual_node_matrix.set_vnode_to_indices(node, indices, False)
+                            node = Virtual_node(parent_node_id, annotation, [a0, a1, a2, a3])
+                            vnm.set_vnode_to_indices(node, indices, False)
                         elif bone == Bone.METACARPAL:
                             annotation = [bone_name] if k == 1 else ""
                             if (j == index_y + 1 and finger_index == 3) or (
@@ -1209,10 +1269,8 @@ def generate_internal_node_matrix(
                                 if i == index_x:
                                     indices.append([i + 1, j + 4, k])
                                     indices.append([i + 3, j + 4, k])
-                            node = virtual_node_matrix.create_internal_vnode(
-                                parent_node_id, [a0, a1, a2, a3], annotation
-                            )
-                            virtual_node_matrix.set_vnode_to_indices(node, indices, False)
+                            node = Virtual_node(parent_node_id, annotation, [a0, a1, a2, a3])
+                            vnm.set_vnode_to_indices(node, indices, False)
                         elif bone == Bone.PROX_PHALANX:
                             n_elements_along = 1
                             finger_name = finger_names[finger_index]
@@ -1220,11 +1278,9 @@ def generate_internal_node_matrix(
                                 finger_name = finger_names[finger_index + 1]
                             finger_part = bone_name + " of " + finger_name
                             annotation = [bone_name, finger_name, finger_part]
-                            node = virtual_node_matrix.create_internal_vnode(
-                                parent_node_id, [a0, a1, a2, a3], annotation
-                            )
+                            node = Virtual_node(parent_node_id, annotation, [a0, a1, a2, a3])
                             indices.append([i + 2, j, k])
-                            virtual_node_matrix.set_vnode_to_indices(node, indices, False)
+                            vnm.set_vnode_to_indices(node, indices, False)
                             indices
                 parent_node_id += 1
             index_x += n_elements_along
@@ -1281,10 +1337,8 @@ def generate_internal_node_matrix(
                                 else:
                                     if i == index_x:
                                         indices.append([i, index_y - 4, k])
-                        node = virtual_node_matrix.create_internal_vnode(
-                            parent_node_id, [a0, a1, a2, a3], annotation
-                        )
-                        virtual_node_matrix.set_vnode_to_indices(node, indices, False)
+                        node = Virtual_node(parent_node_id, annotation, [a0, a1, a2, a3])
+                        vnm.set_vnode_to_indices(node, indices, False)
                 parent_node_id += 1
             index_x += n_elements_along
         if finger_index < THUMB_INDEX - 1:
@@ -1292,13 +1346,13 @@ def generate_internal_node_matrix(
             index_y += columns_per_finger
         else:
             index_y += 2 * columns_per_finger
-    return virtual_node_matrix, node_network, node_identifier
+    return vnm, node_network, node_identifier
 
 
 def generate_external_node_matrix(
     hand_elements_along,
     node_identifier,
-    virtual_node_matrix: Virtual_node_matrix,
+    vnm: Virtual_node_matrix,
     node_network: Node_network,
     options,
 ):
@@ -1368,9 +1422,9 @@ def generate_external_node_matrix(
                 for j in j_val:
                     # TODO make k_val variable
                     if j == index_y or (finger_index == 3 and j == index_y + 1):
-                        k_val = virtual_node_matrix.get_kval(inner=True)
+                        k_val = vnm.get_kval(inner=True)
                     else:
-                        k_val = virtual_node_matrix.get_kval(inner=False)
+                        k_val = vnm.get_kval(inner=False)
                     for k in k_val:
                         # TODO fix bug on ellipse sampling function
                         ellipse_x, ellipse_d1, ellipse_d2 = ellipse
@@ -1423,14 +1477,14 @@ def generate_external_node_matrix(
                             else:
                                 indices.append([i, j + 4, k + a3])
                                 indices.append([i + 2, j + 4, k + a3])
-                        node = virtual_node_matrix.create_external_vnode(
+                        node = Virtual_node(
                             x=[1, 0, 0, 0],
                             d1=[0, 1, 0, 0],
                             d2=[0, 0, 1, 0],
                             node_identifier=node_identifier,
                             annotation=annotation,
                         )
-                        virtual_node_matrix.set_vnode_to_indices(node, indices)
+                        vnm.set_vnode_to_indices(node, indices)
                         node_network.set_node_parameters(
                             [x, d1, d2, d3], node_identifier, internal_node=False
                         )
@@ -1479,9 +1533,9 @@ def generate_external_node_matrix(
                 a1 = 0
                 for j in j_val:
                     if j in [j_val[0], j_val[-1]]:
-                        k_val = virtual_node_matrix.get_kval(inner=True)
+                        k_val = vnm.get_kval(inner=True)
                     else:
-                        k_val = virtual_node_matrix.get_kval(inner=False)
+                        k_val = vnm.get_kval(inner=False)
                     for k in k_val:
                         a1 = 0 if j == index_y else 1
                         a2 = -1 if j == index_y else 1
@@ -1496,14 +1550,14 @@ def generate_external_node_matrix(
                         ## TODO replace this check
                         indices = [[i, j, k + a3]] if k in [1, n_internal_rows + 1] else []
                         indices.append([i, j + a2, k])
-                        node = virtual_node_matrix.create_external_vnode(
+                        node = Virtual_node(
+                            node_identifier=node_identifier,
+                            annotation=annotation,
                             x=[1, 0, 0, 0],
                             d1=[0, 1, 0, 0],
                             d2=[0, 0, 1, 0],
-                            node_identifier=node_identifier,
-                            annotation=annotation,
                         )
-                        virtual_node_matrix.set_vnode_to_indices(node, indices)
+                        vnm.set_vnode_to_indices(node, indices)
                         node_network.set_node_parameters(
                             [x, d1, d2, d3], node_identifier, internal_node=False
                         )
@@ -1524,35 +1578,33 @@ def generate_external_node_matrix(
                             d22 = cap_d22[k][a1]
                             cap_annotation = [finger_name]
                             if k in [1, n_internal_rows + 1]:
-                                node = virtual_node_matrix.create_external_vnode(
+                                node = Virtual_node(
+                                    node_identifier=node_identifier,
+                                    annotation=annotation,
                                     x=[1, 0, 0, 0],
                                     d1=[0, 1, 0, 0],
                                     d2=[0, a3 * d11, a3 * d12, 0],
+                                )
+                                vnm.set_vnode_to_indices(node, [[i, j, k + a3]])
+                            for k_allocation_mode, d21_half in zip(["upper", "lower"], d21):
+                                node = Virtual_node(
                                     node_identifier=node_identifier,
                                     annotation=annotation,
-                                )
-                                virtual_node_matrix.set_vnode_to_indices(
-                                    node, [[i, j, k + a3]]
-                                )
-                            for k_allocation_mode, d21_half in zip(["upper", "lower"], d21):
-                                node = virtual_node_matrix.create_external_vnode(
                                     x=[1, 0, 0, 0],
                                     d1=[0, 1, 0, 0],
                                     d2=[0, -a2 * d21_half, -a2 * d22, 0],
-                                    node_identifier=node_identifier,
-                                    annotation=annotation,
                                 )
-                                virtual_node_matrix.set_vnode_to_indices(
+                                vnm.set_vnode_to_indices(
                                     node, [[i, j + a2, k]], k_allocation_mode=k_allocation_mode
                                 )
-                                node = virtual_node_matrix.create_external_vnode(
+                                node = Virtual_node(
+                                    node_identifier=node_identifier,
+                                    annotation=cap_annotation,
                                     x=[1, 0, 0, 0],
                                     d1=[0, d11, d12, 0],
                                     d2=[0, d21_half, d22, 0],
-                                    node_identifier=node_identifier,
-                                    annotation=cap_annotation,
                                 )
-                                virtual_node_matrix.set_vnode_to_indices(
+                                vnm.set_vnode_to_indices(
                                     node, [[i + 1, j, k]], k_allocation_mode=k_allocation_mode
                                 )
                         node_identifier += 1
@@ -1759,13 +1811,13 @@ def generate_external_node_matrix(
     #     )
     #     virtual_node_matrix.set_virtual_node_to_index(node, [6, index_y - 4, k + a3])
 
-    return virtual_node_matrix, node_network, node_identifier
+    return vnm, node_network, node_identifier
 
 
 def create_cube_element(
     fieldmodule: Fieldmodule,
     element_identifier: int,
-    node_matrix: list,
+    vnm: Virtual_node_matrix,
     node_indices: list,
 ) -> list:
     ## TODO add tricubic configuration
@@ -1809,7 +1861,7 @@ def create_cube_element(
     corners 5, 6, 7 and 8. This is less important in the case of trilinear elements.
     Immediately after, the eight corner of the cube are reorganized according to this
     transformation and the value scale factors are collected from each virtual node.
-    A virtual node always has the structure
+    A virtual node is comprised of lists of scale factors in the format
     [parent_node_id, value_scale_factor, d1_scale_factor, d2_scale_factor, d3_scale_factor].
     These are mapped into a list of expression terms and a dictionary which
     keeps track of the mapping between the real value and the element id of the scale factor.
@@ -1826,6 +1878,7 @@ def create_cube_element(
     :param fieldmodule: Description
     :param element_identifier: Description
     :param node_matrix: Description
+    TODO fix docstring
     :param ix: Description
     :param iy: Description
     :param iz: Description
@@ -1838,28 +1891,25 @@ def create_cube_element(
     coordinates = find_or_create_field_coordinates(fieldmodule)
     # Criteria to identify the z-axis of the element
     ix, iy, iz = node_indices
-    node_1 = node_matrix[ix][iy][iz]
-    node_2 = node_matrix[ix + 1][iy][iz]
-    node_3 = node_matrix[ix][iy + 1][iz]
+    node_1 = vnm.get_vnode([ix, iy, iz])
+    node_2 = vnm.get_vnode([ix + 1, iy, iz])
+    node_3 = vnm.get_vnode([ix, iy + 1, iz])
     if node_1 is None or node_2 is None or node_3 is None:
         return -2, None
-    n1_ext = True if node_1["Type"] == "external" else False
-    n2_ext = True if node_2["Type"] == "external" else False
-    n3_ext = True if node_3["Type"] == "external" else False
     # 6 possible cases, one for each face of a cube
-    if not n1_ext and not n2_ext and not n3_ext:
+    if not node_1.is_external and not node_2.is_external and not node_3.is_external:
         ranges = [[0, 1], [0, 1], [0, 1]]  # 1
         order = [2, 1, 0]
-    elif not n1_ext and not n2_ext and n3_ext:
+    elif not node_1.is_external and not node_2.is_external and node_3.is_external:
         ranges = [[0, 1], [0, 1], [1, 0]]  # 2
         order = [1, 2, 0]
-    elif n1_ext and n2_ext and n3_ext:
+    elif node_1.is_external and node_2.is_external and node_3.is_external:
         ranges = [[0, 1], [1, 0], [1, 0]]  # 3
         order = [2, 1, 0]
-    elif n1_ext and n2_ext and not n3_ext:
+    elif node_1.is_external and node_2.is_external and not node_3.is_external:
         ranges = [[0, 1], [1, 0], [0, 1]]  # 4
         order = [1, 2, 0]
-    elif n1_ext and not n2_ext and n3_ext:
+    elif node_1.is_external and not node_2.is_external and node_3.is_external:
         ranges = [[1, 0], [0, 1], [1, 0]]  # 5
         order = [0, 2, 1]
     else:
@@ -1902,14 +1952,15 @@ def create_cube_element(
         ret = []
         i, j, k = index
         local_node += 1
-        virtual_node = node_matrix[ix + i][iy + j][iz + k]
-        if virtual_node is None:
+        # TODO change the function to instead get the node from the vnm object and keep hints
+        vnode = vnm.get_vnode([ix + i, iy + j, iz + k])
+        if vnode is None:
             return -2, None
-        if virtual_node["Type"] == "external":
+        if vnode.is_external:
             is_bicubic = True
-        virtual_node = virtual_node[Node.VALUE_LABEL_VALUE]
+        vnode_scalefactors = vnode.get_scalefactors(Node.VALUE_LABEL_VALUE)
         # Value expression terms
-        for global_node in virtual_node:
+        for global_node in vnode_scalefactors:
             for factor in range(len(global_node)):
                 if factor == 0:
                     # zero factor is always the node_id
@@ -1969,12 +2020,11 @@ def create_cube_element(
             et = []
             ret = []
             i, j, k = indices[local_node - 1]
-            virtual_node = node_matrix[ix + i][iy + j][iz + k]
-            try:
-                virtual_node = virtual_node[label]
-            except KeyError:
+            vnode = vnm.get_vnode([ix + i, iy + j, iz + k])
+            vnode_scalefactors = vnode.get_scalefactors(label)
+            if vnode_scalefactors is None:
                 return -1, None
-            for global_node in virtual_node:
+            for global_node in vnode_scalefactors:
                 for factor in range(len(global_node)):
                     if factor == 0:
                         # Check for node_ids
@@ -2015,9 +2065,11 @@ def create_cube_element(
             et = []
             ret = []
             i, j, k = indices[local_node - 1]
-            virtual_node = node_matrix[ix + i][iy + j][iz + k]
-            virtual_node = virtual_node[label]
-            for global_node in virtual_node:
+            vnode = vnm.get_vnode([ix + i, iy + j, iz + k])
+            vnode_scalefactors = vnode.get_scalefactors(label)
+            if vnode_scalefactors is None:
+                return -1, None
+            for global_node in vnode_scalefactors:
                 for factor in range(len(global_node)):
                     if factor == 0:
                         # Check for node_ids
