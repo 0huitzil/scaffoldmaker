@@ -3,6 +3,7 @@ from itertools import product
 
 from cmlibs.maths.vectorops import (
     add,
+    dot,
     magnitude,
     mult,
     rotate_vector_around_vector,
@@ -29,6 +30,7 @@ from scaffoldmaker.utils.eft_utils import (
     setEftScaleFactorIds,
 )
 from scaffoldmaker.utils.geometry import sampleEllipsePoints
+from scaffoldmaker.utils.interpolation import interpolateCubicHermite
 
 
 class MeshType_3d_hand1(Scaffold_base):
@@ -355,8 +357,7 @@ class Ellipse:
         self.ellipse_d1 = None
         self.list_ellipse_d2 = None
 
-        self.sorted_scalefactor_d1_external = None
-        self.sorted_scalefactor_d2_external = None
+        self.sorted_fingercap_scale_factors = None
 
     ## TODO create set_sampling_method function, the only public function to be called
 
@@ -488,16 +489,160 @@ class Ellipse:
         self.list_ellipse_d2 = ellipse_d2
 
     def create_fingercap_scale_factors(self):
-        assert self.list_angles is not None, "List of ellipse samples not available"
-        list_angles = self.list_angles
-        ellipse_cubic_factor = 4
-        list_d1 = [
-            ellipse_cubic_factor * math.copysign(
-                math.sin(math.acos(math.sin(angle))), -math.cos(angle)
+        """
+        Calculate the scale factors of the fingercap at every node of the ring, where the
+        fingercap derivatives are combinations of the ring derivatives D1 and D2:
+            d1 = d11 * D1 + d12 * D2,    d2 = d21 * D1 + d22 * D2
+        d21 = [upper, lower] is the D1 part of d2 in the fingercap elements above and below
+        the node (the same for both at a corner, which has a single fingercap element).
+        They are chosen so the halfway point of each fingercap edge lies on the half ellipsoid
+        with the ellipse as its base and D1 as its apex (halfway rule).
+        Going around the ring, every segment between two consecutive nodes is a fingercap
+        edge. The tangents leaving node i are kept as [alpha, beta] = alpha * D1 + beta * D2,
+        ahead[i] towards node i + 1 and behind[i] towards node i - 1 (D2 points towards i + 1):
+        - Middle to middle: lamb * D1 +/- D2, lamb from the halfway rule (0 if the segment
+          already lies outside the ellipsoid).
+        - Middle to corner: the middle node keeps the lamb of its other segment, or 1 with
+          2 internal rows, and the corner adapts to it.
+        - Corner tangents: lamb * (D1 +/- c * D2). With 1 internal row the fingercap is a
+          single element, whose tip rises by the sum of the across and side halfway heights,
+          so lamb = 2 puts the tip on the apex and the halfway rule gives c. Otherwise
+          c = |D1| / |D2| (equal parts of D1 and D2) and the halfway rule gives lamb. If the
+          halfway rule has no solution, the corner keeps lamb = 1 and c = |D1| / |D2|.
+        The edges across the middle nodes are not ring segments: they stay in the slice of the
+        ellipsoid at the height of the node, a half ellipse whose apex |cos(angle)| * D1 is
+        reached with d1 = 4 * cos(angle) * D1.
+        """
+        assert self.list_ellipse_x is not None, "List of ellipse samples not available"
+        n_internal_rows = self.n_internal_rows
+        n_internal_cols = self.n_internal_cols
+        assert n_internal_cols == 1, "Current algorithm limited to 1 internal col per finger"
+        list_x = self.list_ellipse_x
+        list_d2 = self.list_ellipse_d2
+        n_sampling_nodes = self.n_sampling_nodes
+        center = self.center
+        d1 = self.d1
+        axes = [self.major_axis, self.minor_axis, d1]
+        ellipse_cubic_factor = 4  # For the halfway point rule for an ellipse
+        zero = [0.0, 0.0, 0.0]
+
+        def leaving_tangent(i, factors):
+            return add(mult(d1, factors[0]), mult(list_d2[i], factors[1]))
+
+        def solve_on_ellipsoid(base, w):
+            # s > 0 such that base + s * w lies on the ellipsoid, None if there is none
+            p = [dot(sub(base, center), axis) / dot(axis, axis) for axis in axes]
+            w = [dot(w, axis) / dot(axis, axis) for axis in axes]
+            a, b, c = dot(w, w), 2.0 * dot(p, w), dot(p, p) - 1.0
+            discriminant = b * b - 4.0 * a * c
+            if discriminant < 0.0:
+                return None
+            s = (-b + math.sqrt(discriminant)) / (2.0 * a)
+            return s if s > 0.0 else None
+
+        def solve_segment(i, j, fixed_i, varying_i, fixed_j, varying_j):
+            # Halfway rule on the segment between nodes i and j, with the tangents leaving each
+            # end given as fixed + s * varying factors. Returns s, or None if there is none.
+            def halfway_point(x_i, factors_i, x_j, factors_j):
+                return interpolateCubicHermite(
+                    x_i,
+                    leaving_tangent(i, factors_i),
+                    x_j,
+                    mult(leaving_tangent(j, factors_j), -1.0),
+                    0.5,
                 )
-            for angle in list_angles[:-1]
+
+            return solve_on_ellipsoid(
+                halfway_point(list_x[i], fixed_i, list_x[j], fixed_j),
+                halfway_point(zero, varying_i, zero, varying_j),
+            )
+
+        def segments(kinds):
+            # Consecutive nodes i, j = i + 1 around the ring whose (corner, corner) kinds match
+            for i in range(n_sampling_nodes):
+                j = (i + 1) % n_sampling_nodes
+                if (is_corner[i], is_corner[j]) in kinds:
+                    yield i, j
+
+        sorted_index = self.sort_samples(list(range(n_sampling_nodes)))
+        is_corner = [False] * n_sampling_nodes
+        for k, col in product([1, n_internal_rows + 1], [0, n_internal_cols]):
+            is_corner[sorted_index[k][col]] = True
+        c_equal = [magnitude(d1) / magnitude(d2) for d2 in list_d2]
+        ahead = [None] * n_sampling_nodes
+        behind = [None] * n_sampling_nodes
+        # Middle to middle
+        for i, j in segments([(False, False)]):
+            lamb = solve_segment(i, j, [0.0, 1.0], [1.0, 0.0], [0.0, -1.0], [1.0, 0.0])
+            lamb = 0.0 if lamb is None else lamb
+            ahead[i] = [lamb, 1.0]
+            behind[j] = [lamb, -1.0]
+        # Middle nodes facing a corner
+        for i in range(n_sampling_nodes):
+            if not is_corner[i]:
+                known = [t[0] for t in (ahead[i], behind[i]) if t is not None]
+                lamb = known[0] if known else 1.0
+                if ahead[i] is None:
+                    ahead[i] = [lamb, 1.0]
+                if behind[i] is None:
+                    behind[i] = [lamb, -1.0]
+        # Corner to corner
+        for i, j in segments([(True, True)]):
+            c_i, c_j = c_equal[i], c_equal[j]
+            if n_internal_rows == 1:
+                c = solve_segment(i, j, [2.0, 0.0], [0.0, 2.0], [2.0, 0.0], [0.0, -2.0])
+                lamb = None if c is None else 2.0
+                if c is not None:
+                    c_i = c_j = c
+            else:
+                lamb = solve_segment(i, j, [0.0, 0.0], [1.0, c_i], [0.0, 0.0], [1.0, -c_j])
+            lamb = 1.0 if lamb is None else lamb
+            ahead[i] = [lamb, lamb * c_i]
+            behind[j] = [lamb, -lamb * c_j]
+        # Corner to middle, with the tangent leaving the middle node fixed
+        for i, j in segments([(True, False), (False, True)]):
+            corner, middle = (i, j) if is_corner[i] else (j, i)
+            towards_d2 = 1.0 if corner == i else -1.0
+            leaving_middle = behind[j] if corner == i else ahead[i]
+            c = towards_d2 * c_equal[corner]
+            lamb = solve_segment(
+                corner, middle, [0.0, 0.0], [1.0, c], leaving_middle, [0.0, 0.0]
+            )
+            lamb = 1.0 if lamb is None else lamb
+            if corner == i:
+                ahead[i] = [lamb, lamb * c]
+            else:
+                behind[j] = [lamb, lamb * c]
+
+        # Fingercap d1 runs across (+j), d2 along the side (+k): sort and orient the tangents
+        sorted_ahead = self.sort_samples(ahead)
+        sorted_behind = self.sort_samples(behind)
+        sorted_angles = self.sort_samples(self.list_angles[:-1])
+        d11, d12, d21, d22 = [
+            [[None for f in range(n_internal_cols + 1)] for k in range(n_internal_rows + 3)]
+            for i in range(4)
         ]
-        self.list_fingercap_d1 = list_d1
+        for k, col in product(range(1, n_internal_rows + 2), [0, n_internal_cols]):
+            a2 = -1 if col == 0 else 1
+            a3 = -1 if k == 1 else 1
+            if k in [1, n_internal_rows + 1]:
+                # The side edge is ahead of the bottom-left and top-right corners
+                side, across = sorted_ahead[k][col], sorted_behind[k][col]
+                if a2 * a3 != 1:
+                    side, across = across, side
+                d11[k][col], d12[k][col] = [-a2 * f for f in across]
+                d21_side, d22[k][col] = [-a3 * f for f in side]
+                d21[k][col] = [d21_side, d21_side]
+            else:
+                # Upper half towards k + 1 is ahead on the first column, behind on the last
+                upper, lower = sorted_ahead[k][col], sorted_behind[k][col]
+                if a2 == 1:
+                    upper, lower = lower, upper
+                d11[k][col] = ellipse_cubic_factor * math.cos(sorted_angles[k][col])
+                d12[k][col] = 0.0
+                d21[k][col] = [upper[0], -lower[0]]
+                d22[k][col] = -a2
+        self.sorted_fingercap_scale_factors = [d11, d12, d21, d22]
 
     def sort_samples(self, list_samples):
         n_internal_rows = self.n_internal_rows
@@ -544,14 +689,6 @@ class Ellipse:
         self.sorted_scalefactor_d2_internal = sorted_scalefactor_d2
         self.sorted_scalefactor_d3_internal = sorted_scalefactor_d3
 
-    def sort_fingercap_scale_factors(self):
-        assert self.list_fingercap_d1 is not None, (
-            "List of fingercap scale factorss not available"
-        )
-        scalefactor_fingercap_d1 = self.list_fingercap_d1
-        sorted_scalefactor_d1_external = self.sort_samples(scalefactor_fingercap_d1)
-        self.sorted_scalefactor_d1_external = sorted_scalefactor_d1_external
-
     def get_ellipse_samples(self):
         ## TODO call the sample and sort functions from here
         return [self.sorted_ellipse_x, self.sorted_ellipse_d1, self.sorted_ellipse_d2]
@@ -563,8 +700,7 @@ class Ellipse:
     def get_fingercap_scale_factors(self):
         ## TODO call the sample and sort functions from here
         self.create_fingercap_scale_factors()
-        self.sort_fingercap_scale_factors()
-        return [self.sorted_scalefactor_d1_external]
+        return self.sorted_fingercap_scale_factors
 
 
 class Node_network:
@@ -590,7 +726,7 @@ class Node_network:
 
         internal_nodetemplate_labels = [
             Node.VALUE_LABEL_VALUE,
-            Node.VALUE_LABEL_D_DS1,
+            # Node.VALUE_LABEL_D_DS1,
             Node.VALUE_LABEL_D_DS2,
             Node.VALUE_LABEL_D_DS3,
         ]
@@ -1337,7 +1473,9 @@ def generate_external_node_matrix(
                 ellipse.sample_ellipse_along_angles()
                 ellipse.sort_ellipse_samples()
                 ellipse_x, ellipse_d1, ellipse_d2 = ellipse.get_ellipse_samples()
-                (fingercap_d1,) = ellipse.get_fingercap_scale_factors()
+                is_fingertip = bone == Bone.DIST_PHALANX and i == i_val[-1]
+                if is_fingertip:
+                    cap_d11, cap_d12, cap_d21, cap_d22 = ellipse.get_fingercap_scale_factors()
                 a1 = 0
                 for j in j_val:
                     if j in [j_val[0], j_val[-1]]:
@@ -1369,60 +1507,54 @@ def generate_external_node_matrix(
                         node_network.set_node_parameters(
                             [x, d1, d2, d3], node_identifier, internal_node=False
                         )
-                        if bone == Bone.DIST_PHALANX and i == i_val[-1]:
-                            # TODO update the logic to calculate the d1/d2 scale factors
-                            # TODO update the last row of elements so the face facing
-                            # the fingercap shares scale factors/deformation with the cap.
-                            d11 = -fingercap_d1[k][a1]
-                            annotation = [finger_name]
-                            if k not in [1, n_internal_rows + 1]:
+                        if is_fingertip:
+                            # The last ring is the base of the fingercap, made of front-facing
+                            # virtual nodes at i + 1. The pre-cap faces shared with it
+                            # (local nodes 2-4-6-8) use the same d2 on their outer edge, so
+                            # both faces have the same curvature. d21 holds the upper and
+                            # lower halves, for the elements above and below the node.
+                            # TODO move the last row of inner nodes of the distal phalanx
+                            # slightly behind the last ring of external nodes. They are
+                            # currently coplanar, giving a zero jacobian at the 4 inner
+                            # corners of each fingercap element. Either move the internal
+                            # nodes backward or displace the external nodes forward.
+                            d11 = cap_d11[k][a1]
+                            d12 = cap_d12[k][a1]
+                            d21 = cap_d21[k][a1]
+                            d22 = cap_d22[k][a1]
+                            cap_annotation = [finger_name]
+                            if k in [1, n_internal_rows + 1]:
                                 node = virtual_node_matrix.create_external_vnode(
                                     x=[1, 0, 0, 0],
-                                    d1=[0, d11, 0, 0],
-                                    d2=[0, -a3, a2, 0],
+                                    d1=[0, 1, 0, 0],
+                                    d2=[0, a3 * d11, a3 * d12, 0],
                                     node_identifier=node_identifier,
                                     annotation=annotation,
                                 )
                                 virtual_node_matrix.set_vnode_to_indices(
-                                    node, [[i + 1, j, k]], k_allocation_mode="upper"
+                                    node, [[i, j, k + a3]]
                                 )
+                            for k_allocation_mode, d21_half in zip(["upper", "lower"], d21):
                                 node = virtual_node_matrix.create_external_vnode(
                                     x=[1, 0, 0, 0],
-                                    d1=[0, d11, 0, 0],
-                                    d2=[0, a3, a2, 0],
+                                    d1=[0, 1, 0, 0],
+                                    d2=[0, -a2 * d21_half, -a2 * d22, 0],
                                     node_identifier=node_identifier,
                                     annotation=annotation,
                                 )
                                 virtual_node_matrix.set_vnode_to_indices(
-                                    node, [[i + 1, j, k]], k_allocation_mode="lower"
+                                    node, [[i, j + a2, k]], k_allocation_mode=k_allocation_mode
                                 )
-                            else:
                                 node = virtual_node_matrix.create_external_vnode(
                                     x=[1, 0, 0, 0],
-                                    d1=[0, -a2, a3, 0],
-                                    d2=[0, a3, a2, 0],
+                                    d1=[0, d11, d12, 0],
+                                    d2=[0, d21_half, d22, 0],
                                     node_identifier=node_identifier,
-                                    annotation=annotation,
+                                    annotation=cap_annotation,
                                 )
                                 virtual_node_matrix.set_vnode_to_indices(
-                                    node,
-                                    [[i + 1, j, k]],
+                                    node, [[i + 1, j, k]], k_allocation_mode=k_allocation_mode
                                 )
-                            # node = virtual_node_matrix.create_external_vnode(
-                            #     x  = [1, 0, 0, 0],
-                            #     d1 = [0, 1, 0, 0],
-                            #     d2 = [0, -c1, 1, 0],
-                            #     node_identifier = node_identifier, annotation = annotation
-                            # )
-                            # virtual_node_matrix.set_virtual_
-                            # -node_to_index(node, [i, j, k + a3])
-                            # node = virtual_node_matrix.create_external_vnode(
-                            #     x  = [1, 0, 0, 0],
-                            #     d1 = [0, 1, 0, 0],
-                            #     d2 = [0, c1, 1, 0],
-                            #     node_identifier = node_identifier, annotation = annotation
-                            # )
-                            # virtual_node_matrix.set_virtual_node_to_index(node, [i, j + a2, k])
                         node_identifier += 1
                         a1 += 1
                 parent_node_id += 1
@@ -1731,7 +1863,7 @@ def create_cube_element(
         ranges = [[1, 0], [0, 1], [1, 0]]  # 5
         order = [0, 2, 1]
     else:
-        ranges = [[0, 1], [0, 1], [1, 0]]  # 6
+        ranges = [[0, 1], [0, 1], [0, 1]]  # 6
         order = [0, 2, 1]
     # Obtained the ordered list of indices to parse through
     reordered_ranges = [ranges[idx] for idx in order]
