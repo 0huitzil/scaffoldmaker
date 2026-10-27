@@ -56,6 +56,7 @@ class MeshType_3d_hand1(Scaffold_base):
             "Magnitude of minor axis for finger ellipses": 2.0,
             "finger_d2": 0.15,
             "finger_d3": 0.15,
+            "fingercap_d1": 0.6,
             "Create internal elements": True,
             "Create external elements": False,
             "Internal elements across hand": 1,
@@ -84,7 +85,6 @@ class MeshType_3d_hand1(Scaffold_base):
             "Scale factor for blending outer nodes of palm": 0.75,
             "Magnitude of major axis for palm ellipses": 4.35,
             "Magnitude of minor axis for palm ellipses": 2.25,
-
         }
         return options
 
@@ -93,8 +93,9 @@ class MeshType_3d_hand1(Scaffold_base):
         return [
             "Thumb angle",
             # "Splaying angle",
-            "Magnitude of major axis for finger ellipses",
-            "Magnitude of minor axis for finger ellipses",
+            # "Magnitude of major axis for finger ellipses",
+            # "Magnitude of minor axis for finger ellipses",
+            "fingercap_d1",
             "finger_d2",
             "finger_d3",
             "Create internal elements",
@@ -135,6 +136,7 @@ class MeshType_3d_hand1(Scaffold_base):
             if options[key] < 1:
                 options[key] = 1
         for key in [
+            "fingercap_d1",
             "finger_d2",
             "finger_d3",
         ]:
@@ -252,8 +254,6 @@ class MeshType_3d_hand1(Scaffold_base):
     @classmethod
     def defineFaceAnnotations(cls, region, options, annotationGroups):
         """
-        Add orientation anterior 1-D annotation group.
-
         :param region: Zinc region containing model.
         :param options: Dict containing options. See getDefaultOptions().
         :param annotationGroups: List of annotation groups for elements
@@ -351,9 +351,12 @@ class Ellipse:
         self.n_half_rows = n_half_rows
         self.n_half_cols = n_half_cols
         self.first_quadrant_angles = None
-        self.ellipse_x = None
+        self.list_ellipse_x = None
         self.ellipse_d1 = None
-        self.ellipse_d2 = None
+        self.list_ellipse_d2 = None
+
+        self.sorted_scalefactor_d1_external = None
+        self.sorted_scalefactor_d2_external = None
 
     ## TODO create set_sampling_method function, the only public function to be called
 
@@ -431,13 +434,13 @@ class Ellipse:
                 angles.append(new_angle)
         angle = 2 * pi + angles[0]
 
-        scalefactor_d2 = []
-        scalefactor_d3 = []
+        scalefactor_d2_internal = []
+        scalefactor_d3_internal = []
         for angle in angles:
-            scalefactor_d2.append(math.cos(angle))
-            scalefactor_d3.append(math.sin(angle))
-        self.list_scalefactor_d2 = scalefactor_d2
-        self.list_scalefactor_d3 = scalefactor_d3
+            scalefactor_d2_internal.append(math.cos(angle))
+            scalefactor_d3_internal.append(math.sin(angle))
+        self.list_scalefactor_d2_internal = scalefactor_d2_internal
+        self.list_scalefactor_d3_internal = scalefactor_d3_internal
 
     def sample_ellipse_along_angles(self):
         """
@@ -453,108 +456,115 @@ class Ellipse:
         center = self.center
         major_axis = self.major_axis
         minor_axis = self.minor_axis
-        first_quadrant_angles = self.first_quadrant_angles
-        for angle in reversed(first_quadrant_angles):
+        list_angles = [*self.first_quadrant_angles]
+        for angle in reversed(list_angles):
             new_angle = math.pi - angle
-            if new_angle not in first_quadrant_angles:
-                first_quadrant_angles.append(new_angle)
-        for angle in first_quadrant_angles[:]:
+            if new_angle not in list_angles:
+                list_angles.append(new_angle)
+        for angle in list_angles[:]:
             new_angle = math.pi + angle
-            if new_angle not in first_quadrant_angles:
-                first_quadrant_angles.append(new_angle)
-        angle = 2 * math.pi + first_quadrant_angles[0]
-        if angle not in first_quadrant_angles:
-            first_quadrant_angles.append(2 * math.pi + first_quadrant_angles[0])
+            if new_angle not in list_angles:
+                list_angles.append(new_angle)
+        angle = 2 * math.pi + list_angles[0]
+        if angle not in list_angles:
+            list_angles.append(2 * math.pi + list_angles[0])
 
         ellipse_x = []
         ellipse_d2 = []
-        for i in range(len(first_quadrant_angles) - 1):
+        for i in range(len(list_angles) - 1):
             ellipse = sampleEllipsePoints(
                 center,
                 major_axis,
                 minor_axis,
-                first_quadrant_angles[i],
-                first_quadrant_angles[i + 1],
+                list_angles[i],
+                list_angles[i + 1],
                 1,
             )
             ellipse_x.append(ellipse[0][0])
             ellipse_d2.append(ellipse[1][0])
-        self.ellipse_x = ellipse_x
-        self.ellipse_d2 = ellipse_d2
+
+        self.list_angles = list_angles
+        self.list_ellipse_x = ellipse_x
+        self.list_ellipse_d2 = ellipse_d2
+
+    def create_fingercap_scale_factors(self):
+        assert self.list_angles is not None, "List of ellipse samples not available"
+        list_angles = self.list_angles
+        ellipse_cubic_factor = 4
+        list_d1 = [
+            ellipse_cubic_factor * math.copysign(
+                math.sin(math.acos(math.sin(angle))), -math.cos(angle)
+                )
+            for angle in list_angles[:-1]
+        ]
+        self.list_fingercap_d1 = list_d1
+
+    def sort_samples(self, list_samples):
+        n_internal_rows = self.n_internal_rows
+        n_internal_cols = self.n_internal_cols
+        n_half_rows = self.n_half_rows
+        sorted_samples = [
+            [None for f in range(n_internal_cols + 1)] for k in range(n_internal_rows + 3)
+        ]
+        i = -n_half_rows
+        for k in range(1, n_internal_rows + 2):
+            sorted_samples[k][0] = list_samples[i]
+            i += 1
+        for f in range(1, n_internal_cols):
+            sorted_samples[n_internal_rows + 1][f] = list_samples[i]
+            i += 1
+        for k in reversed(range(1, n_internal_rows + 2)):
+            sorted_samples[k][n_internal_cols] = list_samples[i]
+            i += 1
+        for f in reversed(range(1, n_internal_cols)):
+            sorted_samples[1][f] = list_samples[i]
+            i += 1
+        return sorted_samples
 
     def sort_ellipse_samples(self):
-        n_internal_rows = self.n_internal_rows
-        n_internal_cols = self.n_internal_cols
-        n_half_rows = self.n_half_rows
-        ellipse_x = self.ellipse_x
-        ellipse_d2 = self.ellipse_d2
-        d1 = self.d1
-        sorted_ellipse_x, sorted_ellipse_d1, sorted_ellipse_d2 = [
-            [[None for f in range(n_internal_cols + 1)] for k in range(n_internal_rows + 3)]
-            for i in range(3)
-        ]
-        i = -n_half_rows
-        for k in range(1, n_internal_rows + 2):
-            sorted_ellipse_x[k][0] = ellipse_x[i]
-            sorted_ellipse_d1[k][0] = d1
-            sorted_ellipse_d2[k][0] = ellipse_d2[i]
-            i += 1
-        for f in range(1, n_internal_cols):
-            sorted_ellipse_x[n_internal_rows + 1][f] = ellipse_x[i]
-            sorted_ellipse_d1[n_internal_rows + 1][f] = d1
-            sorted_ellipse_d2[n_internal_rows + 1][f] = ellipse_d2[i]
-            i += 1
-        for k in reversed(range(1, n_internal_rows + 2)):
-            sorted_ellipse_x[k][n_internal_cols] = ellipse_x[i]
-            sorted_ellipse_d1[k][n_internal_cols] = d1
-            sorted_ellipse_d2[k][n_internal_cols] = ellipse_d2[i]
-            i += 1
-        for f in reversed(range(1, n_internal_cols)):
-            sorted_ellipse_x[1][f] = ellipse_x[i]
-            sorted_ellipse_d1[1][f] = d1
-            sorted_ellipse_d2[1][f] = ellipse_d2[i]
-            i += 1
-        self.ellipse_x = sorted_ellipse_x
-        self.ellipse_d1 = sorted_ellipse_d1
-        self.ellipse_d2 = sorted_ellipse_d2
+        assert self.list_ellipse_x is not None, "List of ellipse samples not available"
+        ellipse_x = self.list_ellipse_x
+        ellipse_d2 = self.list_ellipse_d2
+        ellipse_d1 = [self.d1 for _ in range(len(ellipse_x))]
+        sorted_ellipse_x = self.sort_samples(ellipse_x)
+        sorted_ellipse_d1 = self.sort_samples(ellipse_d1)
+        sorted_ellipse_d2 = self.sort_samples(ellipse_d2)
+        self.sorted_ellipse_x = sorted_ellipse_x
+        self.sorted_ellipse_d1 = sorted_ellipse_d1
+        self.sorted_ellipse_d2 = sorted_ellipse_d2
 
-    def sort_scale_factors(self):
-        n_internal_rows = self.n_internal_rows
-        n_internal_cols = self.n_internal_cols
-        n_half_rows = self.n_half_rows
-        scalefactor_d2 = self.list_scalefactor_d2
-        scalefactor_d3 = self.list_scalefactor_d3
-        sorted_scalefactor_d2, sorted_scalefactor_d3 = [
-            [[None for f in range(n_internal_cols + 1)] for k in range(n_internal_rows + 3)]
-            for i in range(2)
-        ]
-        i = -n_half_rows
-        for k in range(1, n_internal_rows + 2):
-            sorted_scalefactor_d2[k][0] = scalefactor_d2[i]
-            sorted_scalefactor_d3[k][0] = scalefactor_d3[i]
-            i += 1
-        for f in range(1, n_internal_cols):
-            sorted_scalefactor_d2[n_internal_rows + 1][f] = scalefactor_d2[i]
-            sorted_scalefactor_d3[n_internal_rows + 1][f] = scalefactor_d3[i]
-            i += 1
-        for k in reversed(range(1, n_internal_rows + 2)):
-            sorted_scalefactor_d2[k][n_internal_cols] = scalefactor_d2[i]
-            sorted_scalefactor_d3[k][n_internal_cols] = scalefactor_d3[i]
-            i += 1
-        for f in reversed(range(1, n_internal_cols)):
-            sorted_scalefactor_d2[1][f] = scalefactor_d2[i]
-            sorted_scalefactor_d3[1][f] = scalefactor_d3[i]
-            i += 1
-        self.scalefactor_d2 = sorted_scalefactor_d2
-        self.scalefactor_d3 = sorted_scalefactor_d3
+    def sort_internal_scale_factors(self):
+        assert self.list_scalefactor_d2_internal is not None, (
+            "List of internal scale factors not available"
+        )
+        scalefactor_d2_internal = self.list_scalefactor_d2_internal
+        scalefactor_d3_internal = self.list_scalefactor_d3_internal
+        sorted_scalefactor_d2 = self.sort_samples(scalefactor_d2_internal)
+        sorted_scalefactor_d3 = self.sort_samples(scalefactor_d3_internal)
+        self.sorted_scalefactor_d2_internal = sorted_scalefactor_d2
+        self.sorted_scalefactor_d3_internal = sorted_scalefactor_d3
+
+    def sort_fingercap_scale_factors(self):
+        assert self.list_fingercap_d1 is not None, (
+            "List of fingercap scale factorss not available"
+        )
+        scalefactor_fingercap_d1 = self.list_fingercap_d1
+        sorted_scalefactor_d1_external = self.sort_samples(scalefactor_fingercap_d1)
+        self.sorted_scalefactor_d1_external = sorted_scalefactor_d1_external
 
     def get_ellipse_samples(self):
         ## TODO call the sample and sort functions from here
-        return [self.ellipse_x, self.ellipse_d1, self.ellipse_d2]
+        return [self.sorted_ellipse_x, self.sorted_ellipse_d1, self.sorted_ellipse_d2]
 
-    def get_scale_factors(self):
+    def get_internal_scale_factors(self):
         ## TODO call the sample and sort functions from here
-        return [self.scalefactor_d2, self.scalefactor_d3]
+        return [self.sorted_scalefactor_d2_internal, self.sorted_scalefactor_d3_internal]
+
+    def get_fingercap_scale_factors(self):
+        ## TODO call the sample and sort functions from here
+        self.create_fingercap_scale_factors()
+        self.sort_fingercap_scale_factors()
+        return [self.sorted_scalefactor_d1_external]
 
 
 class Node_network:
@@ -565,7 +575,7 @@ class Node_network:
         self.nodes = self.fieldmodule.findNodesetByFieldDomainType(Field.DOMAIN_TYPE_NODES)
         self.node_identifier = 1
         self.nodes_dict = {}
-        value_labels = [
+        external_nodetemplate_labels = [
             Node.VALUE_LABEL_VALUE,
             Node.VALUE_LABEL_D_DS1,
             Node.VALUE_LABEL_D_DS2,
@@ -574,31 +584,31 @@ class Node_network:
         coordinates = self.coordinates
         external_nodetemplate = nodes.createNodetemplate()
         external_nodetemplate.defineField(coordinates)
-        for value_label in value_labels[1:]:
+        for value_label in external_nodetemplate_labels[1:]:
             external_nodetemplate.setValueNumberOfVersions(coordinates, -1, value_label, 1)
         self.external_nodetemplate = external_nodetemplate
 
-        value_labels = [
+        internal_nodetemplate_labels = [
             Node.VALUE_LABEL_VALUE,
-            # Node.VALUE_LABEL_D_DS1,
+            Node.VALUE_LABEL_D_DS1,
             Node.VALUE_LABEL_D_DS2,
             Node.VALUE_LABEL_D_DS3,
         ]
         internal_nodetemplate = nodes.createNodetemplate()
         internal_nodetemplate.defineField(coordinates)
-        for value_label in value_labels[1:]:
+        for value_label in internal_nodetemplate_labels[1:]:
             internal_nodetemplate.setValueNumberOfVersions(coordinates, -1, value_label, 1)
         self.internal_nodetemplate = internal_nodetemplate
 
-        value_labels = [
+        internal_palm_nodetemplate_labels = [
             Node.VALUE_LABEL_VALUE,
-            # Node.VALUE_LABEL_D_DS1,
-            # Node.VALUE_LABEL_D_DS2,
+            Node.VALUE_LABEL_D_DS1,
+            Node.VALUE_LABEL_D_DS2,
             Node.VALUE_LABEL_D_DS3,
         ]
         internal_palm_nodetemplate = nodes.createNodetemplate()
         internal_palm_nodetemplate.defineField(coordinates)
-        for value_label in value_labels[1:]:
+        for value_label in internal_palm_nodetemplate_labels[1:]:
             internal_palm_nodetemplate.setValueNumberOfVersions(
                 coordinates, -1, value_label, 1
             )
@@ -611,6 +621,7 @@ class Node_network:
         internal_node=True,
         palm_node=False,
     ) -> None:
+        ## TODO change this function to have x, d1, d2 and d3 as individual arguments
         nodes_dict = self.nodes_dict
         assert len(node_coordinates) == 4
         x, d1, d2, d3 = node_coordinates
@@ -630,7 +641,7 @@ class Node_network:
             node_coordinates = node_params.get("parameters")
             if is_internal:
                 x, d1, d2, d3 = node_coordinates
-                d1 = None
+                # d1 = None
                 nodetemplate = self.internal_nodetemplate
                 if is_palm:
                     d2 = None
@@ -667,14 +678,38 @@ class Virtual_node_matrix:
         ]
         columns_per_finger = options.get("Number of matrix columns per finger")
         n_internal_rows = options.get("Internal elements across hand")
-        n_external_rows = 2
         ix = 2 * sum(hand_elements_along)
         iy = 6 * columns_per_finger
-        iz = n_internal_rows + 1 + n_external_rows
+        iz = 3 * n_internal_rows + 1
         node_matrix = [[[None for k in range(iz)] for j in range(iy)] for i in range(ix)]
+        kval_inner = [i + 1 for i in range(n_internal_rows + 1)]
+        kval_outer = [1, n_internal_rows + 1]
 
+        self.n_internal_rows = n_internal_rows
         self.matrix_dimensions = [ix, iy, iz]
         self.node_matrix = node_matrix
+        self.kval_inner = kval_inner
+        self.kval_outer = kval_outer
+
+        # TODO create a phys2log map for x as well?
+        self.build_phys_to_log_k_map()
+
+    def get_logical_k_values(self, k_phys):
+        ## TODO rename this function
+        k_logi = self.phys_to_logic_k_val[k_phys]
+        return k_logi
+
+    def build_phys_to_log_k_map(self):
+        ## TODO rename this function
+        n_internal_rows = self.n_internal_rows
+        phys_to_logic_k_val = [
+            [0],
+            [1],
+            *[[3 * i - 1, 3 * i + 1] for i in range(1, n_internal_rows)],
+            [3 * n_internal_rows - 1],
+            [3 * n_internal_rows],
+        ]
+        self.phys_to_logic_k_val = phys_to_logic_k_val
 
     def create_internal_vnode(self, node_identifier: int, x: list, annotation: dict):
         virtual_node = {
@@ -713,15 +748,36 @@ class Virtual_node_matrix:
                     new_vnode = new_vnode[0]
                     self.blend_vnode(index, new_vnode)
 
-    def set_vnode_to_indices(self, vnode: dict, indices: list, replace=True):
+    def set_vnode_to_indices(
+        self, vnode: dict, indices: list, replace=True, k_allocation_mode="both"
+    ):
+        ## TODO rename the k_allocation_mode
         for index in indices:
-            self.set_vnode_to_index(vnode, index, replace)
+            i, j, phys_k = index
+            logic_k_vals = self.get_logical_k_values(phys_k)
+            if k_allocation_mode == "lower":
+                logic_k_vals = [logic_k_vals[0]]
+            elif k_allocation_mode == "upper":
+                logic_k_vals = [logic_k_vals[-1]]
+            elif k_allocation_mode == "both":
+                logic_k_vals = logic_k_vals
+            else:
+                raise ValueError("Valid modes are upper, lower or both")
+            for k in logic_k_vals:
+                l_index = [i, j, k]
+                self.set_vnode_to_index(vnode, l_index, replace)
 
     def get_matrix(self) -> list:
         return self.node_matrix
 
     def get_matrix_dimensions(self) -> list:
         return self.matrix_dimensions
+
+    def get_kval(self, inner=True):
+        if inner:
+            return self.kval_inner
+        else:
+            return self.kval_outer
 
     def blend_vnode(self, existing_node_index: list, new_vnode):
         """
@@ -805,6 +861,7 @@ def generate_internal_node_network(
     c_d3 = 0.35
     m_d3 = 0.325
     p_d3 = 0.30
+    fingercap_d1 = options["fingercap_d1"]
     finger_d2 = options["finger_d2"]
     finger_d3 = options["finger_d3"]
     hand_dimensions_by_finger = [  # d1, d2, d3
@@ -813,7 +870,7 @@ def generate_internal_node_network(
             [2.0, 0.4, m_d3],  # metacarpal
             [1.1, 0.4, p_d3],  # proximal phalanx
             [0.7, finger_d2, finger_d3],  # middle phalanx
-            [0.6, finger_d2, finger_d3],  # distal phalanx
+            [fingercap_d1, finger_d2, finger_d3],  # distal phalanx
         ],
         [  # Finger 2 (ring finger)
             [1.0, 0.4, c_d3],  # carpal
@@ -845,12 +902,16 @@ def generate_internal_node_network(
         ],
     ]
     carpal_spacing = hand_dimensions_by_finger[0][0][1] * 2.0
+    thumb_dimensions = hand_dimensions_by_finger[-1]
+    thumb_indices = [Bone.METACARPAL, Bone.PROX_PHALANX, Bone.DIST_PHALANX]
+    thumb_angle_degrees = options["Thumb angle"]
+    angle_radians = math.radians(thumb_angle_degrees)
+    splaying_angle_radians = math.radians(options["Splaying angle"])
     index_carpal_node_id = None
     # create nodes up each finger fastest
     x1 = [1.0, 0.0, 0.0]
     x2 = [0.0, 1.0, 0.0]
     x3 = [0.0, 0.0, 1.0]
-    splaying_angle_radians = math.radians(options["Splaying angle"])
     for n_finger in range(4):
         finger_dimensions = hand_dimensions_by_finger[n_finger]
         x = [0.0, n_finger * carpal_spacing, 0.0]
@@ -868,7 +929,7 @@ def generate_internal_node_network(
                 )
             d1 = mult(x1, bone_dimensions[0])
             if bone == Bone.DIST_PHALANX:
-                d1 = mult(d1, 1 / (n_elements_along - 1))
+                d1 = mult(d1, 1 / (n_elements_along))
             else:
                 d1 = mult(d1, 1 / n_elements_along)
             d2 = mult(x2, bone_dimensions[1])
@@ -877,6 +938,7 @@ def generate_internal_node_network(
                 index_carpal_node_id = node_identifier
             is_palm = True if bone < 3 else False
             for i_along in range(n_elements_along):
+                # TODO only allocate one node per bone.
                 if bone == Bone.PROX_PHALANX and i_along == 1:
                     is_palm = False
                     bone_dimensions = finger_dimensions[bone + 1]
@@ -887,11 +949,7 @@ def generate_internal_node_network(
                 )
                 x = add(x, d1)
                 node_identifier += 1
-    thumb_dimensions = hand_dimensions_by_finger[-1]
-    thumb_indices = [Bone.METACARPAL, Bone.PROX_PHALANX, Bone.DIST_PHALANX]
-    thumb_angle_degrees = options["Thumb angle"]
-    # Thumb flexion angle
-    angle_radians = math.radians(thumb_angle_degrees)
+    # Thumb
     x1 = rotate_vector_around_vector(x1, x3, angle_radians)
     x2 = rotate_vector_around_vector(x2, x3, angle_radians)
     # Obtain the starting node position from the metacarpal node
@@ -906,7 +964,7 @@ def generate_internal_node_network(
             n_elements_along = max(1, n_elements_along - 1)
         d1 = mult(x1, bone_dimensions[0])
         if bone == Bone.DIST_PHALANX:
-            d1 = mult(d1, 1 / (n_elements_along - 1))
+            d1 = mult(d1, 1 / (n_elements_along))
         else:
             d1 = mult(d1, 1 / n_elements_along)
         if bone == Bone.METACARPAL:
@@ -949,15 +1007,17 @@ def generate_internal_node_matrix(
     n_internal_rows = options.get("Internal elements across hand")
     n_cols_per_node = options.get("Internal elements along each finger")
     a0 = 1.0
+    # TODO change a1 to depend on the i/n value
     a1 = 0.0
     a2 = 0.0
     index_y = 1
-    k_val = [i + 1 for i in range(n_internal_rows + 1)]
+    # k_val = [i + 1 for i in range(n_internal_rows + 1)]
+    k_val = virtual_node_matrix.get_kval(inner=True)
     # k_val = virtual_node_matrix.get_kval_outer()
     parent_node_id = 1
     columns_per_finger = options.get("Number of matrix columns per finger")
-    elements_along_palm = sum(hand_elements_along[Bone.CARPAL:Bone.PROX_PHALANX]) + 1
-    elements_along_finger = sum(hand_elements_along[Bone.PROX_PHALANX:]) - 1
+    elements_along_palm = sum(hand_elements_along[Bone.CARPAL : Bone.PROX_PHALANX]) + 1
+    elements_along_finger = sum(hand_elements_along[Bone.PROX_PHALANX :]) - 1
     finger_index_x = elements_along_palm + 2  # First P.phalanx element is two-sided
     palm_bones = [Bone.CARPAL, Bone.METACARPAL, Bone.PROX_PHALANX]
     finger_names = options.get("finger names")
@@ -1064,16 +1124,16 @@ def generate_internal_node_matrix(
                         ellipse = Ellipse(node_params, 1, 1, n_internal_rows, n_cols_per_node)
                         ellipse.create_sampling_angles_uniform()
                         ellipse.sample_scale_factors_along_angles()
-                        ellipse.sort_scale_factors()
-                        a2_vals, a3_vals = ellipse.get_scale_factors()
+                        ellipse.sort_internal_scale_factors()
+                        a2_vals, a3_vals = ellipse.get_internal_scale_factors()
                         col_index = 0 if j == index_y else 1
                         a2 = -a2_vals[k][col_index]
                         a3 = a3_vals[k][col_index]
                         indices = [[i, j, k]]
                         finger_name = finger_names[finger_index]
                         bone_name = bone_names[bone]
-                        finger_part = bone_name + " of " + finger_name
                         annotation = [bone_name, finger_name, finger_part]
+                        finger_part = bone_name + " of " + finger_name
                         if finger_index == THUMB_INDEX:
                             if j == index_y:
                                 indices.append([i + 3, index_y - 4, k])
@@ -1130,7 +1190,9 @@ def generate_external_node_matrix(
         x = add(x, d2)
         ## TODO get rid of the multiple function calls
         ## simplify everything into one simple function
-        ellipse = Ellipse([x, d1, d2, d3], a_palm, b_palm, n_internal_rows, n_palm_internal_cols)
+        ellipse = Ellipse(
+            [x, d1, d2, d3], a_palm, b_palm, n_internal_rows, n_palm_internal_cols
+        )
         ellipse.create_sampling_angles_along_axis()
         ellipse.sample_ellipse_along_angles()
         ellipse.sort_ellipse_samples()
@@ -1170,11 +1232,10 @@ def generate_external_node_matrix(
                 for j in j_val:
                     # TODO make k_val variable
                     if j == index_y or (finger_index == 3 and j == index_y + 1):
-                        k_val = [i + 1 for i in range(n_internal_rows + 1)]
+                        k_val = virtual_node_matrix.get_kval(inner=True)
                     else:
-                        k_val = [1, n_internal_rows + 1]
+                        k_val = virtual_node_matrix.get_kval(inner=False)
                     for k in k_val:
-                        # TODO reformulate index_e, it is very unintuitive as it is
                         # TODO fix bug on ellipse sampling function
                         ellipse_x, ellipse_d1, ellipse_d2 = ellipse
                         a1 = finger_index if j == index_y else finger_index + 1
@@ -1276,12 +1337,13 @@ def generate_external_node_matrix(
                 ellipse.sample_ellipse_along_angles()
                 ellipse.sort_ellipse_samples()
                 ellipse_x, ellipse_d1, ellipse_d2 = ellipse.get_ellipse_samples()
+                (fingercap_d1,) = ellipse.get_fingercap_scale_factors()
                 a1 = 0
                 for j in j_val:
                     if j in [j_val[0], j_val[-1]]:
-                        k_val = [i + 1 for i in range(n_internal_rows + 1)]
+                        k_val = virtual_node_matrix.get_kval(inner=True)
                     else:
-                        k_val = [1, n_internal_rows + 1]
+                        k_val = virtual_node_matrix.get_kval(inner=False)
                     for k in k_val:
                         a1 = 0 if j == index_y else 1
                         a2 = -1 if j == index_y else 1
@@ -1293,6 +1355,7 @@ def generate_external_node_matrix(
                         bone_name = bone_names[bone]
                         finger_part = bone_name + " of " + finger_name
                         annotation = [bone_name, finger_name, finger_part]
+                        ## TODO replace this check
                         indices = [[i, j, k + a3]] if k in [1, n_internal_rows + 1] else []
                         indices.append([i, j + a2, k])
                         node = virtual_node_matrix.create_external_vnode(
@@ -1306,44 +1369,53 @@ def generate_external_node_matrix(
                         node_network.set_node_parameters(
                             [x, d1, d2, d3], node_identifier, internal_node=False
                         )
-                        # TODO welp. Need to figure this out again.
-                        # TODO Potentially write as a side function instead?
-                        # TODO big problem here, need additional spacing in the k-direction
                         if bone == Bone.DIST_PHALANX and i == i_val[-1]:
-                            c0 = 1
-                            c1 = c0 * a2 * a3
-                            c2 = c0 * a2
-                            c3 = c0 * a3
-                            node_identifier += 1
-                            xa = add(x, [0.5, 0, 0])
-                            d1a = add(mult(d1, -c2), mult(d2, a3))
-                            d2a = add(mult(d1, c3), mult(d2, a2))
-                            node = virtual_node_matrix.create_external_vnode(
-                                x=[1, 0, 0, 0],
-                                d1=[0, 1, 0, 0],
-                                d2=[0, 0, 1, 0],
-                                node_identifier=node_identifier,
-                                annotation=annotation,
-                            )
-                            virtual_node_matrix.set_vnode_to_index(node, [i + 1, j, k])
-                            node_network.set_node_parameters(
-                                [xa, d1a, d2a, d3], node_identifier, internal_node=False
-                            )
-                            """
-                            Old cap code
-                            """
-                            c0 = 1
-                            c1 = c0 * a2 * a3
-                            c2 = c0 * a2
-                            c3 = c0 * a3
+                            # TODO update the logic to calculate the d1/d2 scale factors
+                            # TODO update the last row of elements so the face facing
+                            # the fingercap shares scale factors/deformation with the cap.
+                            d11 = -fingercap_d1[k][a1]
                             annotation = [finger_name]
+                            if k not in [1, n_internal_rows + 1]:
+                                node = virtual_node_matrix.create_external_vnode(
+                                    x=[1, 0, 0, 0],
+                                    d1=[0, d11, 0, 0],
+                                    d2=[0, -a3, a2, 0],
+                                    node_identifier=node_identifier,
+                                    annotation=annotation,
+                                )
+                                virtual_node_matrix.set_vnode_to_indices(
+                                    node, [[i + 1, j, k]], k_allocation_mode="upper"
+                                )
+                                node = virtual_node_matrix.create_external_vnode(
+                                    x=[1, 0, 0, 0],
+                                    d1=[0, d11, 0, 0],
+                                    d2=[0, a3, a2, 0],
+                                    node_identifier=node_identifier,
+                                    annotation=annotation,
+                                )
+                                virtual_node_matrix.set_vnode_to_indices(
+                                    node, [[i + 1, j, k]], k_allocation_mode="lower"
+                                )
+                            else:
+                                node = virtual_node_matrix.create_external_vnode(
+                                    x=[1, 0, 0, 0],
+                                    d1=[0, -a2, a3, 0],
+                                    d2=[0, a3, a2, 0],
+                                    node_identifier=node_identifier,
+                                    annotation=annotation,
+                                )
+                                virtual_node_matrix.set_vnode_to_indices(
+                                    node,
+                                    [[i + 1, j, k]],
+                                )
                             # node = virtual_node_matrix.create_external_vnode(
                             #     x  = [1, 0, 0, 0],
                             #     d1 = [0, 1, 0, 0],
                             #     d2 = [0, -c1, 1, 0],
                             #     node_identifier = node_identifier, annotation = annotation
                             # )
-                            # virtual_node_matrix.set_virtual_node_to_index(node, [i, j, k + a3])
+                            # virtual_node_matrix.set_virtual_
+                            # -node_to_index(node, [i, j, k + a3])
                             # node = virtual_node_matrix.create_external_vnode(
                             #     x  = [1, 0, 0, 0],
                             #     d1 = [0, 1, 0, 0],
@@ -1351,19 +1423,7 @@ def generate_external_node_matrix(
                             #     node_identifier = node_identifier, annotation = annotation
                             # )
                             # virtual_node_matrix.set_virtual_node_to_index(node, [i, j + a2, k])
-                            # node = virtual_node_matrix.create_external_vnode(
-                            #     x  = [1, 0, 0, 0],
-                            #     d1 = [0, -c2, a3, 0],
-                            #     d2 = [0, c3, a2, 0],
-                            #     node_identifier = node_identifier, annotation = annotation
-                            # )
-                            # virtual_node_matrix.set_virtual_node_to_index(node, [i + 1, j, k])
-                            """
-                            End of old cap code
-                            """
                         node_identifier += 1
-                        # x = add(x, d1)
-                        # ellipse_x[a1] = x
                         a1 += 1
                 parent_node_id += 1
             index_x += n_elements_along
@@ -1916,6 +1976,7 @@ def create_cube_element(
     scale_factors = list(global_to_local_scale_factor_ids.keys())
     element.setScaleFactors(eft, scale_factors)
     return result, element
+
 
 def sampling_coefficient(k, n):
     """
