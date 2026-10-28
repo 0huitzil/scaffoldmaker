@@ -82,7 +82,6 @@ class MeshType_3d_hand1(Scaffold_base):
                 "middle phalanx",
                 "distal phalanx",
             ],
-            "Number of matrix columns per finger": 5,
             "Internal elements along each finger": 1,
             "Scale factor for blending inner nodes of palm": 0.5,
             "Scale factor for blending outer nodes of palm": 0.75,
@@ -237,18 +236,14 @@ class MeshType_3d_hand1(Scaffold_base):
                         # virtual_node_matrix.print_cube_from_index([i, j, k])
                         element_annotations = [hand_group]
                         # find annotation groups
-                        try:
-                            node_annotations = vnm.get_vnode([i, j, k]).get_annotation()
-                            for group in annotation_groups:
-                                if group.getName() in node_annotations:
-                                    element_annotations.append(group)
-                        except KeyError:
-                            continue
-                        finally:
-                            for group in element_annotations:
-                                mesh_group = group.getMeshGroup(mesh3d)
-                                mesh_group.addElement(element)
-                            element_identifier += 1
+                        node_annotations = vnm.get_vnode([i, j, k]).get_annotation()
+                        for group in annotation_groups:
+                            if group.getName() in node_annotations:
+                                element_annotations.append(group)
+                        for group in element_annotations:
+                            mesh_group = group.getMeshGroup(mesh3d)
+                            mesh_group.addElement(element)
+                        element_identifier += 1
         return annotation_groups, None
 
     @classmethod
@@ -760,9 +755,8 @@ class Node_network:
         ## TODO change this function to have x, d1, d2 and d3 as individual arguments
         nodes_dict = self.nodes_dict
         assert len(node_coordinates) == 4
-        x, d1, d2, d3 = node_coordinates
         nodes_dict[node_identifier] = {
-            "parameters": [x, d1, d2, d3],
+            "parameters": [*node_coordinates],
             "internal": internal_node,
             "palm": palm_node,
         }
@@ -848,7 +842,12 @@ class Virtual_node:
         return vnode
 
     def blend(self, new_vnode):
-        # Append the positional (x) scalefactors from the incoming node to the current one
+        """
+        Append the positional (x) scalefactors from the incoming node to the current one
+
+        :param self: Description
+        :param new_vnode: Description
+        """
         assert not self.is_external and not new_vnode.is_external, (
             "Blending only supported for internal nodes"
         )
@@ -866,63 +865,65 @@ class Virtual_node_matrix:
             options["Elements along middle phalanx"],
             options["Elements along distal phalanx"],
         ]
-        columns_per_finger = options.get("Number of matrix columns per finger")
+        n_internal_cols_per_finger = options.get("Internal elements along each finger") + 4
         n_internal_rows = options.get("Internal elements across hand")
-        ix = 2 * sum(hand_elements_along)
-        iy = 6 * columns_per_finger
-        iz = 3 * n_internal_rows + 1
-        node_matrix = [[[None for k in range(iz)] for j in range(iy)] for i in range(ix)]
-        kval_inner = [i + 1 for i in range(n_internal_rows + 1)]
-        kval_outer = [1, n_internal_rows + 1]
+
+        elements_along_palm = sum(hand_elements_along[Bone.CARPAL : Bone.PROX_PHALANX]) + 1
+        elements_along_finger = sum(hand_elements_along[Bone.PROX_PHALANX :]) - 1
+        elements_along_thumb = (
+            max(1, hand_elements_along[Bone.METACARPAL] - 1)
+            + max(1, hand_elements_along[Bone.PROX_PHALANX] - 1)
+            + hand_elements_along[Bone.DIST_PHALANX]
+        )
+        # Palm rows, then the longest digit, then the fingercap row
+        nx_phys = elements_along_palm + max(elements_along_finger, elements_along_thumb) + 1
+
+        split_x_index = [
+            sum(hand_elements_along[Bone.CARPAL : Bone.PROX_PHALANX])
+        ]  # For a double sided prox-phalanx node
+        ny = 6 * n_internal_cols_per_finger
+        nz_phys = n_internal_rows + 3
+        split_z_index = [i for i in range(2, n_internal_rows + 1)]
+        p2l_x, nx_log = self.build_phys_to_log_map(nx_phys, split_x_index)
+        p2l_z, nz_log = self.build_phys_to_log_map(nz_phys, split_z_index)
+        node_matrix = [
+            [[None for k in range(nz_log)] for j in range(ny)] for i in range(nx_log)
+        ]
+        zval_inner = [i + 1 for i in range(n_internal_rows + 1)]
+        zval_outer = [1, n_internal_rows + 1]
 
         self.n_internal_rows = n_internal_rows
-        self.matrix_dimensions = [ix, iy, iz]
+        self.matrix_dimensions = [nx_log, ny, nz_log]
         self.node_matrix = node_matrix
-        self.kval_inner = kval_inner
-        self.kval_outer = kval_outer
+        self.phys_to_logic_x_val = p2l_x
+        self.phys_to_logic_z_val = p2l_z
+        self.zval_inner = zval_inner
+        self.zval_outer = zval_outer
 
-        # TODO create a phys2log map for x as well?
-        self.build_phys_to_log_k_map()
+    def get_log_x_values(self, x_phys):
+        x_val = self.phys_to_logic_x_val[x_phys]
+        return x_val
 
-    def get_logical_k_values(self, k_phys):
-        ## TODO rename this function
-        k_logi = self.phys_to_logic_k_val[k_phys]
-        return k_logi
+    def get_log_z_values(self, z_phys):
+        z_val = self.phys_to_logic_z_val[z_phys]
+        return z_val
 
-    def build_phys_to_log_k_map(self):
-        ## TODO rename this function
-        n_internal_rows = self.n_internal_rows
-        phys_to_logic_k_val = [
-            [0],
-            [1],
-            *[[3 * i - 1, 3 * i + 1] for i in range(1, n_internal_rows)],
-            [3 * n_internal_rows - 1],
-            [3 * n_internal_rows],
-        ]
-        self.phys_to_logic_k_val = phys_to_logic_k_val
-
-    # def create_internal_vnode(self, node_identifier: int, x: list, annotation: dict):
-    #     virtual_node = {
-    #         Node.VALUE_LABEL_VALUE: [[node_identifier, *x]],
-    #         "node_identifier": node_identifier,
-    #         "Type": "internal",
-    #         "Annotation": annotation,
-    #     }
-    #     return virtual_node
-
-    # def create_external_vnode(
-    #     self, node_identifier: int, x: list, d1: list, d2: list, annotation: dict
-    # ):
-    #     assert len(x) == len(d1) == len(d2) == 4, "Scale factor vector must be length 4"
-    #     virtual_node = {
-    #         Node.VALUE_LABEL_VALUE: [[node_identifier, *x]],
-    #         Node.VALUE_LABEL_D_DS1: [[node_identifier, *d1]],
-    #         Node.VALUE_LABEL_D_DS2: [[node_identifier, *d2]],
-    #         "node_identifier": node_identifier,
-    #         "Type": "external",
-    #         "Annotation": annotation,
-    #     }
-    #     return virtual_node
+    def build_phys_to_log_map(self, n_phys: int, split_indices: list, gap: int = 1):
+        """
+        Map physical indices to logical indices along one axis. A split index gets a lower and
+        an upper copy with gap empty logical indices between them, so no element is created
+        across the split. Returns the map and the number of logical indices.
+        """
+        phys_to_log = []
+        n_log = 0
+        for p in range(n_phys):
+            if p in split_indices:
+                phys_to_log.append([n_log, n_log + gap + 1])
+                n_log += gap + 2
+            else:
+                phys_to_log.append([n_log])
+                n_log += 1
+        return phys_to_log, n_log
 
     def set_vnode_to_index(self, vnode: Virtual_node, index: list, overwrite=True):
         i, j, k = index
@@ -939,58 +940,44 @@ class Virtual_node_matrix:
                     node_matrix[i][j][k] = existing_vnode
 
     def set_vnode_to_indices(
-        self, vnode: Virtual_node, indices: list, overwrite=True, k_allocation_mode="both"
+        self, vnode: Virtual_node, indices: list, overwrite=True, x_side="both", z_side="both"
     ):
-        ## TODO rename the k_allocation_mode
         for index in indices:
-            i, j, phys_k = index
-            logic_k_vals = self.get_logical_k_values(phys_k)
-            if k_allocation_mode == "lower":
-                logic_k_vals = [logic_k_vals[0]]
-            elif k_allocation_mode == "upper":
-                logic_k_vals = [logic_k_vals[-1]]
-            elif k_allocation_mode == "both":
-                logic_k_vals = logic_k_vals
+            phys_i, j, phys_k = index
+            logic_i = self.get_log_x_values(phys_i)
+            logic_k = self.get_log_z_values(phys_k)
+            if z_side == "lower":
+                logic_k = [logic_k[0]]
+            elif z_side == "upper":
+                logic_k = [logic_k[-1]]
+            elif z_side == "both":
+                logic_k = logic_k
             else:
                 raise ValueError("Valid modes are upper, lower or both")
-            for k in logic_k_vals:
-                l_index = [i, j, k]
-                self.set_vnode_to_index(vnode, l_index, overwrite)
+            if x_side == "proximal":
+                logic_i = [logic_i[0]]
+            elif x_side == "distal":
+                logic_i = [logic_i[-1]]
+            elif x_side == "both":
+                logic_i = logic_i
+            else:
+                raise ValueError("Valid modes are proximal, distal or both")
+            for i in logic_i:
+                for k in logic_k:
+                    l_index = [i, j, k]
+                    self.set_vnode_to_index(vnode, l_index, overwrite)
 
-    def get_matrix(self) -> list:
-        return self.node_matrix
+    # def get_matrix(self) -> list:
+    #     return self.node_matrix
 
     def get_matrix_dimensions(self) -> list:
         return self.matrix_dimensions
 
     def get_kval(self, inner=True):
         if inner:
-            return self.kval_inner
+            return self.zval_inner
         else:
-            return self.kval_outer
-
-    # def blend_vnode(self, existing_node_index: list, new_vnode):
-    #     """
-    #     Only works for blending internal linear nodes for now
-
-    #     :param self: Description
-    #     :param existing_node_index: Description
-    #     :type existing_node_index: list
-    #     :param new_node: Description
-    #     """
-    #     vertex = self.get_vnode(existing_node_index)
-    #     original_vertex = vertex[Node.VALUE_LABEL_VALUE]
-    #     N = len(original_vertex)
-    #     updated_vertex = [*original_vertex]
-    #     updated_vertex.append([*new_vnode])
-    #     for i in [1, 4]:
-    #         coeff_sum = 0
-    #         for j in range(N + 1):
-    #             coeff_sum += updated_vertex[j][i]
-    #         # TODO make a decision on whether to keep this check or no.
-    #         # assert abs(coeff_sum) == 1, 'Not affine combination'
-    #     vertex[Node.VALUE_LABEL_VALUE] = updated_vertex
-    #     self.set_vnode_to_index(vertex, existing_node_index)
+            return self.zval_outer
 
     def get_vnode(self, index: list) -> Virtual_node:
         i, j, k = index
@@ -1204,23 +1191,22 @@ def generate_internal_node_matrix(
     bone_c_ext = options.get("Scale factor for blending outer nodes of palm")
     n_internal_rows = options.get("Internal elements across hand")
     n_cols_per_node = options.get("Internal elements along each finger")
+    columns_per_finger = options.get("Internal elements along each finger") + 4
+    finger_names = options.get("finger names")
+    bone_names = options.get("bone names")
+    palm_bones = [Bone.CARPAL, Bone.METACARPAL, Bone.PROX_PHALANX]
+    THUMB_INDEX = 4
+
     a0 = 1.0
     # TODO change a1 to depend on the i/n value
     a1 = 0.0
     a2 = 0.0
     index_y = 1
-    # k_val = [i + 1 for i in range(n_internal_rows + 1)]
-    k_val = vnm.get_kval(inner=True)
-    # k_val = virtual_node_matrix.get_kval_outer()
     parent_node_id = 1
-    columns_per_finger = options.get("Number of matrix columns per finger")
+    k_val = vnm.get_kval(inner=True)
     elements_along_palm = sum(hand_elements_along[Bone.CARPAL : Bone.PROX_PHALANX]) + 1
     elements_along_finger = sum(hand_elements_along[Bone.PROX_PHALANX :]) - 1
-    finger_index_x = elements_along_palm + 2  # First P.phalanx element is two-sided
-    palm_bones = [Bone.CARPAL, Bone.METACARPAL, Bone.PROX_PHALANX]
-    finger_names = options.get("finger names")
-    bone_names = options.get("bone names")
-    THUMB_INDEX = 4
+    finger_index_x = elements_along_palm
     # Palm elements
     for finger_index in range(4):
         index_x = 0
@@ -1254,7 +1240,7 @@ def generate_internal_node_matrix(
                         bone_name = bone_names[bone]
                         indices = [[i, j, k]]
                         if bone == Bone.CARPAL:
-                            annotation = [bone_name] if k == 1 else ""
+                            annotation = [bone_name] if k != k_val[-1] else [""]
                             if (j == index_y + 1 and finger_index == 3) or (
                                 j == index_y + 6 and finger_index == 2
                             ):
@@ -1262,7 +1248,7 @@ def generate_internal_node_matrix(
                             node = Virtual_node(parent_node_id, annotation, [a0, a1, a2, a3])
                             vnm.set_vnode_to_indices(node, indices, False)
                         elif bone == Bone.METACARPAL:
-                            annotation = [bone_name] if k == 1 else ""
+                            annotation = [bone_name] if k != k_val[-1] else [""]
                             if (j == index_y + 1 and finger_index == 3) or (
                                 j == index_y + 6 and finger_index == 2
                             ):  # Webbing
@@ -1279,7 +1265,6 @@ def generate_internal_node_matrix(
                             finger_part = bone_name + " of " + finger_name
                             annotation = [bone_name, finger_name, finger_part]
                             node = Virtual_node(parent_node_id, annotation, [a0, a1, a2, a3])
-                            indices.append([i + 2, j, k])
                             vnm.set_vnode_to_indices(node, indices, False)
                             indices
                 parent_node_id += 1
@@ -1294,13 +1279,12 @@ def generate_internal_node_matrix(
     for finger_index in range(5):
         if finger_index == THUMB_INDEX:
             finger_bones = [Bone.METACARPAL, Bone.PROX_PHALANX, Bone.DIST_PHALANX]
-            index_x = hand_elements_along[0]
         else:
-            if hand_elements_along[2] > 1:
+            if hand_elements_along[Bone.PROX_PHALANX] > 1:
                 finger_bones = [Bone.PROX_PHALANX, Bone.MID_PHALANX, Bone.DIST_PHALANX]
             else:
                 finger_bones = [Bone.MID_PHALANX, Bone.DIST_PHALANX]
-            index_x = finger_index_x
+        index_x = finger_index_x
         for bone in finger_bones:
             n_elements_along = hand_elements_along[bone]
             if bone in [Bone.METACARPAL, Bone.PROX_PHALANX]:
@@ -1324,19 +1308,17 @@ def generate_internal_node_matrix(
                         indices = [[i, j, k]]
                         finger_name = finger_names[finger_index]
                         bone_name = bone_names[bone]
-                        annotation = [bone_name, finger_name, finger_part]
                         finger_part = bone_name + " of " + finger_name
-                        if finger_index == THUMB_INDEX:
-                            if j == index_y:
-                                indices.append([i + 3, index_y - 4, k])
-                            if bone == Bone.METACARPAL:
-                                annotation = [finger_name]
-                                if j == index_y:
-                                    if i == index_x:
-                                        indices.append([i + 1, index_y - 4, k])
-                                else:
-                                    if i == index_x:
-                                        indices.append([i, index_y - 4, k])
+                        annotation = [bone_name, finger_name, finger_part]
+                        if finger_index == THUMB_INDEX and bone == Bone.METACARPAL:
+                            annotation = [finger_name]
+                            if i == index_x:
+                                # Thumb web: the first thumb row joins the web column next
+                                # to the palm, alongside the carpal and first metacarpal rows
+                                web_x = hand_elements_along[Bone.CARPAL] + (
+                                    1 if j == index_y else 0
+                                )
+                                indices.append([web_x, index_y - 4, k])
                         node = Virtual_node(parent_node_id, annotation, [a0, a1, a2, a3])
                         vnm.set_vnode_to_indices(node, indices, False)
                 parent_node_id += 1
@@ -1357,15 +1339,14 @@ def generate_external_node_matrix(
     options,
 ):
     parent_node_id = sum(hand_elements_along) + 1
-    elements_along_palm = sum(hand_elements_along[0:2]) + 1
-    elements_along_finger = sum(hand_elements_along[2:]) - 1
+    elements_along_palm = sum(hand_elements_along[Bone.CARPAL : Bone.PROX_PHALANX]) + 1
+    elements_along_finger = sum(hand_elements_along[Bone.PROX_PHALANX :]) - 1
     n_internal_rows = options.get("Internal elements across hand")
-    columns_per_finger = options.get("Number of matrix columns per finger")
+    columns_per_finger = options.get("Internal elements along each finger") + 4
     n_finger_internal_cols = options.get("Internal elements along each finger")
-    n_palm_internal_cols = 4 * n_finger_internal_cols
-    finger_index_x = elements_along_palm + 2  # First P.phalanx element is two-sided
     finger_names = options.get("finger names")
     bone_names = options.get("bone names")
+    palm_bones = [Bone.CARPAL, Bone.METACARPAL, Bone.PROX_PHALANX]
     THUMB_INDEX = 4
     # TODO calculate formulas for these numbers, based on the width of the internal boxes.
     # TODO reformulate how these numbers are calculated.
@@ -1373,8 +1354,10 @@ def generate_external_node_matrix(
     b_palm = options.get("Magnitude of minor axis for palm ellipses")
     a_finger = options.get("Magnitude of major axis for finger ellipses")
     b_finger = options.get("Magnitude of minor axis for finger ellipses")
-    palm_ellipses = [None for i in range(sum(hand_elements_along[0:2]) + 1)]
-    palm_bones = [Bone.CARPAL, Bone.METACARPAL, Bone.PROX_PHALANX]
+
+    n_palm_internal_cols = 4 * n_finger_internal_cols
+    finger_index_x = elements_along_palm
+    palm_ellipses = [None for i in range(elements_along_palm)]
     for n in range(elements_along_palm):
         x, d1, d2, d3 = node_network.get_node_parameters(parent_node_id)
         x = add(x, d2)
@@ -1401,8 +1384,6 @@ def generate_external_node_matrix(
     index_y = 1
     d3 = None
     # d1_offset = 0.0
-    # TODO formulate k_vals in terms of the number of internal rows
-    # TODO K_vals for the elemnents on the sides will probably need 3 elements instead of 2.
     # Palm elements
     for finger_index in range(4):
         index_x = 0
@@ -1420,7 +1401,6 @@ def generate_external_node_matrix(
             for i in i_val:
                 ellipse = palm_ellipses[i]
                 for j in j_val:
-                    # TODO make k_val variable
                     if j == index_y or (finger_index == 3 and j == index_y + 1):
                         k_val = vnm.get_kval(inner=True)
                     else:
@@ -1466,17 +1446,12 @@ def generate_external_node_matrix(
                             bone_name = bone_names[Bone.PROX_PHALANX]
                             finger_part = bone_name + " of " + finger_name
                             annotation = [bone_name, finger_name, finger_part]
-                            if k in [1, n_internal_rows + 1]:
-                                indices.append([i + 2, j, k + a3])
                             if j == index_y:
                                 indices.append([i, j + a2, k])
-                                indices.append([i + 2, j + a2, k])
                             elif finger_index == 3 and j == index_y + 1:
                                 indices.append([i, j + a2, k])
-                                indices.append([i + 2, j + a2, k])
                             else:
                                 indices.append([i, j + 4, k + a3])
-                                indices.append([i + 2, j + 4, k + a3])
                         node = Virtual_node(
                             x=[1, 0, 0, 0],
                             d1=[0, 1, 0, 0],
@@ -1499,13 +1474,13 @@ def generate_external_node_matrix(
     for finger_index in range(5):
         if finger_index == THUMB_INDEX:
             finger_bones = [Bone.METACARPAL, Bone.PROX_PHALANX, Bone.DIST_PHALANX]
-            index_x = hand_elements_along[0]
+            # index_x = hand_elements_along[Bone.CARPAL]
         else:
-            if hand_elements_along[2] > 1:
+            if hand_elements_along[Bone.PROX_PHALANX] > 1:
                 finger_bones = [Bone.PROX_PHALANX, Bone.MID_PHALANX, Bone.DIST_PHALANX]
             else:
                 finger_bones = [Bone.MID_PHALANX, Bone.DIST_PHALANX]
-            index_x = finger_index_x
+        index_x = finger_index_x
         for bone in finger_bones:
             n_elements_along = hand_elements_along[bone]
             if bone in [Bone.METACARPAL, Bone.PROX_PHALANX]:
@@ -1586,7 +1561,7 @@ def generate_external_node_matrix(
                                     d2=[0, a3 * d11, a3 * d12, 0],
                                 )
                                 vnm.set_vnode_to_indices(node, [[i, j, k + a3]])
-                            for k_allocation_mode, d21_half in zip(["upper", "lower"], d21):
+                            for k_side, d21_half in zip(["upper", "lower"], d21):
                                 node = Virtual_node(
                                     node_identifier=node_identifier,
                                     annotation=annotation,
@@ -1594,9 +1569,7 @@ def generate_external_node_matrix(
                                     d1=[0, 1, 0, 0],
                                     d2=[0, -a2 * d21_half, -a2 * d22, 0],
                                 )
-                                vnm.set_vnode_to_indices(
-                                    node, [[i, j + a2, k]], k_allocation_mode=k_allocation_mode
-                                )
+                                vnm.set_vnode_to_indices(node, [[i, j + a2, k]], z_side=k_side)
                                 node = Virtual_node(
                                     node_identifier=node_identifier,
                                     annotation=cap_annotation,
@@ -1604,9 +1577,7 @@ def generate_external_node_matrix(
                                     d1=[0, d11, d12, 0],
                                     d2=[0, d21_half, d22, 0],
                                 )
-                                vnm.set_vnode_to_indices(
-                                    node, [[i + 1, j, k]], k_allocation_mode=k_allocation_mode
-                                )
+                                vnm.set_vnode_to_indices(node, [[i + 1, j, k]], z_side=k_side)
                         node_identifier += 1
                         a1 += 1
                 parent_node_id += 1
