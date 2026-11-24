@@ -1190,6 +1190,8 @@ class MeshType_3d_wholebody2(Scaffold_base):
             'left upper limb',
             'left hand',
             'left foot',
+            'abdomen',
+            'thorax'
         ]
 
         for annotation_group_name in skin_groups:

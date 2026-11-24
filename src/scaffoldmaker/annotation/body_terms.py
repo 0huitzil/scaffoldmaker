@@ -42,6 +42,8 @@ body_terms = [
     ("right", ""),
     ("shell", ""),
     ("skin epidermis outer surface", "UBERON:0001003", "ILX:0796507"),
+    ("abdomen skin epidermis outer surface", ""),
+    ("thorax skin epidermis outer surface", ""),
     ("spinal cord", "UBERON:0002240", "ILX:0110909"),
     ("thoracic cavity", "UBERON:0002224"),
     ("thoracic cavity boundary surface", "ILX:0796508"),
